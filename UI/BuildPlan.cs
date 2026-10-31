@@ -20,6 +20,7 @@ internal static class BuildPlan
     private static SurfaceHandle? _surface;
     private static bool _closeRequested;
     private static string _notice = "", _lastPushed = "";
+    private static UpgradeStage _noticeStage;
     private static float _nextPush;
     internal static SiteDefinition? Site { get; private set; }
 
@@ -45,6 +46,7 @@ internal static class BuildPlan
         rect.offsetMax = Vector2.zero;
         Site = site;
         _notice = _lastPushed = "";
+        Payments.ClearSettledStatus();
         Mod.PlanOpened(site);
         _surface = Surfaces.Mount(rect, SurfaceId, "Based.Assets.based", designShortSide: 540)
             .OnCall("plan.state", _ => State(site))
@@ -55,6 +57,8 @@ internal static class BuildPlan
                     Mod.Warn("Construction plan sent an unknown purchase: " + kind);
                     return "invalid-purchase";
                 }
+                Payments.ClearSettledStatus();
+                _noticeStage = Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId).Stage;
                 _notice = Mod.Purchase(site, kind == "rights" ? PurchaseKind.Rights : PurchaseKind.Construction);
                 return _notice;
             })
@@ -138,7 +142,8 @@ internal static class BuildPlan
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
                 : !owned ? Text.T("Buy the existing room first.")
                 : Mod.HeldBy.Length > 0 ? Text.T("Construction is on hold: move {0} away from the marked walls.", Mod.HeldBy)
-                : _notice,
+                // A refusal describes the stage it was given in, so the next stage starts without it.
+                : state.Stage == _noticeStage ? _notice : "",
             payment = Payments.StatusText,
             steps = Steps(site, upgrade, state, phase),
             drawing = Drawing(site)

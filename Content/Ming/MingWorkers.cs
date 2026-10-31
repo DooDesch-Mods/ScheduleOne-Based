@@ -375,7 +375,7 @@ public static class MingWorkers
             SetVisible(true);
             if (_index == 0 && !_planEquipped)
             {
-                Npc.SetEquippable("tools/managementclipboard/ManagementClipboard_AvatarEquippable");
+                Equip("tools/managementclipboard/ManagementClipboard_AvatarEquippable");
                 _planEquipped = true;
             }
             if (_walking)
@@ -570,12 +570,15 @@ public static class MingWorkers
         {
             if (_hammering == enabled || !InstanceFinder.IsServer) return;
             _hammering = enabled;
-            Npc.SetEquippable(enabled ? "Avatar/Equippables/Hammer" : "");
+            Equip(enabled ? "Avatar/Equippables/Hammer" : "");
             _native.SetAnimationBool_Networked(null, "UseHammer", enabled);
             _previousNormalized = -1;
             _hammerLayer = -1;
             if (!enabled) _audio.Stop();
         }
+
+        // The S1API call changes only the local avatar. This RPC also reaches clients, and the NPC resends it to later joiners.
+        private void Equip(string path) => _native.SetEquippable_Client(null, path);
 
         private bool PlaysHammerClip(int layer)
         {
@@ -700,7 +703,7 @@ public static class MingWorkers
             if (InstanceFinder.IsServer)
             {
                 SetHammer(false);
-                if (_planEquipped) { Npc.SetEquippable(""); _planEquipped = false; }
+                if (_planEquipped) { Equip(""); _planEquipped = false; }
                 Npc.Movement.Stop();
             }
             _walking = false;
