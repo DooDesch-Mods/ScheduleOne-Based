@@ -230,7 +230,9 @@ public static class MingWorld
             state.Copies.Add(Copy("east-window-north", Window, WindowPivot, new Vector3(-53.94f, 1.462493f, 143f)));
             state.Copies.Add(Copy("south-window", Window, WindowPivot, new Vector3(-57f, 1.462493f, 135.94f), 90));
             state.Copies.Add(Copy("north-window", Window, WindowPivot, new Vector3(-57f, 1.462493f, 145.06f), -90));
-            Lamp(state, "south-ceiling-light", -57.5f, 136.83f, morning == 4);
+            // The fan blades reach 1.05 m around the lamp, and the headers of the old room still hang in the roof stage.
+            if (morning == 4) Lamp(state, "south-ceiling-light", -56.5f, 137.575f, true);
+            else Lamp(state, "south-ceiling-light", -54.99f, 137.01f, false);
             Lamp(state, "north-ceiling-light", -57f, 143.61f, morning == 4);
         }
         if (morning == 4)
@@ -539,6 +541,10 @@ public static class MingWorld
     {
         var light = Copy(id, Property + "/Chinese Restaurant/CeilingFan", new Vector3(-62.5f, 2.38f, 138.3f), new Vector3(x, 2.38f, z));
         light.LightsOn = true;
+        // Walls do not stop this light at any quality level, and these lamps hang closer to the outer walls than the
+        // vanilla fan does. Its 6 m reach would light the building's outside, so they reach less and burn brighter.
+        light.LightRange = 4f;
+        light.LightIntensity = 3.5f;
         if (onSwitch) light.LightSwitch = RoomSwitch;
         state.Copies.Add(light);
     }

@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag status | plan | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | advance | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag status | plan | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | advance | lights | lightset <what> <value> | walk <x> <z> [<x> <z> ...]";
 
     public override void ExecuteCommand(List<string> args)
     {
@@ -64,11 +64,70 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "walk":
                     MelonLoader.MelonCoroutines.Start(Walk(args));
                     break;
+                case "lights":
+                    Lights();
+                    break;
+                case "lightset":
+                    LightSet(args[1], float.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture));
+                    break;
                 default:
                     throw new ArgumentException(ExampleUsage);
             }
         }
         catch (Exception error) { Mod.Warn("baseddiag " + action + " failed: " + error); }
+    }
+
+    // Lists the lights and ceiling fan parts around the site, for checks of light reach, shadows and wall clearance.
+    private static void Lights()
+    {
+        var site = new Vector3(-58f, 2f, 140f);
+        foreach (var light in UnityEngine.Object.FindObjectsOfType<Light>())
+        {
+            Vector3 at = light.transform.position;
+            if (Vector3.Distance(at, site) > 15f) continue;
+            Mod.Log($"baseddiag lights: {Path(light.transform)} type {light.type} at ({at.x:F2},{at.y:F2},{at.z:F2}) range {light.range:F2} intensity {light.intensity:F2} shadows {light.shadows} enabled {light.enabled} mask {light.cullingMask} angle {light.spotAngle:F1} forward {light.transform.forward} bias {light.shadowBias:F3} normalBias {light.shadowNormalBias:F3} nearPlane {light.shadowNearPlane:F2} strength {light.shadowStrength:F2}");
+        }
+        Mod.Log($"baseddiag lights: quality {QualitySettings.names[QualitySettings.GetQualityLevel()]} shadowDistance {QualitySettings.shadowDistance:F1} shadows {QualitySettings.shadows} pixelLights {QualitySettings.pixelLightCount}");
+        foreach (var part in UnityEngine.Object.FindObjectsOfType<Renderer>())
+        {
+            Vector3 at = part.transform.position;
+            if (Vector3.Distance(at, site) > 15f || !Path(part.transform).Contains("CeilingFan")) continue;
+            Bounds bounds = part.bounds;
+            Mod.Log($"baseddiag lights: {Path(part.transform)} at ({at.x:F2},{at.y:F2},{at.z:F2}) bounds min ({bounds.min.x:F2},{bounds.min.y:F2},{bounds.min.z:F2}) max ({bounds.max.x:F2},{bounds.max.y:F2},{bounds.max.z:F2})");
+        }
+    }
+
+    // Changes the two ceiling lights added by the upgrade live, so one run can compare reach and shadow settings.
+    private static void LightSet(string what, float value)
+    {
+        if (what == "quality")
+        {
+            QualitySettings.SetQualityLevel((int)value, true);
+            Mod.Log($"baseddiag lightset: quality {QualitySettings.names[QualitySettings.GetQualityLevel()]}, shadows {QualitySettings.shadows}.");
+            return;
+        }
+        int changed = 0;
+        foreach (var light in UnityEngine.Object.FindObjectsOfType<Light>())
+        {
+            if (!Path(light.transform).Contains("Copies/CeilingFan")) continue;
+            if (what == "range") light.range = value;
+            else if (what == "angle") light.spotAngle = value;
+            else if (what == "intensity") light.intensity = value;
+            else if (what == "normalbias") light.shadowNormalBias = value;
+            else if (what == "bias") light.shadowBias = value;
+            else if (what == "near") light.shadowNearPlane = value;
+            else throw new ArgumentException("baseddiag lightset range|angle|intensity|normalbias|bias|near <value>");
+            changed++;
+        }
+        Mod.Log($"baseddiag lightset: {what} {value} on {changed} ceiling lights.");
+    }
+
+    private static string Path(Transform transform)
+    {
+        string path = transform.name;
+        for (Transform parent = transform.parent; parent != null; parent = parent.parent)
+            path = parent.name + "/" + path;
+        return path;
     }
 
     // Selects a hotbar slot like its number key, for checks of hand-held interactions.
