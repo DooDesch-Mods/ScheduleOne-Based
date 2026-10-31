@@ -126,6 +126,12 @@ public static class Payments
         }
     }
 
+    // A finished purchase's status belongs to that purchase. An open payment keeps reporting its own.
+    public static void ClearSettledStatus()
+    {
+        if (!_journal.Any(e => e.SessionId == _session && IsOpen(e))) _status = "";
+    }
+
     public static void ResetForMenu()
     {
         int open = _journal.Count(e => e.SessionId == _session && IsOpen(e));

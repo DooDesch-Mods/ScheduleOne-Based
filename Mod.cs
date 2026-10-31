@@ -524,6 +524,12 @@ public sealed class Mod : MelonMod
             if (packet.Kind == "request") SendSnapshot(peer);
             else if (packet.Kind == "ack")
             {
+                // One purchase sends several revisions, so an answer to an earlier one can arrive after the next went out.
+                if (packet.SaveId == BasedSave.SaveId && packet.Revision < Engine.Revision)
+                {
+                    Log("Older snapshot acknowledgement ignored: revision " + packet.Revision + " after " + Engine.Revision + ", peer " + peer + ".");
+                    return;
+                }
                 string key = packet.SaveId + ":" + packet.Revision;
                 if (!PeerSnapshots.TryGetValue(peer, out string? expected) || expected != key)
                     throw new InvalidOperationException("Snapshot acknowledgement does not match peer/session/revision.");
