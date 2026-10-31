@@ -31,6 +31,8 @@ public static class MingWorld
     private const string RoomSwitch = Property + "/Contents/ModularSwitch";
     private const string Blinds = Property + "/Blinds (1)";
     private static readonly Vector3 BlindsPivot = new(-62.5f, 2.02f, 134.99f);
+    private const string RoofCaster = Property + "/Chinese Restaurant/Chinese restaurant/UpperRoof/Cube";
+    private static readonly Vector3 RoofCasterPivot = new(-62.5f, 2.935f, 138f);
     private const float BlindsY = 2.02f;
     private const string Fence = "Map/Hyland Point/Region_Docks/Dark Market Area/Docks Warehouse/InteriorDisable/Mezzanine/docks mezzanine/FenceBars";
     private const string Pallet = "Map/Hyland Point/Region_Northtown/North Waterfront/Pallet Prop (2)";
@@ -56,7 +58,9 @@ public static class MingWorld
     // Where the old room's wood panelling ends and its wallpaper starts.
     private const float WainscotTop = .5f;
     private const float RoofEdgeBottom = 2.85f;
-    private const float RoofTopY = 3.02f;
+    private const float RoofSheetY = 2.925f;
+    private const float RoofRimTop = 3.025f;
+    private const float RoofCollisionTop = 3.02f;
     private const float WallBase = -.4f;
     private const float StreetY = -3.9f;
 
@@ -216,10 +220,7 @@ public static class MingWorld
             Solid(geometry, "ceiling-south", Wood, -60.04f, CeilingY, 135.95f, -53.95f, RoofEdgeBottom, 137.9f);
             Solid(geometry, "ceiling-east", Wood, -55.78f, CeilingY, 137.9f, -53.95f, RoofEdgeBottom, 141.1f);
             Solid(geometry, "ceiling-north", Wood, -60.04f, CeilingY, 141.1f, -53.95f, RoofEdgeBottom, 145.05f);
-            // The strips join the old roof a little below its top and keep its overhang, so no second surface shows.
-            RoofStrip(geometry, "roof-south", -60.04f, 135.8f, -53.78f, 137.82f, 135.86f, 137.82f);
-            RoofStrip(geometry, "roof-east", -55.82f, 137.75f, -53.78f, 141.25f, 137.82f, 141.2f);
-            RoofStrip(geometry, "roof-north", -60.22f, 141.18f, -53.78f, 145.2f, 141.2f, 145.14f);
+            Roof(state, geometry);
             // The east wall runs past both corners and the west wall reaches into the old one, so no joint stays open.
             // The room faces lie on the grid's half-metre lines like the old room's, so the last row of tiles ends at the wall.
             Shell(geometry, "east", false, -53.94f, -53.88f, 135.88f, 145.12f, new[] { 137.3f, 143f }, morning == 4, 136f, 145f);
@@ -493,12 +494,46 @@ public static class MingWorld
         return blind;
     }
 
-    // The tops meet exactly at topZ1 and topZ2, so the three strips read as one roof.
-    private static void RoofStrip(CopyDefinition copy, string id, float x1, float z1, float x2, float z2, float topZ1, float topZ2)
+    // Built like the old roof: a low sheet inside a raised rim. The ribs on it are not geometry but the shadow of an
+    // invisible caster that lies around the sheet, so the wing gets the same caster and the pattern runs on across both
+    // and changes with the sun like the old one. The rim between the two parts goes, the sheet stays.
+    private static void Roof(WorldStateDefinition state, CopyDefinition geometry)
     {
-        Solid(copy, id, RoofEdge, x1, RoofEdgeBottom, z1, x2, RoofTopY - .02f, z2);
-        Face(copy, id + "-top", RoofTop, x1 + .06f, RoofTopY - .02f, topZ1, x2 - .06f, RoofTopY, topZ2);
+        state.Rules.Add(new ObjectRule
+        {
+            Id = "old-roof-inner-rim", Name = "UpperRoof", Parent = "Chinese restaurant", Side = WorldSide.Main,
+            Effect = ObjectEffect.Cut, Area = BoundsOf(-60.06f, RoofSheetY + .0005f, 136.1f, -55.74f, 3.04f, 141.26f)
+        });
+        // Like the old roof's colliders, these stand above the drawn sheet, level with the rim.
+        Block(geometry, "roof-south-collision", -60.04f, 135.8f, -53.78f, 137.82f);
+        Block(geometry, "roof-east-collision", -55.82f, 137.75f, -53.78f, 141.25f);
+        Block(geometry, "roof-north-collision", -60.22f, 141.18f, -53.78f, 145.2f);
+
+        Rim(geometry, "roof-rim-east", -54.08f, 135.8f, -53.78f, 145.2f);
+        Rim(geometry, "roof-rim-south", -59.75f, 135.8f, -54.08f, 136.1f);
+        Rim(geometry, "roof-rim-north", -60.22f, 144.9f, -54.08f, 145.2f);
+        Rim(geometry, "roof-rim-west", -60.22f, 141.25f, -59.92f, 144.9f);
+        Rim(geometry, "roof-rim-junction", -60.07f, 140.95f, -59.92f, 141.25f);
+        // Closes the old rim where the cut ends it.
+        Rim(geometry, "roof-rim-cap", -60.06f, 136.095f, -59.75f, 136.1f);
+
+        Sheet(geometry, "roof-sheet-south", -60.09f, 136.1f, -54.08f, 138.08f);
+        Sheet(geometry, "roof-sheet-east", -56.08f, 138.08f, -54.08f, 140.92f);
+        Sheet(geometry, "roof-sheet-north", -59.92f, 140.92f, -54.08f, 144.9f);
+
+        state.Copies.Add(Copy("roof-caster-south", RoofCaster, RoofCasterPivot, new Vector3(-57.02f, RoofCasterPivot.y, 138.55f), 90));
+        state.Copies.Add(Copy("roof-caster-north", RoofCaster, RoofCasterPivot, new Vector3(-57.02f, RoofCasterPivot.y, 142.45f), 90));
     }
+
+    private static void Rim(CopyDefinition copy, string id, float x1, float z1, float x2, float z2) =>
+        Face(copy, id, RoofEdge, x1, RoofEdgeBottom, z1, x2, RoofRimTop, z2);
+
+    // A hair above the old sheet and lapping onto it, so it hides what the cut leaves of the old rim.
+    private static void Sheet(CopyDefinition copy, string id, float x1, float z1, float x2, float z2) =>
+        Face(copy, id, RoofTop, x1, RoofSheetY - .02f, z1, x2, RoofSheetY + .001f, z2);
+
+    private static void Block(CopyDefinition copy, string id, float x1, float z1, float x2, float z2) =>
+        copy.Boxes.Add(new BoxDefinition { Id = id, Kind = BoxKind.Block, Box = BoundsOf(x1, RoofEdgeBottom, z1, x2, RoofCollisionTop, z2) });
 
     // Half-metre grid cells of the new floor, from wall to wall like the old room's.
     private static void AddPlacementTiles(PropertyExtensionDefinition property)

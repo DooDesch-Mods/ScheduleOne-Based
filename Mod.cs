@@ -99,6 +99,7 @@ public sealed class Mod : MelonMod
             RoomProbe.ResetForMenu();
 #endif
             BuildPlan.Close();
+            ConstructionJournal.Reset();
             foreach (var site in Sites) site.Crew?.Cleanup();
             Payments.ResetForMenu();
             NativeBus.Stop();
@@ -162,8 +163,16 @@ public sealed class Mod : MelonMod
                 foreach (var site in Sites) BindVendor(site);
             }
             foreach (var site in Sites) TickCrew(site);
+            TickJournal();
         }
         catch (Exception error) { Contain("runtime update", error); }
+    }
+
+    private static void TickJournal()
+    {
+        if (!NativeBus.IsHost && !_snapshotReceived) return;
+        try { ConstructionJournal.Tick(Sites); }
+        catch (Exception error) { Contain("construction quest", error); }
     }
 
     private static void TickClientSync()

@@ -1,21 +1,30 @@
 <link rel="stylesheet" href="app.css">
-<div class="shade"><div class="plan">
-  <div class="heading"><div id="title" class="title"></div><button id="close" class="close"></button></div>
-  <div id="steps" class="steps"></div>
-  <div class="content">
-    <div id="drawing" class="drawing"></div>
-    <div class="offer">
-      <div id="status" class="status"></div>
-      <div id="progress" class="progress"></div>
-      <div id="summary" class="summary"></div>
-      <div class="cost"><span id="rights-label"></span><span id="rights" class="price"></span></div>
-      <div class="cost"><span id="construction-label"></span><span id="construction" class="price"></span></div>
-      <div id="cash" class="small"></div>
-      <div id="restrictions" class="restrictions"></div>
-      <button id="buy" class="buy"></button>
-      <div id="notice" class="notice"></div>
-      <div id="payment" class="small"></div>
+<div class="shade"><div class="board">
+  <div class="paper">
+    <div id="title" class="title"></div>
+    <div class="rule"></div>
+    <div class="content">
+      <div id="drawing" class="drawing"></div>
+      <div class="side">
+        <div id="report" class="report">
+          <div id="status" class="status"></div>
+          <div id="progress" class="progress"></div>
+        </div>
+        <div id="costs" class="costs">
+          <div class="cost"><div id="rights-label"></div><div id="rights"></div></div>
+          <div class="cost"><div id="construction-label"></div><div id="construction"></div></div>
+          <div class="cost total"><div id="duration"></div><div id="cash"></div></div>
+        </div>
+        <div id="steps" class="steps"></div>
+        <div id="notes" class="notes"></div>
+        <div id="notice" class="notice"></div>
+        <div id="payment" class="note"></div>
+        <div class="space"></div>
+        <button id="buy" class="buy"></button>
+      </div>
     </div>
+    <button id="close" class="close">X</button>
   </div>
+  <div class="clip"><div class="pin"></div></div>
 </div></div>
 <script src="app.js"></script>
