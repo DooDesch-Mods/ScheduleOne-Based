@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Based.Content;
@@ -15,7 +16,8 @@ internal static class BuildPlan
 {
     internal const string SurfaceId = "based-plan";
     private const float PushInterval = .25f;
-    private const float PixelsPerMetre = 24f;
+    private const float PixelsPerMetre = 30f;
+    private const float WallPixels = 4f;
     private static GameObject? _root;
     private static SurfaceHandle? _surface;
     private static bool _closeRequested;
@@ -109,45 +111,44 @@ internal static class BuildPlan
         return JsonConvert.SerializeObject(new
         {
             title = Text.T(site.Title),
-            status = Text.T(state.Stage switch
+            status = state.Stage switch
             {
-                UpgradeStage.Complete => "Ready to use",
-                UpgradeStage.Constructing => site.PhaseTitles.TryGetValue(phase, out string? title) ? title : "Construction confirmed",
-                UpgradeStage.RightsOwned => "Rights acquired",
-                _ => "Plan your expansion"
-            }),
-            summary = state.Stage switch
-            {
-                UpgradeStage.RightsMissing => Text.T("Ming sells the rest of the floor. Construction is a separate order."),
-                UpgradeStage.RightsOwned => Text.T("Materials and the crew of three are included."),
+                UpgradeStage.Complete => Text.T("Ready to use"),
+                UpgradeStage.Constructing => Text.T(site.PhaseTitles.TryGetValue(phase, out string? title) ? title : "Construction confirmed"),
                 _ => ""
             },
-            progress = state.Stage switch
-            {
-                UpgradeStage.Constructing => nights == 1 ? Text.T("One night left") : Text.T("{0} nights left", nights),
-                UpgradeStage.Complete => "",
-                _ => Text.T("{0} nights of work", upgrade.ConstructionCycles)
-            },
+            progress = state.Stage == UpgradeStage.Constructing ? ConstructionJournal.NightsLeft(nights) : "",
             stage = state.Stage.ToString(),
             ordering,
             canBuy = owned && !broken && ordering,
-            buy = Text.T(state.Stage == UpgradeStage.RightsMissing ? "Buy rights" : "Order construction"),
-            close = Text.T("Close"),
+            buy = state.Stage == UpgradeStage.RightsMissing
+                ? Text.T("Buy rights") + " - " + Price(upgrade.RightsPrice)
+                : Text.T("Order construction") + " - " + Price(upgrade.ConstructionPrice),
             rightsLabel = Text.T("Expansion rights"),
             rights = state.Stage == UpgradeStage.RightsMissing ? Price(upgrade.RightsPrice) : paid,
             constructionLabel = Text.T("Construction"),
             construction = state.Stage < UpgradeStage.Constructing ? Price(upgrade.ConstructionPrice) : paid,
-            cash = ordering ? Text.T("Paid in cash.") : "",
-            restrictions = state.Stage == UpgradeStage.Complete ? Array.Empty<string>() : site.Restrictions.Select(r => Text.T(r)).ToArray(),
+            duration = Text.T("{0} nights of work", upgrade.ConstructionCycles),
+            cash = Text.T("Paid in cash"),
+            notes = Notes(site, state.Stage),
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
                 : !owned ? Text.T("Buy the existing room first.")
                 : Mod.HeldBy.Length > 0 ? Text.T("Construction is on hold: move {0} away from the marked walls.", Mod.HeldBy)
                 // A refusal describes the stage it was given in, so the next stage starts without it.
                 : state.Stage == _noticeStage ? _notice : "",
-            payment = Payments.StatusText,
+            // The confirmation answers a purchase, so it ends with the ordering. Every other status stays until it clears.
+            payment = !ordering && Payments.StatusText == Text.T("Payment confirmed.") ? "" : Payments.StatusText,
             steps = Steps(site, upgrade, state, phase),
-            drawing = Drawing(site)
+            drawing = Drawing(site, state.Stage)
         });
+    }
+
+    private static string[] Notes(SiteDefinition site, UpgradeStage stage)
+    {
+        if (stage == UpgradeStage.Complete) return Array.Empty<string>();
+        var notes = site.Restrictions.Select(r => Text.T(r)).ToList();
+        if (stage == UpgradeStage.Constructing) notes.Add(Text.T("The crew gets one stage further every night you sleep."));
+        return notes.ToArray();
     }
 
     private static object[] Steps(SiteDefinition site, UpgradeDefinition upgrade, UpgradeState state, string phase)
@@ -163,25 +164,82 @@ internal static class BuildPlan
         return steps.ToArray();
     }
 
-    // Lays the site's rectangles out in pixels with north at the top, plus the one-metre raster lines.
-    private static object Drawing(SiteDefinition site)
+    // Lays the site's rectangles out in pixels with north at the top. The marks on the walls end with the construction.
+    private static object Drawing(SiteDefinition site, UpgradeStage stage)
     {
-        float minX = site.Plan.Min(r => r.MinX), maxX = site.Plan.Max(r => r.MaxX);
-        float minZ = site.Plan.Min(r => r.MinZ), maxZ = site.Plan.Max(r => r.MaxZ);
+        var solid = site.Plan.Where(r => r.Kind != PlanRoomKind.Opening).ToArray();
+        float minX = solid.Min(r => r.MinX), maxX = solid.Max(r => r.MaxX);
+        float minZ = solid.Min(r => r.MinZ), maxZ = solid.Max(r => r.MaxZ);
+        Box Place(float x0, float z0, float x1, float z1) => new(
+            (x0 - minX) * PixelsPerMetre,
+            (maxZ - z1) * PixelsPerMetre,
+            (x1 - x0) * PixelsPerMetre,
+            (z1 - z0) * PixelsPerMetre);
+        var cuts = stage == UpgradeStage.Complete ? Array.Empty<PlanRoom>() : site.Plan.Where(r => r.Kind == PlanRoomKind.Opening).ToArray();
         return new
         {
-            width = Mathf.Ceil((maxX - minX) * PixelsPerMetre) + 2,
-            height = Mathf.Ceil((maxZ - minZ) * PixelsPerMetre) + 2,
-            metre = PixelsPerMetre,
-            rooms = site.Plan.Select(r => new
+            width = Mathf.Ceil((maxX - minX) * PixelsPerMetre),
+            height = Mathf.Ceil((maxZ - minZ) * PixelsPerMetre),
+            fills = solid.Select(r =>
             {
-                kind = r.Kind.ToString().ToLowerInvariant(),
-                left = (r.MinX - minX) * PixelsPerMetre,
-                top = (maxZ - r.MaxZ) * PixelsPerMetre,
-                width = (r.MaxX - r.MinX) * PixelsPerMetre,
-                height = (r.MaxZ - r.MinZ) * PixelsPerMetre,
-                label = r.Label == null ? "" : Text.T(r.Label)
+                // A pixel of overlap keeps the paper from showing between two rooms of one colour.
+                var box = Place(r.MinX, r.MinZ, r.MaxX, r.MaxZ);
+                return new { kind = r.Kind.ToString().ToLowerInvariant(), left = box.left - .5f, top = box.top - .5f, width = box.width + 1f, height = box.height + 1f };
+            }).ToArray(),
+            walls = Outline(solid).Select(w => Thick(Place(w.x0, w.z0, w.x1, w.z1))).ToArray(),
+            cuts = cuts.Select(r => Place(r.MinX, r.MinZ, r.MaxX, r.MaxZ)).ToArray(),
+            labels = solid.Where(r => r.Label != null).Select(r =>
+            {
+                var box = Place(r.MinX, r.MinZ, r.MaxX, r.MaxZ);
+                float area = solid.Where(o => o.Kind == r.Kind).Sum(o => (o.MaxX - o.MinX) * (o.MaxZ - o.MinZ));
+                return new
+                {
+                    box.left,
+                    box.top,
+                    box.width,
+                    box.height,
+                    area = Mathf.RoundToInt(area).ToString(CultureInfo.InvariantCulture) + " m²",
+                    name = Text.T(r.Label!)
+                };
             }).ToArray()
         };
+    }
+
+    private readonly record struct Box(float left, float top, float width, float height);
+
+    private static Box Thick(Box line) =>
+        new(line.left - WallPixels / 2, line.top - WallPixels / 2, line.width + WallPixels, line.height + WallPixels);
+
+    // The rooms' edges cut the plan into cells; a wall runs wherever a covered cell meets an empty one.
+    private static List<(float x0, float z0, float x1, float z1)> Outline(PlanRoom[] rooms)
+    {
+        var xs = rooms.SelectMany(r => new[] { r.MinX, r.MaxX }).Distinct().OrderBy(v => v).ToArray();
+        var zs = rooms.SelectMany(r => new[] { r.MinZ, r.MaxZ }).Distinct().OrderBy(v => v).ToArray();
+        bool Covered(int i, int j) =>
+            i >= 0 && j >= 0 && i < xs.Length - 1 && j < zs.Length - 1
+            && rooms.Any(r => r.MinX <= xs[i] && r.MaxX >= xs[i + 1] && r.MinZ <= zs[j] && r.MaxZ >= zs[j + 1]);
+        var walls = new List<(float x0, float z0, float x1, float z1)>();
+        // Pieces in a line become one wall, so rounding cannot leave a step where two of them meet.
+        void Add(float x0, float z0, float x1, float z1)
+        {
+            int joined = walls.FindIndex(w => x0 == x1 ? w.x0 == x0 && w.x1 == x0 && w.z1 == z0 : w.z0 == z0 && w.z1 == z0 && w.x1 == x0);
+            if (joined < 0) walls.Add((x0, z0, x1, z1));
+            else walls[joined] = (walls[joined].x0, walls[joined].z0, x1, z1);
+        }
+        for (int i = 0; i < xs.Length - 1; i++)
+        for (int j = 0; j < zs.Length - 1; j++)
+        {
+            if (!Covered(i, j)) continue;
+            if (!Covered(i - 1, j)) Add(xs[i], zs[j], xs[i], zs[j + 1]);
+            if (!Covered(i + 1, j)) Add(xs[i + 1], zs[j], xs[i + 1], zs[j + 1]);
+        }
+        for (int j = 0; j < zs.Length - 1; j++)
+        for (int i = 0; i < xs.Length - 1; i++)
+        {
+            if (!Covered(i, j)) continue;
+            if (!Covered(i, j - 1)) Add(xs[i], zs[j], xs[i + 1], zs[j]);
+            if (!Covered(i, j + 1)) Add(xs[i], zs[j + 1], xs[i + 1], zs[j + 1]);
+        }
+        return walls;
     }
 }

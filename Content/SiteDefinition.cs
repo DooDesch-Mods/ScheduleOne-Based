@@ -28,6 +28,9 @@ internal sealed class SiteDefinition
     public string ProgressChoice { get; init; } = "";
     public string VendorLine { get; init; } = "";
     public string Title { get; init; } = "";
+    public Type QuestType { get; init; } = null!;
+    public string OrderEntry { get; init; } = "";
+    public Vector3 QuestMarker { get; init; }
     public IReadOnlyDictionary<string, string> PhaseTitles { get; init; } = new Dictionary<string, string>();
     public IReadOnlyList<string> Restrictions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<Bounds> KeepClear { get; init; } = Array.Empty<Bounds>();

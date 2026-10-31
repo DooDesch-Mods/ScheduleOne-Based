@@ -9,12 +9,16 @@ function div(className, text) {
   return node;
 }
 
-function place(node, left, top, width, height) {
-  node.style.left = left + 'px';
-  node.style.top = top + 'px';
-  node.style.width = width + 'px';
-  node.style.height = height + 'px';
+function place(node, box) {
+  node.style.left = box.left + 'px';
+  node.style.top = box.top + 'px';
+  node.style.width = box.width + 'px';
+  node.style.height = box.height + 'px';
   return node;
+}
+
+function show(id, visible) {
+  $(id).style.display = visible ? 'flex' : 'none';
 }
 
 function drawSteps(steps) {
@@ -22,7 +26,7 @@ function drawSteps(steps) {
   host.replaceChildren();
   for (const step of steps) {
     const node = div('step ' + step.state);
-    node.appendChild(div('step-bar'));
+    node.appendChild(div('box', step.state === 'done' ? 'X' : ''));
     node.appendChild(div('step-label', step.label));
     host.appendChild(node);
   }
@@ -36,9 +40,15 @@ function drawPlan(plan) {
   host.replaceChildren();
   host.style.width = plan.width + 'px';
   host.style.height = plan.height + 'px';
-  for (let x = plan.metre; x < plan.width; x += plan.metre) host.appendChild(place(div('grid-line'), x, 0, 1, plan.height));
-  for (let y = plan.metre; y < plan.height; y += plan.metre) host.appendChild(place(div('grid-line'), 0, y, plan.width, 1));
-  for (const room of plan.rooms) host.appendChild(place(div('room ' + room.kind, room.label), room.left, room.top, room.width, room.height));
+  for (const fill of plan.fills) host.appendChild(place(div('fill ' + fill.kind), fill));
+  for (const wall of plan.walls) host.appendChild(place(div('wall'), wall));
+  for (const cut of plan.cuts) host.appendChild(place(div('cut'), cut));
+  for (const label of plan.labels) {
+    const node = place(div('label'), label);
+    node.appendChild(div('area', label.area));
+    node.appendChild(div('name', label.name));
+    host.appendChild(node);
+  }
 }
 
 function render(raw) {
@@ -47,23 +57,26 @@ function render(raw) {
     const data = JSON.parse(raw);
     current = data;
     $('title').textContent = data.title;
-    $('close').textContent = data.close;
     $('status').textContent = data.status;
     $('progress').textContent = data.progress;
-    $('summary').textContent = data.summary;
     $('rights-label').textContent = data.rightsLabel;
     $('rights').textContent = data.rights;
     $('construction-label').textContent = data.constructionLabel;
     $('construction').textContent = data.construction;
+    $('duration').textContent = data.duration;
     $('cash').textContent = data.cash;
     $('notice').textContent = data.notice;
     $('payment').textContent = data.payment;
     $('buy').textContent = data.buy;
     $('buy').disabled = !data.canBuy;
-    $('buy').style.display = data.ordering ? 'flex' : 'none';
-    const restrictions = $('restrictions');
-    restrictions.replaceChildren();
-    for (const line of data.restrictions) restrictions.appendChild(div('restriction', line));
+    show('costs', data.ordering);
+    show('buy', data.ordering);
+    show('report', !data.ordering);
+    show('notice', data.notice.length > 0);
+    show('payment', data.payment.length > 0);
+    const notes = $('notes');
+    notes.replaceChildren();
+    for (const line of data.notes) notes.appendChild(div('note', line));
     drawSteps(data.steps);
     drawPlan(data.drawing);
   } catch (error) { console.error('Construction plan render failed: ' + error.message); }

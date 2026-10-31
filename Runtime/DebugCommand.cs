@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag status | plan | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | advance | lights | lightset <what> <value> | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag status | plan | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
 
     public override void ExecuteCommand(List<string> args)
     {
@@ -70,11 +70,34 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "lightset":
                     LightSet(args[1], float.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture));
                     break;
+                case "journal":
+                    JournalDetails(args.Count < 2 || args[1] != "off");
+                    break;
                 default:
                     throw new ArgumentException(ExampleUsage);
             }
         }
         catch (Exception error) { Mod.Warn("baseddiag " + action + " failed: " + error); }
+    }
+
+    // The journal only shows a quest's details while the pointer rests on it, so this stands in for the pointer.
+    private static void JournalDetails(bool show)
+    {
+        if (!show)
+        {
+            Il2CppScheduleOne.Quests.Quest.HoveredQuest = null;
+            Mod.Log("baseddiag: journal details closed.");
+            return;
+        }
+        string title = Text.T(Mod.Sites[0].Title);
+        foreach (var quest in UnityEngine.Object.FindObjectsOfType<Il2CppScheduleOne.Quests.Quest>(true))
+        {
+            if (quest.Title != title) continue;
+            Il2CppScheduleOne.Quests.Quest.HoveredQuest = quest;
+            Mod.Log("baseddiag: journal details of '" + title + "' requested, " + quest.Entries.Count + " entries.");
+            return;
+        }
+        Mod.Warn("baseddiag: no active quest named '" + title + "'.");
     }
 
     // Lists the lights and ceiling fan parts around the site, for checks of light reach, shadows and wall clearance.

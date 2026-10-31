@@ -54,6 +54,7 @@
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.UI"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.UIModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.ImageConversionModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.PhysicsModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.AudioModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.AnimationModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.AnimationModule.dll</HintPath><Private>false</Private></Reference>
@@ -96,6 +97,7 @@
     <EmbeddedResource Include="Assets/based/*">
       <LogicalName>Based.Assets.based.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Assets/quest-icon.png" LogicalName="Based.Assets.quest-icon.png" />
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
