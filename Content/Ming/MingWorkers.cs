@@ -494,6 +494,14 @@ public static class MingWorkers
             _agent.stoppingDistance = WorkStoppingDistance;
             // The S1API convenience overload uses a one-metre success distance, too far for tool contact.
             _native.Movement.SetDestination(resolved, null, ArrivalHorizontal, 0.01f);
+            // The agent's own request waits in a queue shared with every walking NPC, which after a load can outlast the whole walk. The checked path is ready now.
+            if (!_agent.SetPath(path))
+            {
+                _native.Movement.Stop();
+                Failure("work anchor path to " + requested + " was refused by the agent");
+                _nextAction = Time.time + 8f;
+                return;
+            }
             _walking = true;
             _nextAction = Time.time + 15f;
         }
@@ -621,9 +629,35 @@ public static class MingWorkers
         {
             if (Npc.gameObject == null) { _info("worker diagnostics: " + Npc.ID + " root missing"); return; }
             Vector3 position = Npc.gameObject.transform.position;
+            var movement = _native.Movement;
+            var movementAgent = movement._agent;
             _info("worker diagnostics: " + Newtonsoft.Json.JsonConvert.SerializeObject(new
             {
                 id = Npc.ID,
+                agent = new
+                {
+                    sameAsMovement = movementAgent != null && movementAgent.Pointer == _agent.Pointer,
+                    enabled = _agent.enabled,
+                    onNavMesh = _agent.isOnNavMesh,
+                    isStopped = _agent.isOnNavMesh && _agent.isStopped,
+                    hasPath = _agent.hasPath,
+                    pathPending = _agent.pathPending,
+                    pathStatus = _agent.pathStatus.ToString(),
+                    remaining = _agent.isOnNavMesh ? _agent.remainingDistance : -1f,
+                    stopping = _agent.stoppingDistance,
+                    speed = _agent.speed,
+                    velocity = _agent.velocity.magnitude,
+                    desired = _agent.desiredVelocity.magnitude,
+                    updatePosition = _agent.updatePosition,
+                    areaMask = _agent.areaMask,
+                    obstacleAvoidance = _agent.obstacleAvoidanceType.ToString(),
+                    canMove = movement.CanMove,
+                    hasDestination = movement._hasDestination,
+                    destination = new[] { movement.CurrentDestination.x, movement.CurrentDestination.y, movement.CurrentDestination.z },
+                    inBuilding = _native.isInBuilding,
+                    ragdolled = _native.Avatar != null && _native.Avatar.Ragdolled,
+                    moveSpeed = movement.SpeedController != null ? movement.SpeedController.MoveSpeed : -1f
+                },
                 position = new[] { position.x, position.y, position.z },
                 visible = Visible,
                 phase = _phase,
