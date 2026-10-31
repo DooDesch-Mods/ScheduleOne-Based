@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="../../Core/**/*.cs" />
     <Compile Include="../../Runtime/Payments.cs" />
+    <Compile Include="../../UI/Text.cs" />
     <Compile Include="Stubs.cs" />
     <Compile Include="Program.cs" />
   </ItemGroup>
