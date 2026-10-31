@@ -45,10 +45,10 @@ public static class RoomProbe
     {
         string location = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
         string[] allowed = {
-            @"F:\Projects\Mods\Schedule1\_MPTest\Schedule I\Schedule I.exe",
-            @"F:\Projects\Mods\Schedule1\_MPTest4\Schedule I\Schedule I.exe"
+            @"\_MPTest\Schedule I\Schedule I.exe",
+            @"\_MPTest4\Schedule I\Schedule I.exe"
         };
-        if (!NativeBus.IsHost || !allowed.Contains(location, StringComparer.OrdinalIgnoreCase) || LoadManager.Instance == null || !LoadManager.Instance.IsGameLoaded)
+        if (!NativeBus.IsHost || !allowed.Any(end => location.EndsWith(end, StringComparison.OrdinalIgnoreCase)) || LoadManager.Instance == null || !LoadManager.Instance.IsGameLoaded)
             throw new InvalidOperationException("Room fixture mutations require the loaded isolated _MPTest or _MPTest4 host.");
         foreach (var peer in Il2CppFishNet.InstanceFinder.ServerManager.Clients)
             if (peer.Value != null && !peer.Value.IsHost)
