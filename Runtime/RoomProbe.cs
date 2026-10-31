@@ -136,7 +136,7 @@ public static class RoomProbe
             var tile = grid.GetTile(pair.coord2);
             var footprint = ghost.GetFootprintTile(pair.coord1);
             if (tile == null || !tile.name.StartsWith(TilePrefix, StringComparison.Ordinal))
-            { reason = $"footprint [{pair.coord2.x},{pair.coord2.y}] is outside verified new tiles"; return false; }
+            { reason = $"footprint [{pair.coord2.x},{pair.coord2.y}] is outside the new tiles"; return false; }
             if (tile.BuildableOccupants.Count > 0 || tile.OccupantTiles.Count > 0)
             { reason = $"footprint [{tile.x},{tile.y}] is occupied"; return false; }
             if (footprint == null || footprint.AreCornerObstaclesBlocked(tile) || !grid.IsTileValidAtCoordinate(pair.coord2, footprint, ghost))

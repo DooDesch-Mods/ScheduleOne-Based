@@ -10,7 +10,7 @@ public enum PurchaseKind { Rights, Construction }
 public enum PurchaseStatus { PaymentPending, Applied, Rejected, RefundRequired }
 
 public sealed record PurchaseCommand(string CommandId, string BaseId, string UpgradeId,
-    PurchaseKind Kind, string PayerId, long? ExpectedRevision = null);
+    PurchaseKind Kind, string PayerId);
 public sealed record PaymentRequest(string CommandId, string PayerId, int Amount);
 public sealed record PaymentAcknowledgement(bool Succeeded, string ReceiptId, string PayerId, int Amount);
 public sealed record PurchaseResult(PurchaseStatus Status, string Reason, long Revision,

@@ -10,6 +10,9 @@ public sealed class BasedSave : Saveable
     internal static BasedSave? Instance { get; private set; }
     private static string _saveId = Guid.NewGuid().ToString("N");
     internal static string SaveId => _saveId;
+    // False from the start of a load until OnLoaded, OnCreated or a host snapshot settles the ID. Until
+    // then SaveId is a placeholder and must not act as the payment session.
+    internal static bool SaveIdKnown { get; private set; }
     [SaveableField("based_state")] private SavedWorld _world = new();
     private static bool _loaded;
     public override SaveableLoadOrder LoadOrder => SaveableLoadOrder.BeforeBaseGame;
@@ -19,6 +22,7 @@ public sealed class BasedSave : Saveable
     internal static void BeginLoad()
     {
         _saveId = Guid.NewGuid().ToString("N");
+        SaveIdKnown = false;
         _loaded = false;
         if (Instance != null) Instance._world = new SavedWorld { SaveId = _saveId };
     }
@@ -27,6 +31,7 @@ public sealed class BasedSave : Saveable
     {
         if (string.IsNullOrEmpty(id)) throw new ArgumentException("Missing Based save identity.", nameof(id));
         _saveId = id;
+        SaveIdKnown = true;
     }
 
     internal static void Capture(BasedState state)
@@ -43,6 +48,7 @@ public sealed class BasedSave : Saveable
                 throw new InvalidOperationException("Based save data is incomplete.");
             Instance = this;
             _saveId = _world.SaveId;
+            SaveIdKnown = true;
             _loaded = true;
             Mod.Restore(_world.State);
         }
@@ -54,6 +60,7 @@ public sealed class BasedSave : Saveable
         if (_loaded) return;
         Instance = this;
         _world = new SavedWorld { SaveId = _saveId, State = Mod.Engine.ExportState() };
+        SaveIdKnown = true;
         _loaded = true;
         Mod.Log("Created Based state for this save.");
     }

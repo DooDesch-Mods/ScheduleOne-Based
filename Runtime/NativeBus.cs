@@ -26,15 +26,29 @@ public static class NativeBus
     private static Il2CppSystem.Func<Reader, BasedHostPacket>? _hostReader;
     private static string? _outgoingClient;
     private static string? _outgoingHost;
-    private static readonly Queue<string> IncomingClient = new();
-    private static readonly Queue<string> IncomingHost = new();
+    // FishNet reads a broadcast and invokes its handler in one synchronous call (LogicContainer in
+    // ServerManager.CreateBroadcastDelegate and ClientManager.CreateBroadcastDelegate). So each payload
+    // waits here for exactly that call, and a read whose handler never ran cannot shift later packets.
+    private static string? _incomingClient;
+    private static string? _incomingHost;
     private static MethodInfo? _sendToConnection;
 
     public static event Action<int, string>? HostReceived;
     public static event Action<string>? ClientReceived;
     public static bool IsHost => InstanceFinder.NetworkManager != null && InstanceFinder.NetworkManager.IsServer;
-    public static bool IsConnected => InstanceFinder.NetworkManager != null &&
-        (InstanceFinder.NetworkManager.IsServer || InstanceFinder.NetworkManager.IsClient);
+    // A client counts once the server has authenticated it. The server handler requires authentication and
+    // kicks a sender for an exploit attempt, and ClientManager.Started is already true before that point.
+    public static bool IsConnected
+    {
+        get
+        {
+            var manager = InstanceFinder.NetworkManager;
+            if (manager == null) return false;
+            if (manager.IsServer) return true;
+            var connection = manager.ClientManager.Connection;
+            return manager.IsClient && connection != null && connection.Authenticated;
+        }
+    }
     public static int LocalPeerId => Player.Local?.Connection?.ClientId ?? -1;
     public static string LocalPlayerId => Player.Local?.PlayerCode ?? "";
 
@@ -48,6 +62,17 @@ public static class NativeBus
                 return player.PlayerCode ?? "";
         }
         return "";
+    }
+
+    public static bool IsPlayerConnected(string playerId)
+    {
+        var players = Player.PlayerList;
+        for (int i = 0; players != null && i < players.Count; i++)
+        {
+            var player = players[i];
+            if (player != null && player.Connection != null && player.PlayerCode == playerId) return true;
+        }
+        return false;
     }
 
     public static bool Start()
@@ -82,7 +107,7 @@ public static class NativeBus
         catch (Exception e) { MelonLogger.Warning("[Based/Net] server unregister failed: " + e); }
         try { manager.ClientManager.UnregisterBroadcast<BasedHostPacket>(_clientReceiver); }
         catch (Exception e) { MelonLogger.Warning("[Based/Net] client unregister failed: " + e); }
-        IncomingClient.Clear(); IncomingHost.Clear();
+        _incomingClient = null; _incomingHost = null;
         _outgoingClient = null; _outgoingHost = null;
     }
 
@@ -121,26 +146,17 @@ public static class NativeBus
         finally { _outgoingHost = null; }
     }
 
-    public static void Broadcast(string packet)
-    {
-        CheckPacket(packet);
-        if (!Start() || !IsHost) throw new InvalidOperationException("Only the Based host can broadcast state.");
-        foreach (var pair in _manager!.ServerManager.Clients)
-            if (pair.Value != null && pair.Value.Authenticated && pair.Key != LocalPeerId) SendToPeer(pair.Key, packet);
-        DispatchClient(packet);
-    }
-
     private static void ConfigureSerializers()
     {
         if (_serializersReady) return;
         _clientWriter = DelegateSupport.ConvertDelegate<Il2CppSystem.Action<Writer, BasedClientPacket>>(
             new Action<Writer, BasedClientPacket>((writer, _) => writer.WriteString(TakeOutgoing(ref _outgoingClient))));
         _clientReader = DelegateSupport.ConvertDelegate<Il2CppSystem.Func<Reader, BasedClientPacket>>(
-            new Func<Reader, BasedClientPacket>(reader => { IncomingClient.Enqueue(ReadPacket(reader)); return new BasedClientPacket(); }));
+            new Func<Reader, BasedClientPacket>(reader => { _incomingClient = null; _incomingClient = ReadPacket(reader); return new BasedClientPacket(); }));
         _hostWriter = DelegateSupport.ConvertDelegate<Il2CppSystem.Action<Writer, BasedHostPacket>>(
             new Action<Writer, BasedHostPacket>((writer, _) => writer.WriteString(TakeOutgoing(ref _outgoingHost))));
         _hostReader = DelegateSupport.ConvertDelegate<Il2CppSystem.Func<Reader, BasedHostPacket>>(
-            new Func<Reader, BasedHostPacket>(reader => { IncomingHost.Enqueue(ReadPacket(reader)); return new BasedHostPacket(); }));
+            new Func<Reader, BasedHostPacket>(reader => { _incomingHost = null; _incomingHost = ReadPacket(reader); return new BasedHostPacket(); }));
         GenericWriter<BasedClientPacket>.Write = _clientWriter;
         GenericReader<BasedClientPacket>.Read = _clientReader;
         GenericWriter<BasedHostPacket>.Write = _hostWriter;
@@ -162,16 +178,20 @@ public static class NativeBus
     }
     private static void ReceiveClient(NetworkConnection connection, BasedClientPacket _)
     {
-        if (IncomingClient.Count == 0) { MelonLogger.Error("[Based/Net] client packet has no managed payload."); return; }
-        string packet = IncomingClient.Dequeue();
-        if (!IsHost || connection == null || !connection.Authenticated)
+        string? packet = _incomingClient;
+        _incomingClient = null;
+        if (packet == null) { MelonLogger.Error("[Based/Net] client packet has no managed payload."); return; }
+        if (!IsHost) { MelonLogger.Warning("[Based/Net] rejected client packet: this machine is not the host."); return; }
+        if (connection == null || !connection.Authenticated)
         { MelonLogger.Warning("[Based/Net] rejected unauthenticated client packet."); return; }
         DispatchHost(connection.ClientId, packet);
     }
     private static void ReceiveHost(BasedHostPacket _)
     {
-        if (IncomingHost.Count == 0) { MelonLogger.Error("[Based/Net] host packet has no managed payload."); return; }
-        DispatchClient(IncomingHost.Dequeue());
+        string? packet = _incomingHost;
+        _incomingHost = null;
+        if (packet == null) { MelonLogger.Error("[Based/Net] host packet has no managed payload."); return; }
+        DispatchClient(packet);
     }
     private static void DispatchHost(int peerId, string packet)
     {

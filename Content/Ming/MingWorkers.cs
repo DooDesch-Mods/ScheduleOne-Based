@@ -18,8 +18,11 @@ public static class MingWorkers
     public const string ForemanId = "based_ming_foreman";
     public const string CarpenterId = "based_ming_carpenter";
     public const string FitterId = "based_ming_fitter";
-    // This contact point must be calibrated against the live equipped avatar before acceptance.
-    public static float HammerContactNormalizedTime { get; set; } = 0.56f;
+    // Share of the UseHammer clip at which the head lands; "baseddiag hammer" measures it on a live avatar.
+    public static float HammerContactNormalizedTime { get; set; } = 0.325f;
+    private const float SpawnScanInterval = 1f;
+    private const float IdleCheckInterval = 1f;
+    private static readonly int UseHammerParameter = Animator.StringToHash("UseHammer");
     private static readonly Dictionary<string, Worker> Workers = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, (float Since, string Reason, bool Failed)> PendingSpawns = new(StringComparer.Ordinal);
     private static readonly string[] Ids = { ForemanId, CarpenterId, FitterId };
@@ -31,11 +34,15 @@ public static class MingWorkers
     private static string? _audioWarning;
     private static AudioClip[]? _clips;
     private static bool _initialized;
+    private static float _nextSpawnScan;
 
     public static int ActiveCount => Workers.Values.Count(w => w.Visible);
-    public static string CurrentPhase => _phase ?? "";
 
 #if DEBUG
+    private static float _swingProbeUntil;
+
+    public static void ProbeSwing(float seconds) => _swingProbeUntil = Time.time + seconds;
+
     public static void Diagnostics()
     {
         _info("workers diagnostics: attached=" + Workers.Count + "/3, active=" + ActiveCount +
@@ -121,7 +128,19 @@ public static class MingWorkers
     public static void Tick()
     {
         if (!_initialized) return;
-        // S1API can hydrate client wrappers without calling a user constructor or OnCreated.
+        if (Workers.Count < Ids.Length && Time.unscaledTime >= _nextSpawnScan)
+        {
+            _nextSpawnScan = Time.unscaledTime + SpawnScanInterval;
+            ScanForSpawnedWorkers();
+        }
+        bool working = _stage == UpgradeStage.Constructing && _phase != null && NetworkSingleton<TimeManager>.InstanceExists &&
+            NetworkSingleton<TimeManager>.Instance.CurrentTime >= 800 && NetworkSingleton<TimeManager>.Instance.CurrentTime < 1800;
+        foreach (var worker in Workers.Values) worker.Tick(working);
+    }
+
+    // S1API can hydrate client wrappers without calling a user constructor or OnCreated, so the list is the only signal.
+    private static void ScanForSpawnedWorkers()
+    {
         foreach (var npc in NPC.All)
         {
             if (npc is not MingWorkerNpc construction || construction.gameObject == null || Workers.ContainsKey(construction.ID)) continue;
@@ -151,9 +170,6 @@ public static class MingWorkers
                     "s: " + reason + "; S1API CustomNpcsReady=" + NPC.CustomNpcsReady + ". Inspect the original S1API spawn error; Based has not spawned a replacement.");
             }
         }
-        bool working = _stage == UpgradeStage.Constructing && _phase != null && NetworkSingleton<TimeManager>.InstanceExists &&
-            NetworkSingleton<TimeManager>.Instance.CurrentTime >= 800 && NetworkSingleton<TimeManager>.Instance.CurrentTime < 1800;
-        foreach (var worker in Workers.Values) worker.Tick(working);
     }
 
     private static bool NativeSpawnReady(MingWorkerNpc npc, out string reason)
@@ -202,13 +218,13 @@ public static class MingWorkers
         _phase = null;
     }
 
-    private static string ForemanLine => _phase switch
+    private static string ForemanLine => Based.UI.Text.T(_phase switch
     {
         "breakthrough" => "We are opening the wall and preparing the floor today. Keep behind the barrier.",
         "frame" => "The floor is in. Today we are putting up the walls.",
         "roof" => "Roof and finishing today. You can move in tomorrow.",
         _ => "Talk to Ming about the upstairs expansion."
-    };
+    });
 
     private static AudioClip[] Clips()
     {
@@ -249,13 +265,16 @@ public static class MingWorkers
         private const float WorkStoppingDistance = 0.15f;
         private const float ArrivalHorizontal = 0.22f;
         private const float ArrivalVertical = 0.2f;
-        private const float FloorHeightTolerance = 0.4f;
+        private const float LeaveHorizontal = 0.45f;
+        private const float FloorHeightTolerance = 0.2f;
         private int _hammerLayer = -1, _soundIndex;
         private string? _failure;
         internal bool Visible;
 #if DEBUG
         private int _soundCount;
         private string _lastSoundClip = "";
+        private readonly float[] _swingHeights = new float[20];
+        private readonly int[] _swingSamples = new int[20];
 #endif
 
         internal Worker(MingWorkerNpc npc, int index)
@@ -306,16 +325,18 @@ public static class MingWorkers
         internal void RefreshDialogue()
         {
             Npc.Dialogue.BuildAndRegisterContainer("based_construction", builder => builder.AddNode("ENTRY",
-                _index == 0 ? ForemanLine : _phase == "roof" ? "Just the last few fittings. Mind the tools." : "Keep the work area clear, please."));
+                _index == 0 ? ForemanLine : Based.UI.Text.T(_phase == "roof" ? "Just the last few fittings. Mind the tools." : "Keep the work area clear, please.")));
             if (!Npc.Dialogue.UseContainerOnInteract("based_construction")) Failure("construction dialogue could not bind to interaction");
         }
 
         internal void Tick(bool working)
         {
-            if (!NativeSpawnReady(Npc, out _)) return;
+            if (Npc.gameObject == null || !Npc.gameObject.activeInHierarchy) return;
             bool host = InstanceFinder.IsServer;
             if (!working)
             {
+                if (Time.time < _nextCheck) return;
+                _nextCheck = Time.time + IdleCheckInterval;
                 if (_hammering || _walking || _stationWorking || _targetValid) ResetWork();
                 RestorePropertyAccess();
                 SetVisible(false);
@@ -379,7 +400,7 @@ public static class MingWorkers
                 _nextAction = _workStartsAt + 4.5f + _index * 1.3f;
                 Recover();
             }
-            else if (_stationWorking && !AtAssignedAnchor())
+            else if (_stationWorking && LeftAssignedAnchor())
             {
                 SetHammer(false);
                 _stationWorking = false;
@@ -441,7 +462,7 @@ public static class MingWorkers
             resolved = hit.position;
             if (HorizontalDistance(requested, resolved) > 0.2f || Mathf.Abs(requested.y - resolved.y) > FloorHeightTolerance)
             {
-                reason = "work anchor projection exceeds 0.2m horizontally or 0.4m in height: " + requested;
+                reason = "work anchor projection exceeds 0.2m horizontally or " + FloorHeightTolerance + "m in height: " + requested;
                 return false;
             }
             reason = "";
@@ -462,7 +483,9 @@ public static class MingWorkers
             var path = new NavMeshPath();
             if (!_agent.isOnNavMesh || !NavMesh.CalculatePath(Npc.Position, resolved, filter, path) || path.status != NavMeshPathStatus.PathComplete)
             {
-                Failure("no complete path to work anchor " + requested + " for worker agent/mask");
+                // A rebuilt site can leave a working worker outside the walls. The next check puts them back at work.
+                Failure("no complete path to work anchor " + requested + " for worker agent/mask; placing the worker again");
+                _placed = false;
                 _nextAction = Time.time + 8f;
                 return;
             }
@@ -489,10 +512,15 @@ public static class MingWorkers
             Mathf.Abs(Npc.Position.y - _resolvedAnchor.y) <= ArrivalVertical &&
             Mathf.Abs(Npc.Position.y - _requestedAnchor.y) <= FloorHeightTolerance;
 
+        // A standing agent drifts a little, so leaving takes clearly more distance than arriving. Otherwise each nudge restarts the job.
+        private bool LeftAssignedAnchor() => !_targetValid ||
+            HorizontalDistance(Npc.Position, _resolvedAnchor) > LeaveHorizontal ||
+            Mathf.Abs(Npc.Position.y - _resolvedAnchor.y) > ArrivalVertical;
+
         private static float HorizontalDistance(Vector3 a, Vector3 b) =>
             Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
 
-        private bool WantsHammer() => _index == 1 || _index == 2 && !_workAtSecondary && _phase != "breakthrough";
+        private bool WantsHammer() => _index == 1 || _index == 2 && _phase != "breakthrough";
 
         private bool ContactInReach()
         {
@@ -506,25 +534,26 @@ public static class MingWorkers
         private Vector3 WorkPoint(bool secondary)
         {
             float y = MingWorld.FloorY;
-            if (_index == 0) return secondary ? new Vector3(-56f, y, 142.5f) : new Vector3(-57.6f, y, 143.3f);
+            // The foreman stays put and only turns from the plan to the timber, so nobody crosses the carpenter between the tables.
+            if (_index == 0) return new Vector3(-57.5f, y, 143.2f);
             if (_index == 1)
-                return _phase == "breakthrough" || !secondary ? new Vector3(-57.8f, y, 137.1f) : new Vector3(-56f, y, 143.85f);
-            return secondary ? new Vector3(-55.6f, y, 141.65f) : new Vector3(-55.3f, y, 140.1f);
+                return _phase == "breakthrough" || !secondary ? new Vector3(-57.8f, y, 137.55f) : new Vector3(-56.4f, y, 143.45f);
+            return secondary ? new Vector3(-54.7f, y, 138.4f) : new Vector3(-54.7f, y, 140.1f);
         }
 
         private Vector3 ContactPoint(bool secondary)
         {
             var point = WorkPoint(secondary);
-            if (_index == 0) return secondary ? point + Vector3.right : new Vector3(-57.6f, 0.65f, 142.4f);
-            if (_index == 1) return point.z < 140 ? new Vector3(-57.8f, 0.65f, 136.45f) : new Vector3(-56f, 0.65f, 144.5f);
-            return secondary ? new Vector3(-54.9f, 0.8f, 142f) : new Vector3(-54.65f, 0.65f, 140.1f);
+            if (_index == 0) return secondary ? new Vector3(-58.85f, 0.1f, 144f) : new Vector3(-57.5f, 0.45f, 142.4f);
+            if (_index == 1) return point.z < 140 ? new Vector3(-57.8f, 0.45f, 136.95f) : new Vector3(-56.4f, 0.45f, 144.05f);
+            return new Vector3(-54.1f, 0.9f, point.z);
         }
 
         private void SetVisible(bool visible)
         {
             if (_native == null) return;
             if (_native.isVisible != visible) _native.SetVisible(visible, false);
-            if (Visible == visible && _colliders.All(c => c.Collider == null || c.Collider.enabled == (visible && c.Enabled))) return;
+            if (Visible == visible) return;
             Visible = visible;
             foreach (var state in _colliders) if (state.Collider != null) state.Collider.enabled = visible && state.Enabled;
         }
@@ -540,21 +569,30 @@ public static class MingWorkers
             if (!enabled) _audio.Stop();
         }
 
+        private bool PlaysHammerClip(int layer)
+        {
+            var clips = _animator!.GetCurrentAnimatorClipInfo(layer);
+            for (int i = 0; i < clips.Length; i++)
+                if (clips[i].clip != null && clips[i].clip.name == "UseHammer" && clips[i].weight > 0.5f) return true;
+            return false;
+        }
+
         private void PlayContactSound()
         {
             if (!Visible || _animator == null) return;
+            // Clients only see the swing through the animator, so the cheap flag decides before any clip lookup.
+            if (!_animator.GetBool(UseHammerParameter)) { _hammerLayer = -1; _previousNormalized = -1; return; }
             if (_hammerLayer < 0)
             {
                 for (int layer = 0; layer < _animator.layerCount; layer++)
-                {
-                    var clips = _animator.GetCurrentAnimatorClipInfo(layer);
-                    if (clips.Any(c => c.clip != null && c.clip.name == "UseHammer" && c.weight > 0.5f)) { _hammerLayer = layer; break; }
-                }
+                    if (PlaysHammerClip(layer)) { _hammerLayer = layer; break; }
                 if (_hammerLayer < 0) return;
             }
-            var active = _animator.GetCurrentAnimatorClipInfo(_hammerLayer);
-            if (!active.Any(c => c.clip != null && c.clip.name == "UseHammer" && c.weight > 0.5f)) { _hammerLayer = -1; _previousNormalized = -1; return; }
+            if (!PlaysHammerClip(_hammerLayer)) { _hammerLayer = -1; _previousNormalized = -1; return; }
             float normalized = _animator.GetCurrentAnimatorStateInfo(_hammerLayer).normalizedTime;
+#if DEBUG
+            SampleSwing(normalized);
+#endif
             if (_previousNormalized >= 0)
             {
                 float contact = Mathf.Clamp01(HammerContactNormalizedTime);
@@ -582,180 +620,43 @@ public static class MingWorkers
         internal void Diagnostics()
         {
             if (Npc.gameObject == null) { _info("worker diagnostics: " + Npc.ID + " root missing"); return; }
-            var network = Npc.gameObject.GetComponent<NetworkObject>();
-            var renderers = Npc.gameObject.GetComponentsInChildren<Renderer>(true);
-            var hammerLayers = new List<object>();
-            var animatorLayers = new List<object>();
-            if (_animator != null && _animator.isInitialized)
-                for (int layer = 0; layer < _animator.layerCount; layer++)
-                {
-                    var clips = _animator.GetCurrentAnimatorClipInfo(layer);
-                    var state = _animator.GetCurrentAnimatorStateInfo(layer);
-                    animatorLayers.Add(new
-                    {
-                        layer,
-                        name = _animator.GetLayerName(layer),
-                        layerWeight = _animator.GetLayerWeight(layer),
-                        state.fullPathHash,
-                        state.normalizedTime,
-                        clips = clips.Select(c => new { name = c.clip != null ? c.clip.name : "", c.weight }).ToArray()
-                    });
-                    foreach (var clip in clips)
-                        if (clip.clip != null && clip.clip.name == "UseHammer")
-                            hammerLayers.Add(new { layer, clip = clip.clip.name, clip.weight,
-                                normalizedTime = state.normalizedTime,
-                                layerWeight = _animator.GetLayerWeight(layer) });
-                }
-            var avatar = _native.Avatar;
-            var animation = avatar != null ? avatar.Animation : null;
-            var head = _animator != null && _animator.isInitialized && _animator.isHuman
-                ? _animator.GetBoneTransform(HumanBodyBones.Head) : null;
-            var hip = avatar != null ? avatar.HipBone : null;
-            var pose = new
-            {
-                root = PoseTransform(Npc.gameObject.transform),
-                avatar = avatar != null ? PoseTransform(avatar.transform) : null,
-                bodyContainer = avatar != null ? PoseTransform(avatar.BodyContainer) : null,
-                animatorTransform = _animator != null ? PoseTransform(_animator.transform) : null,
-                head = PoseTransform(head),
-                hip = PoseTransform(hip),
-                headHipUpDot = head != null && hip != null ? (float?)Vector3.Dot((head.position - hip.position).normalized, Vector3.up) : null,
-                conscious = Npc.IsConscious,
-                ragdolled = avatar != null && avatar.Ragdolled,
-                culled = avatar != null && avatar.IsCulled,
-                animationEnabled = animation != null && animation.animationEnabled,
-                seated = animation != null && animation.IsSeated,
-                standUpAnimationPlaying = animation != null && animation.StandUpAnimationPlaying,
-                ragdollNextFrame = animation != null && animation._activateRagdollNextFrame,
-                lastFrameBoneTransformsValid = animation != null && animation._lastFrameBoneTransformsValid,
-                animator = _animator != null ? new
-                {
-                    _animator.enabled,
-                    active = _animator.gameObject.activeInHierarchy,
-                    initialized = _animator.isInitialized,
-                    humanoid = _animator.isHuman,
-                    cullingMode = _animator.cullingMode.ToString(),
-                    updateMode = _animator.updateMode.ToString(),
-                    _animator.speed,
-                    _animator.applyRootMotion,
-                    controller = _animator.runtimeAnimatorController != null ? _animator.runtimeAnimatorController.name : "",
-                    layers = animatorLayers
-                } : null
-            };
             Vector3 position = Npc.gameObject.transform.position;
-            Vector3 soundPosition = _audio != null ? _audio.transform.position : Vector3.zero;
-            Vector3 anchor = _targetValid ? _requestedAnchor : WorkPoint(_workAtSecondary);
-            var agent = Npc.gameObject.GetComponent<NavMeshAgent>();
-            object? navigation = null;
-            if (agent != null)
-            {
-                bool onMesh = agent.enabled && agent.isOnNavMesh;
-                Vector3? destination = onMesh ? agent.destination : null;
-                Vector3? movementDestination = _native.Movement != null ? _native.Movement.CurrentDestination : null;
-                navigation = new
-                {
-                    agent.agentTypeID,
-                    agent.areaMask,
-                    agent.radius,
-                    agent.height,
-                    agent.baseOffset,
-                    agent.stoppingDistance,
-                    agent.speed,
-                    enabled = agent.enabled,
-                    isOnNavMesh = onMesh,
-                    pathStatus = onMesh ? agent.pathStatus.ToString() : "unavailable:not-on-navmesh",
-                    hasPath = onMesh && agent.hasPath,
-                    pathPending = onMesh && agent.pathPending,
-                    isStopped = onMesh && agent.isStopped,
-                    remainingDistance = onMesh ? (float?)agent.remainingDistance : null,
-                    destination = destination.HasValue ? new[] { destination.Value.x, destination.Value.y, destination.Value.z } : null,
-                    movementDestination = movementDestination.HasValue ? new[] { movementDestination.Value.x, movementDestination.Value.y, movementDestination.Value.z } : null,
-                    movementIsMoving = _native.Movement != null && _native.Movement.IsMoving,
-                    velocity = onMesh ? new[] { agent.velocity.x, agent.velocity.y, agent.velocity.z } : null
-                };
-            }
             _info("worker diagnostics: " + Newtonsoft.Json.JsonConvert.SerializeObject(new
             {
                 id = Npc.ID,
-                root = Npc.gameObject.name,
                 position = new[] { position.x, position.y, position.z },
-                active = Npc.gameObject.activeInHierarchy,
                 visible = Visible,
-                nativeVisible = _native.isVisible,
-                spawned = network != null && network.IsSpawned,
-                renderersEnabled = renderers.Count(r => r != null && r.enabled && r.gameObject.activeInHierarchy),
-                renderersVisible = renderers.Count(r => r != null && r.isVisible),
                 phase = _phase,
-                requestedAnchor = new[] { anchor.x, anchor.y, anchor.z },
-                resolvedAnchor = _targetValid ? new[] { _resolvedAnchor.x, _resolvedAnchor.y, _resolvedAnchor.z } : null,
-                contact = _targetValid ? new[] { _contact.x, _contact.y, _contact.z } : null,
-                distanceToAnchor = Vector3.Distance(position, anchor),
-                atAssignedAnchor = AtAssignedAnchor(),
+                anchor = _targetValid ? new[] { _resolvedAnchor.x, _resolvedAnchor.y, _resolvedAnchor.z } : null,
+                atAnchor = AtAssignedAnchor(),
                 contactInReach = _targetValid && ContactInReach(),
-                pendingSecondary = _pendingSecondary,
-                pose,
-                jobPropertyAccess = _jobPropertyAccess,
-                originalAreaMask = _originalAreaMask,
-                targetSampleActualMask = TargetSample(anchor, _agent.areaMask),
-                targetSampleAllAreas = TargetSample(anchor, NavMesh.AllAreas),
-                propertyInteriorArea = NavMesh.GetAreaFromName("PropertyInterior"),
-                failure = _failure,
-                navigation,
-                hammering = _hammering,
                 walking = _walking,
-                equipped = _native.Avatar?.CurrentEquippable?.AssetPath ?? "",
-                animatorUseHammer = _animator != null && _animator.GetBool("UseHammer"),
-                hammerLayers,
+                hammering = _hammering,
                 soundCount = _soundCount,
                 lastSoundClip = _lastSoundClip,
-                audio = new
-                {
-                    present = _audio != null,
-                    spatialBlend = _audio != null ? _audio.spatialBlend : 0,
-                    isPlaying = _audio != null && _audio.isPlaying,
-                    volume = _audio != null ? _audio.volume : 0,
-                    muted = _audio != null && _audio.mute,
-                    position = new[] { soundPosition.x, soundPosition.y, soundPosition.z }
-                }
+                failure = _failure
             }));
         }
 
-        private static object? PoseTransform(Transform? transform)
+        // Averages the right hand's height per slice of the swing; the lowest slice is where the hammer lands.
+        private void SampleSwing(float normalized)
         {
-            if (transform == null) return null;
-            Vector3 p = transform.position, e = transform.eulerAngles, up = transform.up;
-            Vector3 lp = transform.localPosition, le = transform.localEulerAngles;
-            Quaternion q = transform.rotation, lq = transform.localRotation;
-            return new
+            if (Time.time < _swingProbeUntil)
             {
-                transform.name,
-                activeSelf = transform.gameObject.activeSelf,
-                active = transform.gameObject.activeInHierarchy,
-                position = new[] { p.x, p.y, p.z },
-                euler = new[] { e.x, e.y, e.z },
-                up = new[] { up.x, up.y, up.z },
-                rotation = new[] { q.x, q.y, q.z, q.w },
-                localPosition = new[] { lp.x, lp.y, lp.z },
-                localEuler = new[] { le.x, le.y, le.z },
-                localRotation = new[] { lq.x, lq.y, lq.z, lq.w }
-            };
-        }
-
-        private object TargetSample(Vector3 target, int areaMask)
-        {
-            var filter = new NavMeshQueryFilter { agentTypeID = _agent.agentTypeID, areaMask = areaMask };
-            bool found = NavMesh.SamplePosition(target, out var hit, 0.6f, filter);
-            return new
-            {
-                filter.agentTypeID,
-                filter.areaMask,
-                radius = 0.6f,
-                found,
-                hitMask = found ? (int?)hit.mask : null,
-                position = found ? new[] { hit.position.x, hit.position.y, hit.position.z } : null,
-                distance = found ? (float?)Vector3.Distance(target, hit.position) : null,
-                heightDifference = found ? (float?)Mathf.Abs(target.y - hit.position.y) : null
-            };
+                var hand = _animator != null && _animator.isHuman ? _animator.GetBoneTransform(HumanBodyBones.RightHand) : null;
+                if (hand == null) return;
+                int slice = Mathf.FloorToInt((normalized - Mathf.Floor(normalized)) * _swingHeights.Length) % _swingHeights.Length;
+                _swingHeights[slice] += hand.position.y;
+                _swingSamples[slice]++;
+                return;
+            }
+            if (_swingProbeUntil <= 0 || _swingSamples.Sum() == 0) return;
+            var report = _swingHeights.Select((h, i) => (Time: (i + .5f) / _swingHeights.Length, Height: _swingSamples[i] > 0 ? h / _swingSamples[i] : float.NaN)).ToArray();
+            var lowest = report.Where(r => !float.IsNaN(r.Height)).OrderBy(r => r.Height).First();
+            _info("workers: " + Npc.ID + " hammer swing lowest at normalized " + lowest.Time.ToString("F3") + "; heights " +
+                string.Join(" ", report.Select(r => r.Time.ToString("F2") + "=" + r.Height.ToString("F3"))));
+            Array.Clear(_swingHeights, 0, _swingHeights.Length);
+            Array.Clear(_swingSamples, 0, _swingSamples.Length);
         }
 #endif
 

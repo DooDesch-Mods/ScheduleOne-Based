@@ -1,24 +1,36 @@
-body { height:100%; font-family:game-ui; color:#eaf3fa; font-size:15px; }
-.shade { height:100%; background:rgba(5,10,17,.88); padding:28px; justify-content:center; align-items:center; }
-.plan { width:850px; max-width:100%; background:#13283d; border:1px solid #52758f; padding:24px; gap:22px; }
+body { height:100%; font-family:game-ui; color:#e4eef5; font-size:15px; }
+.shade { height:100%; background:rgba(4,9,16,.88); padding:24px; justify-content:center; align-items:center; }
+.plan { width:800px; max-width:100%; background:#11263b; border:1px solid #4c7088; padding:22px; gap:16px; }
 .heading { flex-direction:row; justify-content:space-between; align-items:center; }
-.brand { color:#67c8e9; font-size:14px; letter-spacing:3px; font-weight:700; margin-bottom:6px; }
-.title { font-size:27px; font-weight:700; }
-.close { padding:8px 14px; background:#233e54; border:1px solid #52758f; border-radius:3px; }
-.content { flex-direction:row; gap:26px; }
-.drawing { width:43%; min-width:0; gap:16px; }
-.drawing-inner { height:235px; background:#0d2032; border:1px solid #3c637f; }
-.old-room { position:absolute; left:15px; top:45px; width:120px; height:170px; border:3px solid #a6bdca; padding:12px; justify-content:center; }
-.new-room { position:absolute; left:135px; top:20px; right:14px; height:195px; background:#194e63; border:3px solid #69cddd; padding:12px; justify-content:center; }
-.passage { position:absolute; left:130px; top:155px; width:12px; height:36px; background:#e6b65b; }
-.caption { color:#b3c9d7; font-size:13px; }
-.offer { flex:1; min-width:0; gap:12px; }
-.status { font-size:21px; font-weight:700; color:#86dfec; margin-bottom:2px; }
-.cost { flex-direction:row; justify-content:space-between; border-bottom:1px solid #35556e; padding-bottom:8px; gap:15px; }
-.description { color:#d4e3eb; }
-.duration { color:#e6b65b; font-weight:700; }
-.small { font-size:12px; color:#b3c9d7; }
-.buy { padding:12px 16px; border-radius:3px; background:#e6b65b; color:#182534; font-weight:700; text-align:center; align-items:center; }
-.buy:hover { background:#f3c776; }
-.buy:disabled { background:#354e5e; color:#afc0ca; }
-.notice { color:#f0c77a; font-size:13px; }
+.title { font-size:26px; font-weight:700; }
+.close { padding:7px 14px; background:#21394e; border:1px solid #4c7088; border-radius:2px; color:#e4eef5; }
+.close:hover { background:#2d4a63; }
+
+.steps { flex-direction:row; gap:6px; }
+.step { flex:1; min-width:0; gap:5px; color:#7f9aad; font-size:13px; }
+.step-bar { height:5px; background:#2b4559; }
+.step.done { color:#a9c6d6; }
+.step.done .step-bar { background:#5fa8c4; }
+.step.active { color:#f0c46a; font-weight:700; }
+.step.active .step-bar { background:#f0c46a; }
+
+.content { flex-direction:row; gap:24px; align-items:flex-start; }
+.drawing { position:relative; flex-shrink:0; background:#0b1d2e; border:1px solid #3a5d76; overflow:hidden; }
+.grid-line { position:absolute; background:#17334a; }
+.room { position:absolute; justify-content:center; align-items:center; padding:3px; font-size:12px; text-align:center; }
+.room.existing { background:#17334a; border:2px solid #9fb8c6; color:#c4d6e0; }
+.room.new { background:#1b5068; border:2px solid #68c8da; color:#e4f5f9; }
+.room.opening { background:#f0c46a; }
+
+.offer { flex:1; min-width:0; gap:9px; }
+.status { font-size:21px; font-weight:700; color:#8adcea; }
+.progress { color:#f0c46a; font-weight:700; }
+.summary { color:#cfdfe8; }
+.cost { flex-direction:row; justify-content:space-between; border-bottom:1px solid #2f4c62; padding-bottom:6px; gap:14px; }
+.price { font-weight:700; }
+.small { font-size:12px; color:#a9bfcd; }
+.restrictions { gap:3px; font-size:13px; color:#cfdfe8; }
+.buy { padding:11px 16px; border-radius:2px; background:#f0c46a; color:#16222f; font-weight:700; text-align:center; align-items:center; }
+.buy:hover { background:#f6d28a; }
+.buy:disabled { background:#334c5c; color:#a9bcc8; }
+.notice { color:#f0c46a; font-size:13px; }
