@@ -17,7 +17,7 @@ public sealed record PurchaseResult(PurchaseStatus Status, string Reason, long R
     PaymentRequest? Payment = null, string? ReceiptId = null);
 public sealed record TransitionResult(bool Applied, string Reason, long Revision);
 
-// These mutable DTOs carry only managed data for the existing Saveable serializer.
+// These mutable DTOs carry only managed data for the Saveable serializer.
 public sealed class BasedState
 {
     public int SchemaVersion { get; set; } = 1;

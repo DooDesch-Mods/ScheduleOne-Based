@@ -2,16 +2,19 @@
 
   <!-- Snitch profiler, Debug only (Snitch/Probe.cs). Release contains no Snitch types. -->
   <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/Snitch.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/Snitch.props')" />
-  <!-- The license notice in the DLL. The repository is private, so the notice points to support. -->
+  <!-- The license notice in the DLL. -->
   <PropertyGroup>
-    <SourceNoticePrivate>true</SourceNoticePrivate>
     <SourceNoticeName>Based</SourceNoticeName>
   </PropertyGroup>
   <!-- Release hardening: strips debug info and assembly identity, and brings the license notice. -->
   <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/Hardening.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/Hardening.props')" />
   <Import Project="$(MSBuildThisFileDirectory)Workspace/build/Hardening.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/Hardening.props')" />
 
-  <!-- CI checks out Workspace as a subfolder, and the checks are their own projects. -->
+  <!-- CI checks out Workspace as a subfolder, and the checks are their own projects. The folder also stays out of the
+       None and Content items: a DLL listed there wins over a HintPath, so old game snapshots would become references. -->
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Workspace/**;Tests/**</DefaultItemExcludes>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Remove="Workspace/**/*.cs" />
     <Compile Remove="Tests/**/*.cs" />
@@ -78,10 +81,15 @@
        build deploys into a folder that does not exist. -->
   <PropertyGroup>
     <MapExpansionsProject Condition="'$(MapExpansionsProject)' == ''">$(MSBuildThisFileDirectory)../MapExpansions/MapExpansions.csproj</MapExpansionsProject>
+    <MapExpansionsDll Condition="'$(MapExpansionsDll)' == ''">$(WorkspaceLibPath)/mapexpansions/MapExpansions.dll</MapExpansionsDll>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="Exists('$(MapExpansionsProject)')">
     <ProjectReference Include="$(MapExpansionsProject)" Private="false"
                       Properties="ModsDirectory=$(MSBuildThisFileDirectory)obj\no-deploy;BuildEditor=false" />
+  </ItemGroup>
+  <!-- CI has no sibling checkout and compiles against the released build in the shared lib folder. -->
+  <ItemGroup Condition="!Exists('$(MapExpansionsProject)')">
+    <Reference Include="MapExpansions"><HintPath>$(MapExpansionsDll)</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
   <!-- The plan page goes through the single-file Sideload shim. -->
