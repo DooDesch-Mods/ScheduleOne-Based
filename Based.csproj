@@ -1,0 +1,105 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Snitch profiler, Debug only (Snitch/Probe.cs). Release contains no Snitch types. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/Snitch.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/Snitch.props')" />
+  <!-- The license notice in the DLL. The repository is private, so the notice points to support. -->
+  <PropertyGroup>
+    <SourceNoticePrivate>true</SourceNoticePrivate>
+    <SourceNoticeName>Based</SourceNoticeName>
+  </PropertyGroup>
+  <!-- Release hardening: strips debug info and assembly identity, and brings the license notice. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/Hardening.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/Hardening.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Workspace/build/Hardening.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/Hardening.props')" />
+
+  <!-- CI checks out Workspace as a subfolder, and the checks are their own projects. -->
+  <ItemGroup>
+    <Compile Remove="Workspace/**/*.cs" />
+    <Compile Remove="Tests/**/*.cs" />
+  </ItemGroup>
+
+  <!-- Must come after the Remove above, or it would drop these generated and linked files again. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/ModVersion.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/ModVersion.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Workspace/build/ModVersion.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/ModVersion.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/L10n.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/L10n.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Workspace/build/L10n.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/L10n.props')" />
+  <!-- Where a build is allowed to install: the slot of this session's lease. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/Deploy.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/Deploy.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Workspace/build/Deploy.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/Deploy.props')" />
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Based</AssemblyName>
+    <RootNamespace>Based</RootNamespace>
+    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
+    <NoWarn>$(NoWarn);MSB3277;MSB3245</NoWarn>
+    <WorkspaceLibPath Condition="'$(WorkspaceLibPath)' == ''">$(MSBuildThisFileDirectory)../Workspace/lib/il2cpp</WorkspaceLibPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader"><HintPath>$(WorkspaceLibPath)/melonloader/MelonLoader.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(WorkspaceLibPath)/melonloader/0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>$(WorkspaceLibPath)/melonloader/Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppInterop.Runtime"><HintPath>$(WorkspaceLibPath)/melonloader/Il2CppInterop.Runtime.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppInterop.Common"><HintPath>$(WorkspaceLibPath)/melonloader/Il2CppInterop.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Assembly-CSharp"><HintPath>$(WorkspaceLibPath)/game/Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppScheduleOne.Core"><HintPath>$(WorkspaceLibPath)/game/Il2CppScheduleOne.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppFishNet.Runtime"><HintPath>$(WorkspaceLibPath)/game/Il2CppFishNet.Runtime.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2Cppmscorlib"><HintPath>$(WorkspaceLibPath)/game/Il2Cppmscorlib.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppSystem"><HintPath>$(WorkspaceLibPath)/game/Il2CppSystem.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UI"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UIModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.PhysicsModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AudioModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AnimationModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.AnimationModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.AIModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.AIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.TextMeshPro"><HintPath>$(WorkspaceLibPath)/game/Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="S1API.Il2Cpp.MelonLoader"><HintPath>$(WorkspaceLibPath)/s1api/S1API.Il2Cpp.MelonLoader.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!-- The crew are Personnel NPCs. A sibling checkout's build wins over the shared lib folder. -->
+  <PropertyGroup>
+    <PersonnelDll Condition="'$(PersonnelDll)' == '' And Exists('$(MSBuildThisFileDirectory)../Personnel/bin/Debug/net6.0/Personnel.dll')">$(MSBuildThisFileDirectory)../Personnel/bin/Debug/net6.0/Personnel.dll</PersonnelDll>
+    <PersonnelDll Condition="'$(PersonnelDll)' == ''">$(WorkspaceLibPath)/personnel/Personnel.dll</PersonnelDll>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Personnel"><HintPath>$(PersonnelDll)</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!-- The world work. MapExpansionsProject points at another checkout, e.g. a worktree with an API change; MSBuild
+       also takes it from an environment variable of that name. The framework ships on its own, so the referenced
+       build deploys into a folder that does not exist. -->
+  <PropertyGroup>
+    <MapExpansionsProject Condition="'$(MapExpansionsProject)' == ''">$(MSBuildThisFileDirectory)../MapExpansions/MapExpansions.csproj</MapExpansionsProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(MapExpansionsProject)" Private="false"
+                      Properties="ModsDirectory=$(MSBuildThisFileDirectory)obj\no-deploy;BuildEditor=false" />
+  </ItemGroup>
+
+  <!-- The plan page goes through the single-file Sideload shim. -->
+  <PropertyGroup>
+    <SideloadShimPath Condition="Exists('$(MSBuildThisFileDirectory)../Sideload/Sideload.Api/Sideload.cs')">$(MSBuildThisFileDirectory)../Sideload/Sideload.Api/Sideload.cs</SideloadShimPath>
+    <SideloadShimPath Condition="'$(SideloadShimPath)' == '' And Exists('$(MSBuildThisFileDirectory)Workspace/lib/sideload-api/Sideload.cs')">$(MSBuildThisFileDirectory)Workspace/lib/sideload-api/Sideload.cs</SideloadShimPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Condition="'$(SideloadShimPath)' != ''" Include="$(SideloadShimPath)" Link="Sideload.Api.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets/based/*">
+      <LogicalName>Based.Assets.based.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <Exec Condition="Exists('$(ModsDirectory)')"
+          Command="cmd /c copy /Y &quot;$(TargetPath)&quot; &quot;$(ModsDirectory)&quot;" />
+  </Target>
+</Project>
