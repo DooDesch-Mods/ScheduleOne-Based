@@ -24,9 +24,15 @@ internal static class BuildPlan
     private static string _notice = "", _lastPushed = "";
     private static UpgradeStage _noticeStage;
     private static float _nextPush;
+    private static Il2CppScheduleOne.State.State? _gameState;
+    private static IntPtr _gameStateParent;
+    private static bool _gameStatePushed;
+    private static volatile bool _gameStateLeft;
     internal static SiteDefinition? Site { get; private set; }
+    // Opened from the folder rather than in the vendor's conversation, so nothing else holds the mouse or ends the plan.
+    internal static bool Standalone { get; private set; }
 
-    internal static void Open(SiteDefinition site)
+    internal static void Open(SiteDefinition site, bool standalone = false)
     {
         if (_root != null) return;
         if (!Surfaces.Available) throw new InvalidOperationException("Sideload Surfaces is required for the construction plan.");
@@ -47,11 +53,19 @@ internal static class BuildPlan
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
         Site = site;
+        Standalone = standalone;
         _notice = _lastPushed = "";
         Payments.ClearSettledStatus();
         Mod.PlanOpened(site);
+        if (standalone) PushGameState();
         _surface = Surfaces.Mount(rect, SurfaceId, "Based.Assets.based", designShortSide: 540)
             .OnCall("plan.state", _ => State(site))
+            .OnCall("plan.take", _ =>
+            {
+                _noticeStage = Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId).Stage;
+                _notice = ProjectFolder.Give();
+                return _notice;
+            })
             .OnCall("plan.buy", kind =>
             {
                 if (kind != "rights" && kind != "construction")
@@ -62,6 +76,7 @@ internal static class BuildPlan
                 Payments.ClearSettledStatus();
                 _noticeStage = Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId).Stage;
                 _notice = Mod.Purchase(site, kind == "rights" ? PurchaseKind.Rights : PurchaseKind.Construction);
+                if (kind == "rights" && _notice.Length == 0) ProjectFolder.GiveAfterPayment(site);
                 return _notice;
             })
             .OnCall("plan.close", _ => { _closeRequested = true; return "ok"; });
@@ -76,6 +91,12 @@ internal static class BuildPlan
             Mod.EndPlan();
             return;
         }
+        if (_gameStateLeft)
+        {
+            _gameStateLeft = false;
+            Close("the game left its UI state (Escape)");
+            return;
+        }
         if (Site == null || Time.unscaledTime < _nextPush) return;
         _nextPush = Time.unscaledTime + PushInterval;
         string state = State(Site);
@@ -84,21 +105,64 @@ internal static class BuildPlan
         _surface?.Emit("plan.changed", state);
     }
 
-    internal static void Close()
+    internal static void Close(string reason)
     {
         Mod.ClearOutlines();
         if (_root == null) return;
+        Mod.Log("Construction plan closed because " + reason + ".");
+        PopGameState();
         Surfaces.Unmount(SurfaceId);
         UnityEngine.Object.Destroy(_root);
         _root = null;
         _surface = null;
         Site = null;
+        Standalone = false;
         _closeRequested = false;
+        ProjectFolder.NoteClosed();
+    }
+
+    // The game's own UI state frees the mouse, stops the player and answers Escape.
+    private static void PushGameState()
+    {
+        _gameStateLeft = false;
+        var inGame = Il2CppScheduleOne.SceneState.Current?.InGame;
+        if (inGame == null) throw new InvalidOperationException("The game has no in-game state machine.");
+        if (_gameState == null || _gameStateParent != inGame.Pointer)
+        {
+            var parent = inGame.TryCast<Il2CppScheduleOne.State.IStateMachine>() ?? new Il2CppScheduleOne.State.IStateMachine(inGame.Pointer);
+            _gameState = new Il2CppScheduleOne.State.State("Based_ConstructionPlan", parent, Il2CppScheduleOne.State.StateProperties.EPreset.UINoInventory, null);
+            _gameState.EnableAutoExitListener(1);
+            _gameState.add_OnRemovedFromStack(Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action>((Action)GameStateRemoved));
+            _gameStateParent = inGame.Pointer;
+        }
+        _gameState.PushToDefaultParent();
+        _gameStatePushed = true;
+        Mod.Log("Construction plan pushed the game's UI state.");
+    }
+
+    // Called from inside the state machine's pop, so the plan closes on the next frame.
+    private static void GameStateRemoved()
+    {
+        if (_gameStatePushed) _gameStateLeft = true;
+    }
+
+    private static void PopGameState()
+    {
+        if (!_gameStatePushed || _gameState == null) return;
+        _gameStatePushed = false;
+        _gameStateLeft = false;
+        try { _gameState.RemoveFromDefaultParent(); }
+        catch (Exception error) { Mod.Warn("Leaving the game's UI state failed: " + error.Message); }
     }
 
     private static string Price(int amount) => string.Format(CultureInfo.InvariantCulture, "${0:N0}", amount);
 
-    internal static string State(SiteDefinition site)
+    internal static string State(SiteDefinition site) => State(site, Standalone, wall: false);
+
+    // The page on the folder: everything the plan reports, nothing to press.
+    internal static string WallState(SiteDefinition site) => State(site, readOnly: true, wall: true);
+
+    private static string State(SiteDefinition site, bool readOnly, bool wall)
     {
         var state = Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId);
         var upgrade = site.Upgrade;
@@ -107,37 +171,42 @@ internal static class BuildPlan
         bool ordering = state.Stage is UpgradeStage.RightsMissing or UpgradeStage.RightsOwned;
         bool owned = Mod.Owns(site);
         bool broken = Mod.Failure.Length > 0;
-        string paid = Text.T("Paid");
         return JsonConvert.SerializeObject(new
         {
             title = Text.T(site.Title),
             status = state.Stage switch
             {
-                UpgradeStage.Complete => Text.T("Ready to use"),
+                UpgradeStage.Complete => Text.T("Ready to move in"),
                 UpgradeStage.Constructing => Text.T(site.PhaseTitles.TryGetValue(phase, out string? title) ? title : "Construction confirmed"),
                 _ => ""
             },
             progress = state.Stage == UpgradeStage.Constructing ? ConstructionJournal.NightsLeft(nights) : "",
             stage = state.Stage.ToString(),
             ordering,
-            canBuy = owned && !broken && ordering,
+            wall,
+            canOrder = ordering && !readOnly,
+            canBuy = owned && !broken && ordering && !readOnly,
+            take = !readOnly && ProjectFolder.Offered(state.Stage) ? Text.T("Take the project folder") : "",
             buy = state.Stage == UpgradeStage.RightsMissing
                 ? Text.T("Buy rights") + " - " + Price(upgrade.RightsPrice)
                 : Text.T("Order construction") + " - " + Price(upgrade.ConstructionPrice),
             rightsLabel = Text.T("Expansion rights"),
-            rights = state.Stage == UpgradeStage.RightsMissing ? Price(upgrade.RightsPrice) : paid,
+            rights = Price(upgrade.RightsPrice),
+            rightsPaid = state.Stage != UpgradeStage.RightsMissing,
             constructionLabel = Text.T("Construction"),
-            construction = state.Stage < UpgradeStage.Constructing ? Price(upgrade.ConstructionPrice) : paid,
+            construction = Price(upgrade.ConstructionPrice),
+            constructionPaid = state.Stage >= UpgradeStage.Constructing,
             duration = Text.T("{0} nights of work", upgrade.ConstructionCycles),
-            cash = Text.T("Paid in cash"),
+            cash = Text.T("Cash only"),
             notes = Notes(site, state.Stage),
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
-                : !owned ? Text.T("Buy the existing room first.")
-                : Mod.HeldBy.Length > 0 ? Text.T("Construction is on hold: move {0} away from the marked walls.", Mod.HeldBy)
+                : !owned ? Text.T("Buy the Sweatshop first.")
+                : Mod.HeldBy.Length > 0 ? Text.T("On hold: move {0} off the red walls.", Mod.HeldBy)
+                : readOnly && ordering ? Text.T("Order the construction from Mrs. Ming")
                 // A refusal describes the stage it was given in, so the next stage starts without it.
                 : state.Stage == _noticeStage ? _notice : "",
             // The confirmation answers a purchase, so it ends with the ordering. Every other status stays until it clears.
-            payment = !ordering && Payments.StatusText == Text.T("Payment confirmed.") ? "" : Payments.StatusText,
+            payment = readOnly || (!ordering && Payments.StatusText == Text.T("Payment confirmed.")) ? "" : Payments.StatusText,
             steps = Steps(site, upgrade, state, phase),
             drawing = Drawing(site, state.Stage)
         });
@@ -147,7 +216,7 @@ internal static class BuildPlan
     {
         if (stage == UpgradeStage.Complete) return Array.Empty<string>();
         var notes = site.Restrictions.Select(r => Text.T(r)).ToList();
-        if (stage == UpgradeStage.Constructing) notes.Add(Text.T("The crew gets one stage further every night you sleep."));
+        if (stage == UpgradeStage.Constructing) notes.Add(Text.T("The crew finishes one stage each night you sleep."));
         return notes.ToArray();
     }
 
@@ -160,7 +229,7 @@ internal static class BuildPlan
             label = Text.T(site.PhaseTitles[p.Id]),
             state = complete || i < current ? "done" : i == current ? "active" : "todo"
         }).ToList();
-        steps.Add(new { label = Text.T("Ready to use"), state = complete ? "done" : "todo" });
+        steps.Add(new { label = Text.T("Ready to move in"), state = complete ? "done" : "todo" });
         return steps.ToArray();
     }
 

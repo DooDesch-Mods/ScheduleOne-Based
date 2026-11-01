@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag status | plan | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag status | plan | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
 
     public override void ExecuteCommand(List<string> args)
     {
@@ -29,6 +29,19 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "plan":
                     Mod.DebugPlan(Mod.Sites[0]);
                     Mod.Log("baseddiag: plan opened through the vendor conversation.");
+                    break;
+                case "blockers":
+                    Mod.DebugBlockers(Mod.Sites[0]);
+                    break;
+                case "planfree":
+                    Mod.DebugFreeConversation = args.Count > 1 && args[1] == "on";
+                    Mod.Log("baseddiag: conversation hold under the plan " + (Mod.DebugFreeConversation ? "off" : "on") + ".");
+                    break;
+                case "folder":
+                    Folder(args.Count > 1 ? args[1] : "state");
+                    break;
+                case "morningsound":
+                    ConstructionSounds.Play();
                     break;
                 case "hammer":
                     Hammer(args);
@@ -50,7 +63,8 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     NetworkProbe.Execute();
                     break;
                 case "packdoorway":
-                    PackTestDoorway();
+                    if (args.Count > 1 && args[1] == "one") PackOneBlocker();
+                    else PackTestDoorway();
                     break;
                 case "phase":
                     JumpToPhase(args.Count > 1 ? args[1] : "");
@@ -60,6 +74,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     break;
                 case "stayers":
                     Stayers();
+                    break;
+                case "walkers":
+                    Walkers();
                     break;
                 case "walk":
                     MelonLoader.MelonCoroutines.Start(Walk(args));
@@ -78,6 +95,19 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             }
         }
         catch (Exception error) { Mod.Warn("baseddiag " + action + " failed: " + error); }
+    }
+
+    // Stands in for the clicks a test cannot make: read the folder, hang it where the aim is, or take one.
+    private static void Folder(string action)
+    {
+        switch (action)
+        {
+            case "give": Mod.Log("baseddiag: folder given, answer '" + ProjectFolder.Give() + "'."); break;
+            case "open": ProjectFolder.DebugOpen(); break;
+            case "hang": ProjectFolder.DebugHang(); break;
+            case "state": Mod.Log("baseddiag: folder " + ProjectFolder.DebugState()); break;
+            default: throw new ArgumentException("baseddiag folder give|open|hang|state");
+        }
     }
 
     // The journal only shows a quest's details while the pointer rests on it, so this stands in for the pointer.
@@ -198,6 +228,24 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         Mod.Log("baseddiag walk: route finished.");
     }
 
+    // Names the NPCs whose scheduled walk stands still short of its target: the game retries those every frame.
+    private static void Walkers()
+    {
+        int running = 0, stalled = 0;
+        foreach (var walk in UnityEngine.Object.FindObjectsOfType<Il2CppScheduleOne.NPCs.Schedules.NPCSignal_WalkToLocation>(true))
+        {
+            if (!walk.IsActive) continue;
+            running++;
+            var movement = walk.npc?.Movement;
+            if (movement == null || walk.Destination == null) continue;
+            float left = Vector3.Distance(movement.FootPosition, walk.Destination.position);
+            if (movement.IsMoving || left < walk.DestinationThreshold) continue;
+            stalled++;
+            Mod.Warn("baseddiag: " + walk.npc!.name + " stalls on walk to '" + walk.Destination.name + "' at " + walk.Destination.position + ", feet at " + movement.FootPosition + ", " + left.ToString("0.0") + " m left, on navmesh " + walk.npc.gameObject.GetComponent<UnityEngine.AI.NavMeshAgent>()?.isOnNavMesh + ".");
+        }
+        Mod.Log("baseddiag: " + running + " scheduled walks running, " + stalled + " stalled.");
+    }
+
     // Lists every running stay-in-building event whose building offers no door an NPC may use.
     private static void Stayers()
     {
@@ -241,11 +289,12 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         {
             "none" => (UpgradeStage.RightsMissing, 0),
             "rights" => (UpgradeStage.RightsOwned, 0),
+            "ordered" => (UpgradeStage.Constructing, 0),
             "breakthrough" => (UpgradeStage.Constructing, 1),
             "frame" => (UpgradeStage.Constructing, 2),
             "roof" => (UpgradeStage.Constructing, 3),
             "complete" => (UpgradeStage.Complete, 4),
-            _ => throw new ArgumentException("baseddiag phase none|rights|breakthrough|frame|roof|complete")
+            _ => throw new ArgumentException("baseddiag phase none|rights|ordered|breakthrough|frame|roof|complete")
         };
         upgrade.Stage = stage;
         upgrade.CompletedCycles = cycles;
@@ -256,6 +305,24 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         Mod.Engine.RestoreState(state);
         Mod.Changed();
         Mod.Log("baseddiag: construction moved to " + phase + "; revision " + state.Revision + ".");
+    }
+
+    // Clears the walls item by item, as a player does, so the hold's list can be seen shrinking.
+    private static void PackOneBlocker()
+    {
+        foreach (var item in Mod.BlockingItems(Mod.Sites[0]))
+        {
+            string name = item.GetManagementName();
+            if (!item.CanBePickedUp(out string reason))
+            {
+                Mod.Log("baseddiag: " + name + " stays, pickup refused: " + reason);
+                continue;
+            }
+            item.PickupItem();
+            Mod.Log("baseddiag: picked up " + name + ".");
+            return;
+        }
+        Mod.Warn("baseddiag: no blocking item could be picked up.");
     }
 
     private static void PackTestDoorway()

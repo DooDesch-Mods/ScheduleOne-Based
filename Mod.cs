@@ -37,6 +37,7 @@ public sealed class Mod : MelonMod
     private const float VendorWarnAfter = 30f;
     private const float RequestInterval = 5f;
     private const float PlanRequestTimeout = 3f;
+    private const float HoldCheckInterval = 1f;
 
     internal static readonly IReadOnlyList<SiteDefinition> Sites = new[] { MingSite.Create() };
     internal static Mod Instance { get; private set; } = null!;
@@ -50,6 +51,7 @@ public sealed class Mod : MelonMod
     {
         public S1API.Entities.NPC Npc = null!;
         public DialogueController.DialogueChoice Choice = null!;
+        public DialogueHandler Handler = null!;
     }
 
     private static readonly Dictionary<SiteDefinition, Vendor> Vendors = new();
@@ -58,7 +60,7 @@ public sealed class Mod : MelonMod
     private static readonly List<BuildableItem> Outlined = new();
     private static readonly HashSet<string> ContainedErrors = new();
     private static SiteDefinition? _planRequest;
-    private static float _planRequestedAt, _nextBind, _nextRequest, _loadedAt = -1;
+    private static float _planRequestedAt, _nextBind, _nextRequest, _nextHoldCheck, _loadedAt = -1;
     private static bool _main, _snapshotReceived, _worldDirty = true, _initialized, _waitingNetwork, _saveWarningShown;
     private static string _lastWorld = "", _lastAck = "";
 
@@ -98,8 +100,9 @@ public sealed class Mod : MelonMod
             DockProbe.ResetForMenu();
             RoomProbe.ResetForMenu();
 #endif
-            BuildPlan.Close();
+            BuildPlan.Close("the game returned to the menu");
             ConstructionJournal.Reset();
+            ProjectFolder.Reset();
             foreach (var site in Sites) site.Crew?.Cleanup();
             Payments.ResetForMenu();
             NativeBus.Stop();
@@ -141,6 +144,8 @@ public sealed class Mod : MelonMod
         {
             // The plan has to stay closable after a failure, so it runs before the failure check.
             TickPlan();
+            // The folder reports a failed expansion too, so it runs before the failure check as well.
+            if (LoadManager.Instance?.IsGameLoaded == true) TickFolder();
             if (Failure.Length > 0) return;
             if (!NativeBus.Start()) return;
             if (!NativeBus.IsConnected)
@@ -163,9 +168,25 @@ public sealed class Mod : MelonMod
                 foreach (var site in Sites) BindVendor(site);
             }
             foreach (var site in Sites) TickCrew(site);
+            TickHold();
             TickJournal();
         }
         catch (Exception error) { Contain("runtime update", error); }
+    }
+
+    // The quest names what still stands on the walls, so the list shrinks while the player clears them.
+    private static void TickHold()
+    {
+        if (!NativeBus.IsHost || HeldBy.Length == 0 || Time.unscaledTime < _nextHoldCheck) return;
+        _nextHoldCheck = Time.unscaledTime + HoldCheckInterval;
+        var site = Sites.FirstOrDefault(s => Engine.GetUpgrade(s.Base.Id, s.UpgradeId).Stage == UpgradeStage.Constructing);
+        SetHeld(site == null ? "" : BlockerNames(BlockingItems(site)));
+    }
+
+    private static void TickFolder()
+    {
+        try { ProjectFolder.Tick(Sites[0]); }
+        catch (Exception error) { Contain("project folder", error); }
     }
 
     private static void TickJournal()
@@ -222,13 +243,13 @@ public sealed class Mod : MelonMod
                     _planRequest = null;
                 }
             }
-            if (BuildPlan.Site != null && !VendorTalking(BuildPlan.Site)) BuildPlan.Close();
+            if (BuildPlan.Site != null && !BuildPlan.Standalone && !VendorTalking(BuildPlan.Site)) BuildPlan.Close("the conversation ended");
             BuildPlan.Tick();
         }
         catch (Exception error)
         {
             Contain("construction plan", error);
-            BuildPlan.Close();
+            BuildPlan.Close("of an error");
         }
     }
 
@@ -265,7 +286,7 @@ public sealed class Mod : MelonMod
         };
         choice.onChoosen.AddListener((Action)(() => RequestPlan(site)));
         controller.AddDialogueChoice(choice, 55);
-        var vendor = new Vendor { Npc = npc, Choice = choice };
+        var vendor = new Vendor { Npc = npc, Choice = choice, Handler = handler };
         Vendors[site] = vendor;
         RefreshChoice(site, vendor);
         Log(site.VendorNpcId + "'s dialogue extended with the construction plan.");
@@ -277,6 +298,16 @@ public sealed class Mod : MelonMod
         var stage = Engine.GetUpgrade(site.Base.Id, site.UpgradeId).Stage;
         vendor.Choice.Enabled = Owns(site) && stage != UpgradeStage.Complete;
         vendor.Choice.ChoiceText = Text.T(stage == UpgradeStage.Constructing ? site.ProgressChoice : site.RequestChoice);
+    }
+
+    // The plan hangs on the vendor's conversation, whose last line ends on any click or key. The plan ends it instead.
+    internal static bool HoldsConversation(DialogueHandler handler)
+    {
+#if DEBUG
+        if (DebugFreeConversation) return false;
+#endif
+        var site = BuildPlan.Standalone ? _planRequest : BuildPlan.Site ?? _planRequest;
+        return site != null && Vendors.TryGetValue(site, out var vendor) && vendor.Handler.Pointer == handler.Pointer;
     }
 
     private static void RequestPlan(SiteDefinition site)
@@ -292,7 +323,7 @@ public sealed class Mod : MelonMod
     {
         var site = Sites.FirstOrDefault(s => s.Base.Id == command.BaseId);
         if (site == null) return "unknown-base";
-        if (!Owns(site)) return Text.T("Buy the existing room first.");
+        if (!Owns(site)) return Text.T("Buy the Sweatshop first.");
         if (command.Kind != PurchaseKind.Construction) return null;
         var items = BlockingItems(site);
         return items.Length > 0 ? BlockedText(items) : null;
@@ -301,12 +332,16 @@ public sealed class Mod : MelonMod
     internal static string Purchase(SiteDefinition site, PurchaseKind kind)
     {
         if (Failure.Length > 0) return Text.T("Construction paused because the expansion could not be applied.");
-        if (!Owns(site)) return Text.T("Buy the existing room first.");
+        if (!Owns(site)) return Text.T("Buy the Sweatshop first.");
         if (!NativeBus.IsHost && !_snapshotReceived) return Text.T("Waiting for the host's construction plan.");
         if (kind == PurchaseKind.Construction)
         {
             var items = OutlineBlocking(site);
-            if (items.Length > 0) return BlockedText(items);
+            if (items.Length > 0)
+            {
+                Log("Construction order refused, on the marked walls: " + BlockerNames(items) + ".");
+                return BlockedText(items);
+            }
         }
         try
         {
@@ -321,7 +356,7 @@ public sealed class Mod : MelonMod
     }
 
     // The outlines end with the plan, so the text names every blocker at once.
-    private static string BlockedText(BuildableItem[] items) => Text.T("Move {0} away from the marked walls.", BlockerNames(items));
+    private static string BlockedText(BuildableItem[] items) => Text.T("Move {0} off the red walls.", BlockerNames(items));
 
     private static string BlockerNames(BuildableItem[] items) => string.Join(", ", items.Select(i => i.GetManagementName()).Distinct());
 
@@ -372,17 +407,29 @@ public sealed class Mod : MelonMod
     {
         if (HeldBy == item) return;
         HeldBy = item;
+        Log(item.Length > 0 ? "Construction hold names: " + item + "." : "Construction hold cleared.");
         BroadcastSnapshot();
     }
 
     internal static void EndPlan()
     {
         var site = BuildPlan.Site;
-        BuildPlan.Close();
-        if (site != null && Vendors.TryGetValue(site, out var vendor)) vendor.Npc.Dialogue.End();
+        bool conversation = !BuildPlan.Standalone;
+        BuildPlan.Close("the player closed it");
+        if (conversation && site != null && Vendors.TryGetValue(site, out var vendor)) vendor.Npc.Dialogue.End();
     }
 
 #if DEBUG
+    // Lets a test see the conversation end the plan, as it does without the hold.
+    internal static bool DebugFreeConversation;
+
+    internal static void DebugBlockers(SiteDefinition site)
+    {
+        var property = UnityEngine.Object.FindObjectsOfType<Il2CppScheduleOne.Property.Property>().FirstOrDefault(p => p.PropertyCode == site.Base.PropertyId);
+        Log("baseddiag: blockers=" + BlockerNames(BlockingItems(site)) + "; culled=" + (property?.IsContentCulled.ToString() ?? "no property")
+            + "; placed items=" + (property?.BuildableItems.Count.ToString() ?? "?"));
+    }
+
     internal static void DebugPlan(SiteDefinition site)
     {
         if (!Vendors.TryGetValue(site, out var vendor)) throw new InvalidOperationException(site.VendorNpcId + " dialogue is not ready.");
@@ -612,6 +659,17 @@ public sealed class Mod : MelonMod
         string failure = operation + ": " + error.Message;
         if (Failure != failure) MelonLogger.Error("[Based] " + failure + "\n" + error);
         Failure = failure;
+    }
+}
+
+[HarmonyPatch(typeof(DialogueHandler), nameof(DialogueHandler.ContinueSubmitted))]
+internal static class KeepConversationUnderPlan
+{
+    private static bool Prefix(DialogueHandler __instance)
+    {
+        if (!Mod.HoldsConversation(__instance)) return true;
+        Mod.Log("Click under the construction plan ignored; the conversation stays open.");
+        return false;
     }
 }
 

@@ -1,10 +1,31 @@
 body { height:100%; font-family:game-hand, "Segoe Print", cursive; color:#2b2b2b; font-size:15px; }
 .shade { height:100%; background:rgba(0,0,0,.62); justify-content:center; align-items:center; }
 
-.board { width:860px; height:500px; padding:26px 12px 12px; background:linear-gradient(180deg, #6a4524, #4d3117); border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.6); }
-.clip { position:absolute; top:-6px; left:330px; width:200px; height:34px; background:#17181a; border-radius:6px 6px 2px 2px; }
-.pin { position:absolute; left:92px; top:8px; width:16px; height:16px; border-radius:8px; background:#b9bcc0; }
-.paper { flex:1; min-height:0; padding:24px 28px 18px; gap:12px; background:#cfcfcf; border-radius:3px; }
+.shade.wall { background:transparent; }
+.shade.wall .close, .shade.wall .notes, .shade.wall .take, .shade.wall .buy { display:none; }
+.shade.wall .layer-clip { top:0; }
+/* The wall page has nothing to press, so its room goes to type that reads from across the room. */
+.shade.wall .title { font-size:38px; line-height:42px; }
+.shade.wall .label { font-size:18px; line-height:21px; }
+.shade.wall .area { font-size:25px; line-height:28px; }
+.shade.wall .side { gap:9px; }
+.shade.wall .status { font-size:29px; line-height:33px; }
+.shade.wall .progress { font-size:22px; line-height:27px; }
+.shade.wall .cost { font-size:21px; line-height:27px; }
+.shade.wall .step { font-size:23px; line-height:29px; gap:11px; }
+.shade.wall .box { width:19px; height:19px; font-size:16px; line-height:16px; }
+.shade.wall .notice { font-size:19px; line-height:23px; }
+
+.board { width:860px; height:500px; padding:30px 24px 22px; }
+/* An img is tinted with its colour, which it would inherit from the text. */
+.layer-board, .layer-sheets, .layer-paper, .layer-clip, .layer-pencil, .layer-tape { color:#fff; }
+.layer-board { position:absolute; left:0; top:0; width:860px; height:500px; }
+.layer-sheets { position:absolute; left:10px; top:14px; width:840px; height:476px; }
+.layer-paper { position:absolute; left:0; top:0; width:812px; height:448px; }
+.layer-clip { position:absolute; left:335px; top:-12px; width:190px; height:56px; }
+.layer-pencil { position:absolute; left:48px; top:444px; width:170px; height:23px; transform:rotate(-3deg); }
+.layer-tape { position:absolute; left:770px; top:438px; width:84px; height:21px; transform:rotate(-38deg); }
+.paper { flex:1; min-height:0; padding:20px 30px 18px; gap:12px; }
 .close { position:absolute; right:18px; top:14px; width:30px; height:30px; background:transparent; color:#2b2b2b; font-family:game-hand, "Segoe Print", cursive; font-size:22px; font-weight:700; justify-content:center; align-items:center; }
 .close:hover { color:#7a2d22; }
 .title { font-size:30px; line-height:34px; }
@@ -26,9 +47,11 @@ body { height:100%; font-family:game-hand, "Segoe Print", cursive; color:#2b2b2b
 .progress { font-size:17px; line-height:22px; color:#7a2d22; }
 .costs { gap:2px; }
 .cost { flex-direction:row; justify-content:space-between; font-size:17px; line-height:23px; white-space:nowrap; }
+.cost.paid div { text-decoration:line-through; color:#6b6b6b; }
 .total { border-top:2px solid #333; padding-top:3px; margin-top:2px; }
 .steps { gap:1px; margin-top:5px; }
 .step { flex-direction:row; align-items:center; gap:9px; font-size:16px; line-height:21px; white-space:nowrap; }
+.step.done .step-label { text-decoration:line-through; color:#6b6b6b; }
 .step.todo { color:#5f5f5f; }
 .step.active { color:#000; }
 .box { width:15px; height:15px; flex-shrink:0; border:2px solid #333; justify-content:center; align-items:center; font-size:13px; line-height:13px; font-weight:700; }
@@ -38,6 +61,8 @@ body { height:100%; font-family:game-hand, "Segoe Print", cursive; color:#2b2b2b
 .note { font-size:13px; line-height:17px; color:#4c4c4c; }
 .notice { font-size:14px; line-height:18px; color:#7a2d22; }
 .space { flex:1; min-height:0; }
+.take { height:30px; flex-shrink:0; background:transparent; border:2px solid #333; color:#2b2b2b; font-family:game-hand, "Segoe Print", cursive; font-size:15px; text-align:center; justify-content:center; align-items:center; border-radius:3px; white-space:nowrap; }
+.take:hover { background:#d8d8c8; }
 .buy { height:42px; flex-shrink:0; background:#232323; color:#efefef; font-family:game-hand, "Segoe Print", cursive; font-size:18px; text-align:center; justify-content:center; align-items:center; border-radius:3px; white-space:nowrap; }
 .buy:hover { background:#3a3a3a; }
 .buy:disabled { background:#8a8a8a; color:#d8d8d8; }

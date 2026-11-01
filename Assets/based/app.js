@@ -56,6 +56,7 @@ function render(raw) {
   try {
     const data = JSON.parse(raw);
     current = data;
+    $('shade').className = data.wall ? 'shade wall' : 'shade';
     $('title').textContent = data.title;
     $('status').textContent = data.status;
     $('progress').textContent = data.progress;
@@ -63,15 +64,20 @@ function render(raw) {
     $('rights').textContent = data.rights;
     $('construction-label').textContent = data.constructionLabel;
     $('construction').textContent = data.construction;
+    $('rights-row').className = data.rightsPaid ? 'cost paid' : 'cost';
+    $('construction-row').className = data.constructionPaid ? 'cost paid' : 'cost';
     $('duration').textContent = data.duration;
     $('cash').textContent = data.cash;
     $('notice').textContent = data.notice;
     $('payment').textContent = data.payment;
     $('buy').textContent = data.buy;
     $('buy').disabled = !data.canBuy;
-    show('costs', data.ordering);
-    show('buy', data.ordering);
+    $('take').textContent = data.take;
+    show('buy', data.canOrder);
+    show('take', data.take.length > 0);
     show('report', !data.ordering);
+    // Once the bills are paid, the wall page gives their room to the progress and the hold list.
+    show('costs', !data.wall || data.ordering);
     show('notice', data.notice.length > 0);
     show('payment', data.payment.length > 0);
     const notes = $('notes');
@@ -86,6 +92,10 @@ $('buy').addEventListener('click', () => {
   if (!current || !current.canBuy) return;
   const answer = s1.call('plan.buy', current.stage === 'RightsMissing' ? 'rights' : 'construction');
   if (answer === null || answer === undefined) console.error('The purchase request returned no acknowledgement.');
+  render(s1.call('plan.state'));
+});
+$('take').addEventListener('click', () => {
+  if (s1.call('plan.take') === null) console.error('Taking the project folder returned no answer.');
   render(s1.call('plan.state'));
 });
 $('close').addEventListener('click', () => s1.call('plan.close'));

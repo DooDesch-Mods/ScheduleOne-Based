@@ -8,25 +8,26 @@
 
 ![Based](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/header.jpg)
 
-> Too little room at Ming's? Buy the rest of the floor, order the work and watch a crew build it over four nights.
+> Too little room in the Sweatshop? Buy the rest of the floor, order the work and watch a crew build it over four nights.
 
 ## What it does
 
-Own the room above Ming's restaurant and ask Ming for more space upstairs. The plan opens as a clipboard with
-the floor plan.
+Own the Sweatshop and ask Mrs. Ming to expand it. The plan opens as a clipboard with the floor plan.
 
-1. **Buy the rights** for $1,000. This needs the room itself first.
+1. **Buy the rights** for $1,000. This needs the Sweatshop itself first.
 2. **Order the construction** for $3,000.
 3. **Sleep.** Each night the crew gets one stage further: breakthrough, frame, roof and interior. A short notice
    each morning names the stage, and the journal lists the progress.
 4. **Move in** on the fourth morning. The new space is part of the property: place stations and storage in it
    like in the old room.
 
-Your room stays usable during construction. Keep the walls marked in red clear, or the work goes on hold.
+You can keep using the room during construction. Keep the red walls clear, or the work goes on hold.
+
+The rights come with a project folder. Left click it to read the plan, or hang it on a wall to follow the build.
 
 ## You pick the next base
 
-Ming's is the first base. The Discord votes on which property comes next:
+The Sweatshop is the first base. The Discord votes on which property comes next:
 [mods.doodesch.de](https://mods.doodesch.de).
 
 ## Co-op
@@ -44,6 +45,7 @@ Pick up what stands in the new rooms first. It disappears with the mod.
 |---|---|
 | ![The build plan](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/build-plan.jpg) | ![Construction](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/construction.jpg) |
 | ![The finished space](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/finished.jpg) | ![The new wing from outside](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/outside.jpg) |
+| ![The project folder on the wall](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/project-folder.jpg) | |
 
 ## Requirements
 

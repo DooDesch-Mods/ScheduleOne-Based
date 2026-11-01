@@ -22,6 +22,8 @@ public static class MingWorkers
     public static float HammerContactNormalizedTime { get; set; } = 0.325f;
     private const float SpawnScanInterval = 1f;
     private const float IdleCheckInterval = 1f;
+    // Work comes in bursts with a reach for material between them, and a worker moves on after a few of those.
+    private const float SwingMin = 2.5f, SwingMax = 5f, RestMin = 1.5f, RestMax = 3.5f, StationMin = 10f, StationMax = 18f;
     private static readonly int UseHammerParameter = Animator.StringToHash("UseHammer");
     private static readonly Dictionary<string, Worker> Workers = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, (float Since, string Reason, bool Failed)> PendingSpawns = new(StringComparer.Ordinal);
@@ -220,10 +222,10 @@ public static class MingWorkers
 
     private static string ForemanLine => Based.UI.Text.T(_phase switch
     {
-        "breakthrough" => "We are opening the wall and preparing the floor today. Keep behind the barrier.",
-        "frame" => "The floor is in. Today we are putting up the walls.",
+        "breakthrough" => "We're opening the wall today. Stay behind the barrier.",
+        "frame" => "Floor's in. Walls go up today.",
         "roof" => "Roof and finishing today. You can move in tomorrow.",
-        _ => "Talk to Ming about the upstairs expansion."
+        _ => "Talk to Mrs. Ming about the expansion."
     });
 
     private static AudioClip[] Clips()
@@ -258,10 +260,10 @@ public static class MingWorkers
         private readonly float _originalStoppingDistance;
         private readonly int _originalAreaMask;
         private bool _jobPropertyAccess;
-        private bool _placed, _hammering, _walking, _workAtSecondary, _planEquipped, _stationWorking, _targetValid;
+        private bool _placed, _hammering, _swinging, _walking, _workAtSecondary, _planEquipped, _stationWorking, _targetValid;
         private bool? _pendingSecondary;
         private Vector3 _requestedAnchor, _resolvedAnchor, _contact;
-        private float _nextAction, _nextCheck, _workStartsAt, _previousNormalized = -1;
+        private float _nextAction, _nextCheck, _workStartsAt, _rhythmSwitch, _previousNormalized = -1;
         private const float WorkStoppingDistance = 0.15f;
         private const float ArrivalHorizontal = 0.22f;
         private const float ArrivalVertical = 0.2f;
@@ -302,6 +304,21 @@ public static class MingWorkers
             _audio.dopplerLevel = 0;
             _animator = npc.gameObject.GetComponentInChildren<Animator>(true);
             _nextAction = Time.time + index * 2.35f;
+            OpenTalkAngle(npc);
+        }
+
+        // Vanilla only talks from the NPC's front half, and a worker faces the job, away from whoever walks in.
+        private static void OpenTalkAngle(MingWorkerNpc npc)
+        {
+            var talk = npc.gameObject.GetComponentInChildren<Il2CppScheduleOne.Dialogue.DialogueController>(true)?._interactable;
+            if (talk == null)
+            {
+                _warn("workers: " + npc.ID + " has no talk interaction; the angle limit stays.");
+                return;
+            }
+            talk.LimitInteractionAngle = false;
+            talk.Priority = 1;
+            _info("workers: " + npc.ID + " can be talked to from every side.");
         }
 
         private void ApplyAppearance()
@@ -325,7 +342,7 @@ public static class MingWorkers
         internal void RefreshDialogue()
         {
             Npc.Dialogue.BuildAndRegisterContainer("based_construction", builder => builder.AddNode("ENTRY",
-                _index == 0 ? ForemanLine : Based.UI.Text.T(_phase == "roof" ? "Just the last few fittings. Mind the tools." : "Keep the work area clear, please.")));
+                _index == 0 ? ForemanLine : Based.UI.Text.T(_phase == "roof" ? "Just the last few fittings. Mind the tools." : "Keep the site clear, please.")));
             if (!Npc.Dialogue.UseContainerOnInteract("based_construction")) Failure("construction dialogue could not bind to interaction");
         }
 
@@ -397,7 +414,9 @@ public static class MingWorkers
                 Npc.Movement.FacePoint(_contact);
                 _stationWorking = true;
                 _workStartsAt = Time.time + 0.55f;
-                _nextAction = _workStartsAt + 4.5f + _index * 1.3f;
+                _nextAction = _workStartsAt + UnityEngine.Random.Range(StationMin, StationMax);
+                _swinging = true;
+                _rhythmSwitch = _workStartsAt + UnityEngine.Random.Range(SwingMin, SwingMax);
                 Recover();
             }
             else if (_stationWorking && LeftAssignedAnchor())
@@ -415,8 +434,20 @@ public static class MingWorkers
                 BeginWalk(_pendingSecondary ?? !_workAtSecondary);
             }
             if (_stationWorking && Time.time >= _workStartsAt)
+            {
+                TickRhythm();
                 SetHammer(WantsHammer() && ContactInReach());
+            }
             PlayContactSound();
+        }
+
+        private void TickRhythm()
+        {
+            if (Time.time < _rhythmSwitch) return;
+            _swinging = !_swinging;
+            _rhythmSwitch = Time.time + (_swinging ? UnityEngine.Random.Range(SwingMin, SwingMax) : UnityEngine.Random.Range(RestMin, RestMax));
+            if (_hammering) _native.SetAnimationBool_Networked(null, "UseHammer", _swinging);
+            if (!_swinging && _index != 0) _native.SetAnimationTrigger_Networked(null, "GrabItem");
         }
 
         private void GrantPropertyAccess()
@@ -528,7 +559,8 @@ public static class MingWorkers
         private static float HorizontalDistance(Vector3 a, Vector3 b) =>
             Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
 
-        private bool WantsHammer() => _index == 1 || _index == 2 && _phase != "breakthrough";
+        // On the first day the far spot has no table yet, so the carpenter only looks at the plan there.
+        private bool WantsHammer() => _index == 1 && !(_phase == "breakthrough" && _workAtSecondary) || _index == 2 && _phase != "breakthrough";
 
         private bool ContactInReach()
         {
@@ -544,8 +576,7 @@ public static class MingWorkers
             float y = MingWorld.FloorY;
             // The foreman stays put and only turns from the plan to the timber, so nobody crosses the carpenter between the tables.
             if (_index == 0) return new Vector3(-57.5f, y, 143.2f);
-            if (_index == 1)
-                return _phase == "breakthrough" || !secondary ? new Vector3(-57.8f, y, 137.55f) : new Vector3(-56.4f, y, 143.45f);
+            if (_index == 1) return !secondary ? new Vector3(-57.8f, y, 137.55f) : new Vector3(-56.4f, y, 143.45f);
             return secondary ? new Vector3(-54.7f, y, 138.4f) : new Vector3(-54.7f, y, 140.1f);
         }
 
@@ -553,7 +584,11 @@ public static class MingWorkers
         {
             var point = WorkPoint(secondary);
             if (_index == 0) return secondary ? new Vector3(-58.85f, 0.1f, 144f) : new Vector3(-57.5f, 0.45f, 142.4f);
-            if (_index == 1) return point.z < 140 ? new Vector3(-57.8f, 0.45f, 136.95f) : new Vector3(-56.4f, 0.45f, 144.05f);
+            if (_index == 1)
+            {
+                if (point.z < 140) return new Vector3(-57.8f, 0.45f, 136.95f);
+                return _phase == "breakthrough" ? new Vector3(-57.2f, 0.45f, 142.05f) : new Vector3(-56.4f, 0.45f, 144.05f);
+            }
             return new Vector3(-54.1f, 0.9f, point.z);
         }
 
@@ -571,7 +606,7 @@ public static class MingWorkers
             if (_hammering == enabled || !InstanceFinder.IsServer) return;
             _hammering = enabled;
             Equip(enabled ? "Avatar/Equippables/Hammer" : "");
-            _native.SetAnimationBool_Networked(null, "UseHammer", enabled);
+            _native.SetAnimationBool_Networked(null, "UseHammer", enabled && _swinging);
             _previousNormalized = -1;
             _hammerLayer = -1;
             if (!enabled) _audio.Stop();
@@ -710,8 +745,8 @@ public static class MingWorkers
             _stationWorking = false;
             _targetValid = false;
             _pendingSecondary = null;
+            // The access stays: without it the agent standing inside jumps to the nearest floor it may use, outside the room.
             if (_agent != null) _agent.stoppingDistance = _originalStoppingDistance;
-            RestorePropertyAccess();
             _audio.Stop();
             _nextAction = Time.time + 1f + _index * 2.35f;
         }
@@ -733,6 +768,7 @@ public static class MingWorkers
         internal void Dispose()
         {
             ResetWork();
+            RestorePropertyAccess();
             SetVisible(false);
             if (_audio != null) Object.Destroy(_audio.gameObject);
         }

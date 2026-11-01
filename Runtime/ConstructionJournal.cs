@@ -23,7 +23,7 @@ internal static class ConstructionJournal
     private const float NoticeDelay = 4f;
 
     private readonly record struct Seen(UpgradeStage Stage, int Cycles, string Held);
-    private readonly record struct Notice(string Title, string Subtitle, float Due);
+    private readonly record struct Notice(string Title, string Subtitle, float Due, bool Work);
 
     private static readonly Dictionary<SiteDefinition, Seen> Last = new();
     private static readonly List<Notice> Pending = new();
@@ -34,12 +34,14 @@ internal static class ConstructionJournal
     {
         Last.Clear();
         Pending.Clear();
+        ConstructionSounds.Reset();
         _next = 0;
         _waiting = false;
     }
 
     internal static void Tick(IEnumerable<SiteDefinition> sites)
     {
+        ConstructionSounds.Tick();
         if (Time.unscaledTime < _next) return;
         _next = Time.unscaledTime + Interval;
         // S1API's quest constructor reads the contacts app and the game's quest start reads the journal.
@@ -114,7 +116,7 @@ internal static class ConstructionJournal
         return Progress(Text.T(site.PhaseTitles[site.Upgrade.Phases[active - 1].Id]), site.Upgrade.ConstructionCycles - state.CompletedCycles);
     }
 
-    private static string Hold() => Text.T("Construction is on hold: move {0} away from the marked walls.", Mod.HeldBy);
+    private static string Hold() => Text.T("On hold: move {0} off the red walls.", Mod.HeldBy);
 
     private static string Progress(string title, int nights) =>
         nights == 1 ? Text.T("{0}, one night left", title) : Text.T("{0}, {1} nights left", title, nights);
@@ -150,19 +152,20 @@ internal static class ConstructionJournal
         }
         if (now == before) return;
         Last[site] = now;
-        if (now.Held.Length > 0 && now.Held != before.Held) Queue(Text.T(site.Title), Text.T("Construction on hold"));
-        else if (now.Stage == UpgradeStage.Complete && before.Stage != UpgradeStage.Complete) Queue(Text.T(site.Title), Text.T("Ready to use"));
+        // The list shrinks while the player clears the walls, and only the start of a hold is news.
+        if (now.Held.Length > 0 && before.Held.Length == 0) Queue(Text.T(site.Title), Text.T("Construction on hold"));
+        else if (now.Stage == UpgradeStage.Complete && before.Stage != UpgradeStage.Complete) Queue(Text.T(site.Title), Text.T("Ready to move in"), true);
         else if (now.Stage == UpgradeStage.Constructing && now.Cycles > before.Cycles)
         {
             string phase = Mod.Engine.CurrentPhase(state.BaseId, state.UpgradeId) ?? "";
             if (site.PhaseTitles.TryGetValue(phase, out string? title))
-                Queue(Text.T(title), NightsLeft(site.Upgrade.ConstructionCycles - now.Cycles));
+                Queue(Text.T(title), NightsLeft(site.Upgrade.ConstructionCycles - now.Cycles), true);
             else Mod.Warn("Morning notice skipped: phase " + phase + " has no title.");
         }
     }
 
-    private static void Queue(string title, string subtitle) =>
-        Pending.Add(new Notice(title, subtitle, Time.unscaledTime + NoticeDelay));
+    private static void Queue(string title, string subtitle, bool work = false) =>
+        Pending.Add(new Notice(title, subtitle, Time.unscaledTime + NoticeDelay, work));
 
     private static void ShowDue()
     {
@@ -172,6 +175,7 @@ internal static class ConstructionJournal
             var notice = Pending[i];
             Pending.RemoveAt(i);
             Notify(notice);
+            if (notice.Work) ConstructionSounds.Play();
         }
     }
 
