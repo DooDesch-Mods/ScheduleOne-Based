@@ -37,6 +37,11 @@ internal static class MingSite
             new(PlanRoomKind.Opening, -56.06f, 137.9f, -55.94f, 141.1f),
             new(PlanRoomKind.Opening, -60f, 141.04f, -56f, 141.16f)
         },
+        StaffPlaces = new UnityEngine.Vector3[]
+        {
+            new(-58.5f, MingWorld.FloorY, 136.9f),
+            new(-55.2f, MingWorld.FloorY, 136.8f)
+        },
         RegisterWorld = MingWorld.Register,
         Crew = new Crew()
     };

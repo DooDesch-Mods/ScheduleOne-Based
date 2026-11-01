@@ -19,7 +19,7 @@ Own the Sweatshop and ask Mrs. Ming to expand it. The plan opens as a clipboard 
 3. **Sleep.** Each night the crew gets one stage further: breakthrough, frame, roof and interior. A short notice
    each morning names the stage, and the journal lists the progress.
 4. **Move in** on the fourth morning. The new space is part of the property: place stations and storage in it
-   like in the old room.
+   like in the old room, and hire 3 employees instead of 1.
 
 You can keep using the room during construction. Keep the red walls clear, or the work goes on hold.
 
@@ -37,7 +37,7 @@ money comes from the player who clicks.
 
 ## Removing the mod
 
-Pick up what stands in the new rooms first. It disappears with the mod.
+Pick up what stands in the new rooms first. It disappears with the mod, and the Sweatshop keeps only its first employee.
 
 ## Screenshots
 

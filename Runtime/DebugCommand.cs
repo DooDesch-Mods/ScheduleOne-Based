@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag status | plan | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag status | plan | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
 
     public override void ExecuteCommand(List<string> args)
     {
@@ -78,6 +78,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "walkers":
                     Walkers();
                     break;
+                case "staff":
+                    Staff();
+                    break;
                 case "walk":
                     MelonLoader.MelonCoroutines.Start(Walk(args));
                     break;
@@ -95,6 +98,33 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             }
         }
         catch (Exception error) { Mod.Warn("baseddiag " + action + " failed: " + error); }
+    }
+
+    // The employee limit, each waiting place with its route from the door, and where every employee stands.
+    private static void Staff()
+    {
+        var property = Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(Mod.Sites[0].Base.PropertyId);
+        if (property == null) throw new InvalidOperationException("The property is not loaded.");
+        var places = property.EmployeeIdlePoints;
+        Mod.Log("baseddiag: staff " + property.Employees.Count + "/" + property.EmployeeCapacity + ", places " + places.Length + ", spawn " + property.NPCSpawnPoint.position);
+        var filter = new UnityEngine.AI.NavMeshQueryFilter
+        {
+            agentTypeID = Il2CppScheduleOne.DevUtilities.NavMeshUtility.GetNavMeshAgentID("Employee"),
+            areaMask = UnityEngine.AI.NavMesh.AllAreas
+        };
+        for (int i = 0; i < places.Length; i++)
+        {
+            var path = new UnityEngine.AI.NavMeshPath();
+            bool found = UnityEngine.AI.NavMesh.CalculatePath(property.NPCSpawnPoint.position, places[i].position, filter, path);
+            Mod.Log("baseddiag: place " + i + " at " + places[i].position + " route " + (found ? path.status.ToString() : "none"));
+        }
+        for (int i = 0; i < property.Employees.Count; i++)
+        {
+            var employee = property.Employees[i];
+            var agent = employee.GetComponentInChildren<UnityEngine.AI.NavMeshAgent>(true);
+            Mod.Log("baseddiag: employee " + employee.name + " index " + employee.EmployeeIndex + " at " + agent.transform.position
+                + ", waits at " + places[employee.EmployeeIndex].position + ", agent type " + agent.agentTypeID + ", on mesh " + agent.isOnNavMesh);
+        }
     }
 
     // Stands in for the clicks a test cannot make: read the folder, hang it where the aim is, or take one.
