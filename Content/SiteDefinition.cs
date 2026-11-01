@@ -35,6 +35,8 @@ internal sealed class SiteDefinition
     public IReadOnlyList<string> Restrictions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<Bounds> KeepClear { get; init; } = Array.Empty<Bounds>();
     public IReadOnlyList<PlanRoom> Plan { get; init; } = Array.Empty<PlanRoom>();
+    // Where the additional employees of the finished room wait, in world metres.
+    public IReadOnlyList<Vector3> StaffPlaces { get; init; } = Array.Empty<Vector3>();
     public Action RegisterWorld { get; init; } = () => { };
     public ISiteCrew? Crew { get; init; }
 

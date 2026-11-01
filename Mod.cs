@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Based.Content;
 using Based.Content.Ming;
 using Based.Core;
@@ -75,6 +76,20 @@ public sealed class Mod : MelonMod
         Text.Register();
         foreach (var site in Sites) site.Validate();
         Engine = new UpgradeEngine(Sites.Select(s => s.Base), new HostAuthority());
+        MissingMods.Check(LoggerInstance);
+        if (MissingMods.Any)
+        {
+            LoggerInstance.Error("Based stays off: " + MissingMods.Line + " " + Sites[0].VendorNpcId + " names them in the dialogue.");
+            return;
+        }
+        InitializeWithRequiredMods();
+    }
+
+    // Holds every first use of a required mod. The runtime resolves those types when it compiles this method, so
+    // OnInitializeMelon must not contain them, and inlining would put them back there.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void InitializeWithRequiredMods()
+    {
         foreach (var site in Sites) site.RegisterWorld();
 #if DEBUG
         DockProbe.Register();
@@ -92,6 +107,11 @@ public sealed class Mod : MelonMod
 
     public override void OnSceneWasLoaded(int buildIndex, string sceneName)
     {
+        if (MissingMods.Any)
+        {
+            MissingModsSceneLoaded(sceneName);
+            return;
+        }
         if (!_initialized) return;
         if (sceneName == "Menu")
         {
@@ -103,6 +123,7 @@ public sealed class Mod : MelonMod
             BuildPlan.Close("the game returned to the menu");
             ConstructionJournal.Reset();
             ProjectFolder.Reset();
+            StaffRoom.Reset();
             foreach (var site in Sites) site.Crew?.Cleanup();
             Payments.ResetForMenu();
             NativeBus.Stop();
@@ -128,8 +149,32 @@ public sealed class Mod : MelonMod
         }
     }
 
+    // The save state of the last save must not carry over into the next one, with or without the required mods.
+    private static void MissingModsSceneLoaded(string sceneName)
+    {
+        if (sceneName == "Menu")
+        {
+            _main = false;
+            BasedSave.BeginLoad();
+            Vendors.Clear();
+            ContainedErrors.Clear();
+            Failure = "";
+            _saveWarningShown = false;
+        }
+        else if (sceneName == "Main")
+        {
+            _main = true;
+            _nextBind = 0;
+        }
+    }
+
     public override void OnUpdate()
     {
+        if (MissingMods.Any)
+        {
+            if (_main) TickMissingMods();
+            return;
+        }
         if (!_initialized || !_main) return;
 #if SNITCH
         using (Profiler.Sample("Based.Frame")) Frame();
@@ -263,17 +308,46 @@ public sealed class Mod : MelonMod
             RefreshChoice(site, bound);
             return;
         }
+        var vendor = AddVendorChoice(site, Text.T(site.VendorLine), () => RequestPlan(site));
+        if (vendor == null) return;
+        RefreshChoice(site, vendor);
+        Log(site.VendorNpcId + "'s dialogue extended with the construction plan.");
+    }
+
+    // Without the required mods the entry stays, owned room or not, and its line says what is missing.
+    private static void TickMissingMods()
+    {
+        try
+        {
+            if (LoadManager.Instance?.IsGameLoaded != true || Time.unscaledTime < _nextBind) return;
+            if (_loadedAt < 0) _loadedAt = Time.unscaledTime;
+            _nextBind = Time.unscaledTime + 1f;
+            foreach (var site in Sites)
+            {
+                if (Vendors.ContainsKey(site)) continue;
+                var vendor = AddVendorChoice(site, MissingMods.Line, () => Log("The player asked for the expansion: " + MissingMods.Line));
+                if (vendor == null) continue;
+                vendor.Choice.Enabled = true;
+                vendor.Choice.ChoiceText = Text.T(site.RequestChoice);
+                Log(site.VendorNpcId + "'s dialogue names the missing mods.");
+            }
+        }
+        catch (Exception error) { Contain("missing mods notice", error); }
+    }
+
+    private static Vendor? AddVendorChoice(SiteDefinition site, string line, Action chosen)
+    {
         var npc = S1API.Entities.NPC.Get(site.VendorNpcId);
         if (npc == null)
         {
             if (Time.unscaledTime - _loadedAt > VendorWarnAfter && MissingVendors.Add(site))
                 Warn(site.VendorNpcId + " is missing from this save; the plan for " + site.Base.Id + " stays unavailable.");
-            return;
+            return null;
         }
         var controller = npc.gameObject.GetComponentInChildren<DialogueController>(true);
         var handler = npc.gameObject.GetComponentInChildren<DialogueHandler>(true);
         if (controller == null || handler == null) throw new InvalidOperationException(site.VendorNpcId + " has no dialogue controller or handler.");
-        npc.Dialogue.BuildAndRegisterContainer(site.VendorContainerId, b => b.AddNode("ENTRY", Text.T(site.VendorLine)));
+        npc.Dialogue.BuildAndRegisterContainer(site.VendorContainerId, b => b.AddNode("ENTRY", line));
         Conversation? container = null;
         for (int i = 0; i < handler.dialogueContainers.Count; i++)
             if (handler.dialogueContainers[i].name == site.VendorContainerId) container = handler.dialogueContainers[i];
@@ -284,12 +358,11 @@ public sealed class Mod : MelonMod
             Priority = 55,
             onChoosen = new UnityEvent()
         };
-        choice.onChoosen.AddListener((Action)(() => RequestPlan(site)));
+        choice.onChoosen.AddListener(chosen);
         controller.AddDialogueChoice(choice, 55);
         var vendor = new Vendor { Npc = npc, Choice = choice, Handler = handler };
         Vendors[site] = vendor;
-        RefreshChoice(site, vendor);
-        Log(site.VendorNpcId + "'s dialogue extended with the construction plan.");
+        return vendor;
     }
 
     // The choice offers what is possible right now: nothing before the room is owned or once the work is done.
@@ -449,6 +522,14 @@ public sealed class Mod : MelonMod
 
     internal static void Restore(BasedState state)
     {
+        if (MissingMods.Any)
+        {
+            // Started work has world that cannot be built now, and saving would drop what stands in that room.
+            if (state.Upgrades.Any(u => u.Stage is UpgradeStage.Constructing or UpgradeStage.Complete))
+                Fail("loading Based save", new InvalidOperationException("Construction has started and required mods are missing. " + MissingMods.Line));
+            else Log("Saved Based state has no construction; it stays as it is until the required mods are back.");
+            return;
+        }
         Engine.RestoreState(state);
         Payments.SetSession(BasedSave.SaveId);
         _worldDirty = true;
@@ -546,6 +627,16 @@ public sealed class Mod : MelonMod
                 return false;
             }
             requested.Add(target.Key + "/" + target.Value);
+        }
+        // Employees above the game's limit would be dropped on load, and the next save would lose them for good.
+        try
+        {
+            foreach (var site in Sites) StaffRoom.Apply(site, Engine.GetUpgrade(site.Base.Id, site.UpgradeId).Stage);
+        }
+        catch (Exception error)
+        {
+            Fail("raising the employee limit", error);
+            return false;
         }
         _worldDirty = false;
         string desiredStates = string.Join(",", requested);

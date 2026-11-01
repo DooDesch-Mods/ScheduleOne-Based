@@ -32,7 +32,8 @@ var checks = new (string Name, Action Run)[]
     ("changed cycle counts adapt with a warning", MigrateCycleCount),
     ("stored rejections from an older save are dropped", MigrateRejections),
     ("pending payment on removed content is released on load", MigratePendingOnRemovedContent),
-    ("restored upgrades keep their state when a prerequisite was added", MigrateNewPrerequisite)
+    ("restored upgrades keep their state when a prerequisite was added", MigrateNewPrerequisite),
+    ("employee limit: one becomes three, every other limit doubles", StaffLimits)
 };
 int failed = 0;
 foreach (var check in checks)
@@ -415,6 +416,14 @@ static void MigratePendingOnRemovedContent()
     Equal(0, restored.PendingPurchases().Count);
     Equal(PurchaseStatus.RefundRequired, restored.AcknowledgePayment("removed", new(true, "late", "buyer", 100)).Status);
 }
+static void StaffLimits()
+{
+    Equal(3, StaffLimit.Expanded(1));
+    Equal(4, StaffLimit.Expanded(2));
+    Equal(20, StaffLimit.Expanded(10));
+    Equal(0, StaffLimit.Expanded(0));
+}
+
 static void MigrateNewPrerequisite()
 {
     var engine = Engine(new("fixture", "p", new[] { Upgrade("A", Array.Empty<string>(), "a", 2), Upgrade("B", Array.Empty<string>(), "b", 1) }));
