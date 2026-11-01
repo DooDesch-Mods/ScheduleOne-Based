@@ -49,7 +49,7 @@ Pick up what stands in the new rooms first. It disappears with the mod.
 
 - [MelonLoader](https://melonwiki.xyz/) 0.7.3 or newer
 - [S1API](https://thunderstore.io/c/schedule-i/p/ifBars/S1API_Forked/) 3.2.1 or newer
-- [Personnel](https://thunderstore.io/c/schedule-i/p/DooDesch/Personnel/) 2.4.5 or newer
+- [Personnel](https://thunderstore.io/c/schedule-i/p/DooDesch/Personnel/) 2.4.6 or newer
 - [Sideload](https://thunderstore.io/c/schedule-i/p/DooDesch/Sideload/) 1.36.1 or newer
 - [MapExpansions](https://thunderstore.io/c/schedule-i/p/DooDesch/MapExpansions/) 1.0.0 or newer
 
