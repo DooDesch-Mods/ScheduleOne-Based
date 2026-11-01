@@ -21,7 +21,7 @@ public abstract class ConstructionQuest : Quest
     private SiteDefinition Site => Mod.Sites.First(s => s.Base.Id == BaseId);
 
     protected override string Title => Text.T(Site.Title);
-    protected override string Description => Text.T("The crew gets one stage further every night you sleep.");
+    protected override string Description => Text.T("The crew finishes one stage each night you sleep.");
     protected override bool AutoBegin => true;
 
     // Unity destroys runtime sprites when a save is left for the menu, so a destroyed one is built again.

@@ -227,6 +227,8 @@ public static class MingWorld
             Shell(geometry, "south", true, 135.88f, 135.96f, -59.995f, -53.94f, new[] { -57f }, morning == 4, -59.98f, -54f);
             Shell(geometry, "north", true, 145.04f, 145.12f, -60.12f, -53.94f, new[] { -57f }, morning == 4, -60f, -54f);
             Shell(geometry, "west-north", false, -60.12f, -60.04f, 141.05f, 145.04f, Array.Empty<float>(), morning == 4, 141f, 145f);
+            // The new wall starts just north of the old one. Until the finished return covers it, this stud closes the joint.
+            if (morning == 3) Solid(geometry, "west-north-joint", Trim, -60.12f, FloorY, 141f, -59.98f, CeilingY, 141.06f);
             state.Copies.Add(Copy("east-window-south", Window, WindowPivot, new Vector3(-53.94f, 1.462493f, 137.3f)));
             state.Copies.Add(Copy("east-window-north", Window, WindowPivot, new Vector3(-53.94f, 1.462493f, 143f)));
             state.Copies.Add(Copy("south-window", Window, WindowPivot, new Vector3(-57f, 1.462493f, 135.94f), 90));
@@ -330,11 +332,13 @@ public static class MingWorld
     private static void Scaffold(WorldStateDefinition state, CopyDefinition geometry)
     {
         const float wall = 135.42f, outer = 134.86f, top = 2.3f;
+        // The pavement drops toward the street, so the posts start below its lowest point.
+        const float foot = StreetY - .4f;
         for (int i = 0; i < 3; i++)
         {
             float x = -59.75f + i * 2.8f;
-            Face(geometry, "scaffold-post-inner-" + i, Trim, x - .05f, StreetY, wall - .05f, x + .05f, top, wall + .05f);
-            Face(geometry, "scaffold-post-outer-" + i, Trim, x - .05f, StreetY, outer - .05f, x + .05f, top + .9f, outer + .05f);
+            Face(geometry, "scaffold-post-inner-" + i, Trim, x - .05f, foot, wall - .05f, x + .05f, top, wall + .05f);
+            Face(geometry, "scaffold-post-outer-" + i, Trim, x - .05f, foot, outer - .05f, x + .05f, top + .9f, outer + .05f);
         }
         foreach (float y in new[] { -1.9f, .1f, 2.1f })
         {

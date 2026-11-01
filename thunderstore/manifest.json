@@ -2,7 +2,7 @@
   "name": "Based",
   "version_number": "1.0.0",
   "website_url": "https://github.com/DooDesch-Mods/ScheduleOne-Based",
-  "description": "Buy the rest of the floor above Ming's and watch a crew build it over four nights. Ming's is the first base.",
+  "description": "Expand the Sweatshop: buy the rest of the floor and watch a crew build it over four nights.",
   "dependencies": [
     "LavaGang-MelonLoader-0.7.3",
     "ifBars-S1API_Forked-3.2.1",
