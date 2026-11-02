@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag status | plan | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag status | plan | ray [office|street] | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
 
     public override void ExecuteCommand(List<string> args)
     {
@@ -29,6 +29,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "plan":
                     Mod.DebugPlan(Mod.Sites[0]);
                     Mod.Log("baseddiag: plan opened through the vendor conversation.");
+                    break;
+                case "ray":
+                    PlanCopies.DebugTalk(args.Count > 1 ? args[1] : "");
                     break;
                 case "blockers":
                     Mod.DebugBlockers(Mod.Sites[0]);

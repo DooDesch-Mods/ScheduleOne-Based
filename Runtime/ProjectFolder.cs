@@ -68,6 +68,25 @@ internal static class ProjectFolder
         return stage is UpgradeStage.RightsOwned or UpgradeStage.Constructing && Hung.Count == 0 && !Carried;
     }
 
+    // A folder in the pocket or on a wall: the player still has the plans.
+    internal static bool Present
+    {
+        get
+        {
+            Hung.RemoveAll(item => item == null || item.IsDestroyed);
+            return Hung.Count > 0 || Carried;
+        }
+    }
+
+    internal static bool Fits
+    {
+        get
+        {
+            var inventory = PlayerSingleton<PlayerInventory>.Instance;
+            return _definition != null && inventory != null && inventory.CanItemFitInInventory(_definition.GetDefaultInstance(1), 1);
+        }
+    }
+
     internal static void GiveAfterPayment(SiteDefinition site) => _giftFor = site;
 
     internal static void Register()

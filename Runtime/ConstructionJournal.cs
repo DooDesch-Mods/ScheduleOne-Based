@@ -26,6 +26,7 @@ internal static class ConstructionJournal
     private readonly record struct Notice(string Title, string Subtitle, float Due, bool Work);
 
     private static readonly Dictionary<SiteDefinition, Seen> Last = new();
+    private static readonly Dictionary<(SiteDefinition, string), UpgradeStage> LastFollowUp = new();
     private static readonly List<Notice> Pending = new();
     private static float _next;
     private static bool _waiting;
@@ -33,6 +34,7 @@ internal static class ConstructionJournal
     internal static void Reset()
     {
         Last.Clear();
+        LastFollowUp.Clear();
         Pending.Clear();
         ConstructionSounds.Reset();
         _next = 0;
@@ -56,6 +58,7 @@ internal static class ConstructionJournal
         {
             Reconcile(site);
             Report(site);
+            foreach (var followUp in site.FollowUps) Report(site, followUp);
         }
         ShowDue();
     }
@@ -162,6 +165,18 @@ internal static class ConstructionJournal
                 Queue(Text.T(title), NightsLeft(site.Upgrade.ConstructionCycles - now.Cycles), true);
             else Mod.Warn("Morning notice skipped: phase " + phase + " has no title.");
         }
+    }
+
+    // A follow-up takes one night and has no quest, so its finish is the only news.
+    private static void Report(SiteDefinition site, SiteFollowUp followUp)
+    {
+        var stage = Mod.Engine.GetUpgrade(site.Base.Id, followUp.UpgradeId).Stage;
+        var key = (site, followUp.UpgradeId);
+        bool seen = LastFollowUp.TryGetValue(key, out var before);
+        LastFollowUp[key] = stage;
+        if (!seen || stage == before) return;
+        if (stage == UpgradeStage.Complete) Queue(Text.T(followUp.Title), Text.T(followUp.Done), true);
+        Mod.Log("Follow-up " + followUp.UpgradeId + " of " + site.Base.Id + " is now " + stage + ".");
     }
 
     private static void Queue(string title, string subtitle, bool work = false) =>

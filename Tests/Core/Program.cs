@@ -33,7 +33,8 @@ var checks = new (string Name, Action Run)[]
     ("stored rejections from an older save are dropped", MigrateRejections),
     ("pending payment on removed content is released on load", MigratePendingOnRemovedContent),
     ("restored upgrades keep their state when a prerequisite was added", MigrateNewPrerequisite),
-    ("employee limit: one becomes three, every other limit doubles", StaffLimits)
+    ("employee limit: one becomes three, every other limit doubles", StaffLimits),
+    ("an upgrade without a rights price is ordered directly after its prerequisite", DirectOrder)
 };
 int failed = 0;
 foreach (var check in checks)
@@ -432,6 +433,32 @@ static void MigrateNewPrerequisite()
     restored.RestoreState(engine.ExportState());
     Equal(1, warnings.Count);
     Equal(UpgradeStage.Complete, restored.GetUpgrade("fixture", "B").Stage);
+}
+
+static void DirectOrder()
+{
+    var definition = Fixture(includeDock: false) with { Upgrades = new[]
+    {
+        Upgrade("A", Array.Empty<string>(), "area-a", 2),
+        new UpgradeDefinition("dock", 0, 1500, 1, new[] { "A" }, Array.Empty<ConstructionPhase>(), new[] { new UpgradeEffect("world-state", "dock", "complete") })
+    } };
+    var engine = Engine(definition);
+    Equal("prerequisite-incomplete", engine.BeginPurchase(Command("early", "dock", PurchaseKind.Construction)).Reason);
+    Order(engine, "A", "a");
+    Equal("prerequisite-incomplete", engine.BeginPurchase(Command("busy", "dock", PurchaseKind.Construction)).Reason);
+    engine.AdvanceSleep(1); engine.AdvanceSleep(2);
+    Equal("rights-not-sold", engine.BeginPurchase(Command("rights", "dock", PurchaseKind.Rights)).Reason);
+    var applied = Pay(engine, "dock-order", "dock", PurchaseKind.Construction);
+    Equal(PurchaseStatus.Applied, applied.Status);
+    Equal(1500, applied.Payment!.Amount);
+    engine = RoundTrip(engine, definition);
+    Equal(UpgradeStage.Constructing, engine.GetUpgrade("fixture", "dock").Stage);
+    Equal(0, engine.GetUpgrade("fixture", "dock").RightsPaid);
+    engine.AdvanceSleep(3);
+    Equal(UpgradeStage.Complete, engine.GetUpgrade("fixture", "dock").Stage);
+    Equal(2, engine.CompletedEffects("fixture").Count);
+    engine = RoundTrip(engine, definition);
+    Equal(UpgradeStage.Complete, engine.GetUpgrade("fixture", "dock").Stage);
 }
 
 sealed class AuthorityFlag(bool canMutate) : IAuthority { public bool CanMutate => canMutate; }

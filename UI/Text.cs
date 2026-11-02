@@ -73,5 +73,18 @@ internal static class Text
         ["This upgrade is not available."] = "Dieser Ausbau ist nicht verfügbar.",
         ["The host declined this purchase."] = "Der Host hat diesen Kauf abgelehnt.",
         ["Based needs these mods: {0}."] = "Based braucht diese Mods: {0}.",
+        ["Loading dock: Sweatshop"] = "Laderampe: Sweatshop",
+        ["Ready for deliveries"] = "Bereit für Lieferungen",
+        ["Deliveries park in the yard behind the restaurant."] = "Lieferungen parken im Hof hinter dem Restaurant.",
+        ["Employees can unload the van from there."] = "Mitarbeiter können den Lieferwagen dort ausladen.",
+        ["The crew builds it the night you sleep."] = "Der Trupp baut sie in der Nacht, in der du schläfst.",
+        ["One night of work"] = "Eine Nacht Bauzeit",
+        ["Sweatshop"] = "Sweatshop",
+        ["I lost my building plans."] = "Ich habe meine Baupläne verloren.",
+        ["Copies are {0}, cash. Come back when you have it."] = "Eine Kopie kostet {0}, bar. Komm wieder, wenn du es hast.",
+        ["Make some room in your pockets first."] = "Mach erst mal Platz in deinen Taschen.",
+        ["Lost your plans? I keep a copy of every deed. {0} a set, cash."] = "Pläne verloren? Ich habe von jeder Urkunde eine Kopie. {0} pro Satz, bar.",
+        ["Never mind."] = "Schon gut.",
+        ["Here you go. Keep them somewhere safe this time."] = "Bitte schön. Pass diesmal besser darauf auf.",
     });
 }
