@@ -252,8 +252,12 @@ public sealed class UpgradeEngine
         if (!Enum.IsDefined(typeof(PurchaseKind), command.Kind)) return "invalid-purchase-kind";
         var state = FindState(command.BaseId, command.UpgradeId);
         if (definition.Prerequisites.Any(p => FindState(command.BaseId, p).Stage != UpgradeStage.Complete)) return "prerequisite-incomplete";
+        // An upgrade without a rights price is ordered directly; there are no rights to sell for it.
+        bool rightsFree = definition.RightsPrice == 0;
+        if (command.Kind == PurchaseKind.Rights && rightsFree) return "rights-not-sold";
         if (command.Kind == PurchaseKind.Rights && state.Stage != UpgradeStage.RightsMissing) return "rights-already-owned";
-        if (command.Kind == PurchaseKind.Construction && state.Stage != UpgradeStage.RightsOwned) return "construction-unavailable";
+        if (command.Kind == PurchaseKind.Construction && state.Stage != UpgradeStage.RightsOwned &&
+            !(rightsFree && state.Stage == UpgradeStage.RightsMissing)) return "construction-unavailable";
         if (command.Kind == PurchaseKind.Construction && _state.Upgrades.Any(s => s.BaseId == command.BaseId && s.Stage == UpgradeStage.Constructing)) return "construction-active";
         if (checkReservation && _state.Purchases.Any(p => p.Result.Status == PurchaseStatus.PaymentPending && p.Command.BaseId == command.BaseId &&
             (p.Command.UpgradeId == command.UpgradeId || command.Kind == PurchaseKind.Construction && p.Command.Kind == PurchaseKind.Construction))) return "purchase-pending";

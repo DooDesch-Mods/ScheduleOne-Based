@@ -123,6 +123,7 @@ public sealed class Mod : MelonMod
             BuildPlan.Close("the game returned to the menu");
             ConstructionJournal.Reset();
             ProjectFolder.Reset();
+            PlanCopies.Reset();
             StaffRoom.Reset();
             foreach (var site in Sites) site.Crew?.Cleanup();
             Payments.ResetForMenu();
@@ -211,6 +212,8 @@ public sealed class Mod : MelonMod
             {
                 _nextBind = Time.unscaledTime + 1f;
                 foreach (var site in Sites) BindVendor(site);
+                try { PlanCopies.Tick(Time.unscaledTime - _loadedAt); }
+                catch (Exception error) { Contain("plan copies at Ray", error); }
             }
             foreach (var site in Sites) TickCrew(site);
             TickHold();
@@ -397,17 +400,21 @@ public sealed class Mod : MelonMod
         var site = Sites.FirstOrDefault(s => s.Base.Id == command.BaseId);
         if (site == null) return "unknown-base";
         if (!Owns(site)) return Text.T("Buy the Sweatshop first.");
-        if (command.Kind != PurchaseKind.Construction) return null;
+        // Only the expansion builds into the room; a follow-up stands outside it.
+        if (command.Kind != PurchaseKind.Construction || command.UpgradeId != site.UpgradeId) return null;
         var items = BlockingItems(site);
         return items.Length > 0 ? BlockedText(items) : null;
     }
 
-    internal static string Purchase(SiteDefinition site, PurchaseKind kind)
+    internal static string ActiveUpgradeId(SiteDefinition site) =>
+        site.ActiveUpgradeId(id => Engine.GetUpgrade(site.Base.Id, id).Stage);
+
+    internal static string Purchase(SiteDefinition site, string upgradeId, PurchaseKind kind)
     {
         if (Failure.Length > 0) return Text.T("Construction paused because the expansion could not be applied.");
         if (!Owns(site)) return Text.T("Buy the Sweatshop first.");
         if (!NativeBus.IsHost && !_snapshotReceived) return Text.T("Waiting for the host's construction plan.");
-        if (kind == PurchaseKind.Construction)
+        if (kind == PurchaseKind.Construction && upgradeId == site.UpgradeId)
         {
             var items = OutlineBlocking(site);
             if (items.Length > 0)
@@ -418,7 +425,8 @@ public sealed class Mod : MelonMod
         }
         try
         {
-            Payments.Request(kind, site.Base.Id, site.UpgradeId);
+            Payments.Request(kind, site.Base.Id, upgradeId);
+            Log("Purchase requested: " + kind + " of " + site.Base.Id + "/" + upgradeId + ".");
             return "";
         }
         catch (InvalidOperationException error)

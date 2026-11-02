@@ -8,6 +8,7 @@ internal static class MingSite
     {
         Base = MingDefinition.Create(),
         UpgradeId = MingDefinition.UpgradeId,
+        PropertyName = "Sweatshop",
         VendorNpcId = "ming",
         VendorContainerId = "based_ming_plan",
         RequestChoice = "I want to expand the room.",
@@ -42,8 +43,17 @@ internal static class MingSite
             new(-58.5f, MingWorld.FloorY, 136.9f),
             new(-55.2f, MingWorld.FloorY, 136.8f)
         },
-        RegisterWorld = MingWorld.Register,
-        Crew = new Crew()
+        RegisterWorld = () =>
+        {
+            MingWorld.Register();
+            MingDock.Register();
+        },
+        Crew = new Crew(),
+        FollowUps = new[]
+        {
+            new SiteFollowUp(MingDefinition.DockUpgradeId, "Loading dock: Sweatshop", "Ready for deliveries",
+                new[] { "Deliveries park in the yard behind the restaurant.", "Employees can unload the van from there." })
+        }
     };
 
     private sealed class Crew : ISiteCrew

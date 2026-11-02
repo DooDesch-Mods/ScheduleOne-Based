@@ -65,6 +65,7 @@ function render(raw) {
     $('construction-label').textContent = data.constructionLabel;
     $('construction').textContent = data.construction;
     $('rights-row').className = data.rightsPaid ? 'cost paid' : 'cost';
+    $('rights-row').style.display = data.rightsShown ? 'flex' : 'none';
     $('construction-row').className = data.constructionPaid ? 'cost paid' : 'cost';
     $('duration').textContent = data.duration;
     $('cash').textContent = data.cash;
@@ -90,7 +91,7 @@ function render(raw) {
 
 $('buy').addEventListener('click', () => {
   if (!current || !current.canBuy) return;
-  const answer = s1.call('plan.buy', current.stage === 'RightsMissing' ? 'rights' : 'construction');
+  const answer = s1.call('plan.buy', current.buyKind);
   if (answer === null || answer === undefined) console.error('The purchase request returned no acknowledgement.');
   render(s1.call('plan.state'));
 });

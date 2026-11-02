@@ -7,9 +7,12 @@ public static class MingDefinition
     public const string BaseId = "ming.sweatshop";
     public const string UpgradeId = "ming.restaurant-wing";
     public const string ExpansionId = "based_ming_upper";
+    public const string DockUpgradeId = "ming.loading-dock";
+    public const string DockExpansionId = "based_ming_dock";
     // Together the price of the game's Storage Unit: the wing doubles the sweatshop's floor but adds no employee beds.
     public const int RightsPrice = 1000;
     public const int ConstructionPrice = 3000;
+    public const int DockPrice = 1500;
 
     public static BaseDefinition Create(int rightsPrice = RightsPrice,
         int constructionPrice = ConstructionPrice) =>
@@ -21,6 +24,10 @@ public static class MingDefinition
                     new ConstructionPhase("breakthrough", 1, "breakthrough"),
                     new ConstructionPhase("frame", 2, "frame"),
                     new ConstructionPhase("roof", 3, "roof")
-                }, new[] { new UpgradeEffect("world-state", ExpansionId, "complete") })
+                }, new[] { new UpgradeEffect("world-state", ExpansionId, "complete") }),
+            // The street already belongs to the city, so the dock has no rights to buy.
+            new UpgradeDefinition(DockUpgradeId, 0, DockPrice, 1,
+                new[] { UpgradeId }, Array.Empty<ConstructionPhase>(),
+                new[] { new UpgradeEffect("world-state", DockExpansionId, "complete") })
         });
 }
