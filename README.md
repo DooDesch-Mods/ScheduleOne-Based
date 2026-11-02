@@ -2,7 +2,7 @@
 
 > 🛟 **Need help or found a bug?** Get support at [support.doodesch.de/based](https://support.doodesch.de/based).
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
 [![Polyfill](https://polyfill.doomods.com/badge/based.svg)](https://polyfill.doomods.com/mod/based)
@@ -27,6 +27,13 @@ Own the Sweatshop and ask Mrs. Ming to expand it. The plan opens as a clipboard 
 You can keep using the room during construction. Keep the red walls clear, or the work goes on hold.
 
 The rights come with a project folder. Left click it to read the plan, or hang it on a wall to follow the build.
+Lost it? Ray at Ray's Realty sells a copy of the plans for $200.
+
+## Loading dock
+
+Once the expansion is done, the project folder offers the next stage: a loading dock in the yard behind the
+restaurant, for $1,500 and one night of work. After that the Sweatshop shows up in the delivery app, and
+employees can unload the van there.
 
 ## You pick the next base
 
@@ -41,6 +48,7 @@ money comes from the player who clicks.
 ## Removing the mod
 
 Pick up what stands in the new rooms first. It disappears with the mod, and the Sweatshop keeps only its first employee.
+Wait until no delivery is on its way to the Sweatshop, since the dock goes with the mod.
 
 ## Screenshots
 
