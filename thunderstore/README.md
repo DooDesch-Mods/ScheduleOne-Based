@@ -6,6 +6,8 @@
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
 
+[![MLVScan Based.dll](https://mlvscan.com/attestations/att_sYt6w_XgXlUvdRGRF6rqsKD4/badge.svg)](https://mlvscan.com/attestations/att_sYt6w_XgXlUvdRGRF6rqsKD4)
+
 ![Based](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/header.jpg)
 
 > Too little room in the Sweatshop? Buy the rest of the floor, order the work and watch a crew build it over four nights.
