@@ -150,11 +150,14 @@ internal static class ProjectFolder
 
     internal static void NoteClosed() => _nextClick = Time.unscaledTime + ClickCooldown;
 
+    // The item carries its property's name. Based has one site, so one folder item; a second site needs its own item.
+    private static string DisplayName => Text.T("{0} - Project folder", Text.T(Mod.Sites[0].PropertyName));
+
     private static void Notify(string line)
     {
         var notifications = Singleton<NotificationsManager>.Instance;
         if (notifications == null) { Mod.Warn("No notification shown: the notification manager is not ready."); return; }
-        notifications.SendNotification(Text.T("Project folder"), line, _icon, 8f, false);
+        notifications.SendNotification(DisplayName, line, _icon, 8f, false);
     }
 
     // The ghost shows on a wall that takes the item, where the game's own click hangs it. Anywhere else the click reads it.
@@ -330,7 +333,7 @@ internal static class ProjectFolder
         definition.hideFlags |= HideFlags.DontUnloadUnusedAsset;
         definition.name = "Based_ProjectFolder";
         definition.ID = ItemId;
-        definition.Name = Text.T("Project folder");
+        definition.Name = DisplayName;
         definition.Description = Text.T("Left click to read, or hang it on a wall.");
         definition.Icon = _icon != null ? _icon : note.Icon;
         definition.Category = note.Category;

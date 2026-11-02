@@ -39,6 +39,7 @@ internal static class Text
         ["Expansion"] = "Ausbau",
         ["Buy rights"] = "Rechte kaufen",
         ["Project folder"] = "Projektmappe",
+        ["{0} - Project folder"] = "{0} - Projektmappe",
         ["Take the project folder"] = "Projektmappe mitnehmen",
         ["No room for the project folder."] = "Kein Platz für die Projektmappe.",
         ["Left click to read, or hang it on a wall."] = "Linksklick zum Lesen, oder häng sie an die Wand.",
