@@ -376,7 +376,7 @@ jobs:
           repo: thunderstore.io
           namespace: DooDesch
           name: Based
-          description: Expand the Sweatshop: buy the rest of the floor and watch a crew build it over four nights.
+          description: "Expand the Sweatshop: buy the rest of the floor and watch a crew build it over four nights."
           version: ${{ needs.build.outputs.version }}
           path: thunderstore-package
           deps: |
