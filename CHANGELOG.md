@@ -4,6 +4,15 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.1.0] - 2026-11-02
+
+### Added
+- Loading dock for the Sweatshop: after the expansion the project folder offers it for $1,500, built in one night of sleep.
+- The dock sits in the yard behind the restaurant. The Sweatshop now shows up in the Deliveries app and the van parks there.
+- Employees can unload the van at the dock with a packager route.
+- Order further stages in the project folder itself. Mrs. Ming only handles the first expansion.
+- Lost the folder? Ray at Ray's Realty sells a copy of the building plans for $200 cash, for each property with a Based expansion.
+
 ## [1.0.1] - 2026-11-02
 
 ### Changed
