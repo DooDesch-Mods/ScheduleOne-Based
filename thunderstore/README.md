@@ -5,6 +5,7 @@
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
+[![Polyfill](https://polyfill.doomods.com/badge/based.svg)](https://polyfill.doomods.com/mod/based)
 
 [![MLVScan Based.dll](https://mlvscan.com/attestations/att_sYt6w_XgXlUvdRGRF6rqsKD4/badge.svg)](https://mlvscan.com/attestations/att_sYt6w_XgXlUvdRGRF6rqsKD4)
 
