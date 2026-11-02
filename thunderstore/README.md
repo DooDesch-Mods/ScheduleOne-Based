@@ -7,7 +7,7 @@
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
 [![Polyfill](https://polyfill.doomods.com/badge/based.svg)](https://polyfill.doomods.com/mod/based)
 
-[![MLVScan Based.dll](https://mlvscan.com/attestations/att__g2WdCxVfrFOaHVUhH8B08DP/badge.svg)](https://mlvscan.com/attestations/att__g2WdCxVfrFOaHVUhH8B08DP)
+[![MLVScan Based.dll](https://mlvscan.com/attestations/att_dSsHBdF9b1VPfRCN-uusfRcm/badge.svg)](https://mlvscan.com/attestations/att_dSsHBdF9b1VPfRCN-uusfRcm)
 
 ![Based](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/header.jpg)
 
