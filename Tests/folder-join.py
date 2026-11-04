@@ -35,7 +35,9 @@ from s1 import Game  # noqa: E402
 REGISTERED = r"\[Based\].*Project folder item registered\."
 HUNG = r"\[Based\].*Project folder hung at"
 JOIN_START = r"Joining as client to:"
-# A missing definition shows as the registry's warning, then as the null dereference in CreateInstanceAndRead.
+# A missing definition shows as the registry's warning, then as the null dereference in CreateInstanceAndRead. During a
+# join the registry stays quiet and FishNet writes its parse error only to Unity's Player.log, so the decisive check is
+# that the client dresses the folder at all: a dropped spawn packet leaves the folder, and more, missing.
 MISSING = r"based_project_folder' not found in registry|CreateInstanceAndRead|ReadItemInstance"
 
 
