@@ -2,12 +2,10 @@
 
 > 🛟 **Need help or found a bug?** Get support at [support.doodesch.de/based](https://support.doodesch.de/based).
 
-[![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de)
-
 ![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
-[![Polyfill](https://polyfill.doomods.com/badge/based.svg)](https://polyfill.doomods.com/mod/based)
+[![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de) [![Polyfill](https://polyfill.doomods.com/badge/based.svg)](https://polyfill.doomods.com/mod/based)
 
 [![MLVScan Based.dll](https://mlvscan.com/attestations/att_dSsHBdF9b1VPfRCN-uusfRcm/badge.svg)](https://mlvscan.com/attestations/att_dSsHBdF9b1VPfRCN-uusfRcm)
 
