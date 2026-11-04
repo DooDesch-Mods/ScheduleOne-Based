@@ -146,15 +146,25 @@ class Run:
         ready, last = self.client.wait_ready(timeout=timeout, say=lambda s: None)
         return self.check("client finishes the join", ready, "stuck after %d s; last log line: %s" % (timeout, last) if not ready else "")
 
-    # A client the host's save does not know yet starts in the character creator, and the host's property objects only
-    # reach it once its player is in the world.
-    def finish_creator(self, log):
-        mark = Log(self.client)
-        self.client.call("run_console_command", {"command": "baseddiag creator", "capture": False})
-        line = mark.wait(r"baseddiag: creator (done|not open)|baseddiag.*(Exception|failed)", 10)
-        print("      %s" % (line or "no answer from 'baseddiag creator' in 10 s"), flush=True)
-        hung = log.wait(HUNG, 90)
-        print("      %s" % (hung or "no folder on the client after 90 s"), flush=True)
+    # A client the host's save does not know yet plays the intro, then opens the character creator. The folder may
+    # arrive before that, so the creator only matters for the screenshot of a player standing in the world.
+    def finish_creator(self, log, timeout=300):
+        start = time.time()
+        while time.time() - start < timeout:
+            mark = Log(self.client)
+            self.client.call("run_console_command", {"command": "baseddiag creator", "capture": False})
+            line = mark.wait(r"baseddiag: creator (done|not open)|baseddiag.*(Exception|failed)", 10)
+            if line and "creator done" in line:
+                print("      intro and creator took %d s" % (time.time() - start), flush=True)
+                break
+            if line and "creator not open" not in line:
+                print("      'baseddiag creator' failed: %s" % line, flush=True)
+                break
+            time.sleep(3)
+        else:
+            print("      no character creator opened in %d s" % timeout, flush=True)
+        hung = log.wait(HUNG, 30)
+        print("      %s" % (hung or "no folder on the client 30 s after the creator"), flush=True)
 
     def read_client(self, log):
         lines = log.lines()
