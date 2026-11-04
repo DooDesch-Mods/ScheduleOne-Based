@@ -4,6 +4,11 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.1.1] - 2026-11-05
+
+### Fixed
+- Co-op: a friend joining your game no longer hangs on "Syncing" when a project folder hangs on one of your walls.
+
 ## [1.1.0] - 2026-11-02
 
 ### Added
