@@ -4,6 +4,8 @@
 
 **Download:** [Nexus Mods](https://www.nexusmods.com/schedule1/mods/3034) · [Thunderstore](https://thunderstore.io/c/schedule-i/p/DooDesch/Based/) · [GitHub Releases](https://github.com/DooDesch-Mods/ScheduleOne-Based/releases)
 
+[![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de)
+
 ![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
@@ -84,6 +86,12 @@ Install with a mod manager (r2modman / Gale) from the Schedule I community, or u
 ### Manual
 
 Download the zip from [GitHub Releases](https://github.com/DooDesch-Mods/ScheduleOne-Based/releases) and put `Based.dll` into your Schedule I `Mods/` folder.
+
+## Community
+
+[![DooDesch Mods on Discord](https://mods.doodesch.de/img/card.svg)](https://mods.doodesch.de)
+
+Join the DooDesch Mods Discord: update pings, polls on what comes next, and playtests of new mods.
 
 ## Credits
 

@@ -2,6 +2,8 @@
 
 > 🛟 **Need help or found a bug?** Get support at [support.doodesch.de/based](https://support.doodesch.de/based).
 
+[![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de)
+
 ![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
@@ -63,6 +65,12 @@ Wait until no delivery is on its way to the Sweatshop, since the dock goes with 
 - [Personnel](https://thunderstore.io/c/schedule-i/p/DooDesch/Personnel/) 2.4.6 or newer
 - [Sideload](https://thunderstore.io/c/schedule-i/p/DooDesch/Sideload/) 1.36.1 or newer
 - [MapExpansions](https://thunderstore.io/c/schedule-i/p/DooDesch/MapExpansions/) 1.0.0 or newer
+
+## Community
+
+[![DooDesch Mods on Discord](https://mods.doodesch.de/img/card.svg)](https://mods.doodesch.de)
+
+Join the DooDesch Mods Discord: update pings, polls on what comes next, and playtests of new mods.
 
 ## Credits
 
