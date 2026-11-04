@@ -199,6 +199,39 @@ internal static class ProjectFolder
         Mod.Log("baseddiag: project folder placed through the game's placement.");
     }
 
+    // Hangs a folder on the wall nearest to the player through the game's own spawn, as a placement would.
+    // A co-op join test needs one on a wall: its spawn data carries the item to a joining client.
+    internal static string DebugWall()
+    {
+        if (!Il2CppFishNet.InstanceFinder.IsServer) throw new InvalidOperationException("Only the host can hang a folder by console.");
+        if (_definition == null) throw new InvalidOperationException("The project folder item is not built.");
+        var manager = NetworkSingleton<BuildManager>.Instance;
+        if (manager == null) throw new InvalidOperationException("The build manager is not ready.");
+        var player = Player.Local;
+        if (player == null) throw new InvalidOperationException("No local player.");
+        Vector3 from = player.transform.position + Vector3.up * 1.4f;
+        Surface? best = null;
+        Vector3 point = default;
+        float bestDistance = float.MaxValue;
+        foreach (var surface in UnityEngine.Object.FindObjectsOfType<Surface>())
+        {
+            if (surface.SurfaceType != Surface.ESurfaceType.Wall || surface.ParentProperty == null) continue;
+            var collider = surface.GetComponentInChildren<Collider>();
+            if (collider == null) continue;
+            Vector3 closest = collider.ClosestPoint(from);
+            float distance = Vector3.Distance(closest, from);
+            if (distance >= bestDistance) continue;
+            best = surface;
+            point = closest;
+            bestDistance = distance;
+        }
+        if (best == null) throw new InvalidOperationException("No wall surface in the loaded world.");
+        var item = manager.CreateSurfaceItem(_definition.GetDefaultInstance(1), best, best.GetRelativePosition(point), Quaternion.identity);
+        string where = best.ParentProperty.PropertyName + " wall " + best.name + " at " + point + " (" + bestDistance.ToString("0.0") + " m away)";
+        if (item == null) throw new InvalidOperationException("The game did not create the folder on " + where + ".");
+        return where;
+    }
+
     internal static string DebugState()
     {
         var hung = string.Join("; ", Hung.Where(i => i != null).Select(i => i.transform.position.ToString()));

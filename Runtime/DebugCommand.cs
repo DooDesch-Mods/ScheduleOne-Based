@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag status | plan | ray [office|street] | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag status | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
 
     public override void ExecuteCommand(List<string> args)
     {
@@ -42,6 +42,12 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     break;
                 case "folder":
                     Folder(args.Count > 1 ? args[1] : "state");
+                    break;
+                case "creator":
+                    // A joining test client without saved looks starts in the character creator; finish it with the defaults.
+                    var creator = Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.CharacterCreator.CharacterCreator>.Instance;
+                    if (creator == null || !creator.IsOpen) Mod.Log("baseddiag: creator not open.");
+                    else { creator.Done(); Mod.Log("baseddiag: creator done with the default looks."); }
                     break;
                 case "morningsound":
                     ConstructionSounds.Play();
@@ -202,8 +208,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             case "give": Mod.Log("baseddiag: folder given, answer '" + ProjectFolder.Give() + "'."); break;
             case "open": ProjectFolder.DebugOpen(); break;
             case "hang": ProjectFolder.DebugHang(); break;
+            case "wall": Mod.Log("baseddiag: folder hung on the " + ProjectFolder.DebugWall() + "."); break;
             case "state": Mod.Log("baseddiag: folder " + ProjectFolder.DebugState()); break;
-            default: throw new ArgumentException("baseddiag folder give|open|hang|state");
+            default: throw new ArgumentException("baseddiag folder give|open|hang|wall|state");
         }
     }
 
