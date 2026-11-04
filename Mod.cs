@@ -107,6 +107,7 @@ public sealed class Mod : MelonMod
 
     public override void OnSceneWasLoaded(int buildIndex, string sceneName)
     {
+        if (sceneName == "Main") RegisterItems();
         if (MissingMods.Any)
         {
             MissingModsSceneLoaded(sceneName);
@@ -148,6 +149,14 @@ public sealed class Mod : MelonMod
             _nextBind = 0;
             _worldDirty = true;
         }
+    }
+
+    // The game drops every runtime item before a scene change, so the folder comes back with each Main scene. A joining
+    // client reads items from the host's spawn data before the scene's network objects run Start, so this cannot wait.
+    private static void RegisterItems()
+    {
+        try { ProjectFolder.Register(); }
+        catch (Exception error) { MelonLogger.Error("[Based] Registering the project folder failed: " + error); }
     }
 
     // The save state of the last save must not carry over into the next one, with or without the required mods.

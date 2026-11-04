@@ -13,7 +13,6 @@ using Il2CppScheduleOne.Equipping;
 using Il2CppScheduleOne.Interaction;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.PlayerScripts;
-using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.UI;
 using UnityEngine;
 using UnityEngine.Events;
@@ -452,16 +451,6 @@ internal static class ProjectFolder
         var sprite = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(.5f, .5f), 100f);
         sprite.hideFlags = HideFlags.HideAndDontSave;
         return sprite;
-    }
-}
-
-[HarmonyPatch(typeof(ProductManager), "Start")]
-internal static class RegisterProjectFolder
-{
-    private static void Prefix()
-    {
-        try { ProjectFolder.Register(); }
-        catch (Exception error) { MelonLoader.MelonLogger.Error("[Based] Registering the project folder failed: " + error); }
     }
 }
 
