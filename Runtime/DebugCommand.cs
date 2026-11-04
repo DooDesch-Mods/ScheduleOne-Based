@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag status | plan | ray [office|street] | dock | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag status | plan | ray [office|street] | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
 
     public override void ExecuteCommand(List<string> args)
     {
@@ -59,6 +59,13 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "room":
                     RoomProbe.Execute(args.Skip(1).ToArray());
                     break;
+                case "dockroute":
+                    if (args.Count > 3 && args[1] == "deliver") DockDeliver(int.Parse(args[2]), args[3]);
+                    else if (args.Count > 1 && args[1] == "route") SetDockRoute();
+                    else if (args.Count > 1 && args[1] == "routes") DockRoutes();
+                    else if (args.Count > 1 && args[1] == "work") DockWork();
+                    else DockRoute(args.Count > 1 && args[1] == "build");
+                    break;
                 case "workers":
                     MingWorkers.Diagnostics();
                     break;
@@ -101,6 +108,63 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             }
         }
         catch (Exception error) { Mod.Warn("baseddiag " + action + " failed: " + error); }
+    }
+
+    // Whether an employee can reach the Sweatshop's loading docks: each access point, and the spot behind a parked van
+    // where the game moves the first one, on the Employee NavMesh and on a route from the employees' spawn point.
+    private static void DockRoute(bool build)
+    {
+        if (build) CompleteDock();
+        var property = Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(Mod.Sites[0].Base.PropertyId);
+        if (property == null) throw new InvalidOperationException("The property is not loaded.");
+        var filter = new UnityEngine.AI.NavMeshQueryFilter
+        {
+            agentTypeID = Il2CppScheduleOne.DevUtilities.NavMeshUtility.GetNavMeshAgentID("Employee"),
+            areaMask = UnityEngine.AI.NavMesh.AllAreas
+        };
+        Vector3 from = property.NPCSpawnPoint.position;
+        float vanLength = 0f;
+        var shops = Il2CppScheduleOne.UI.Shop.ShopInterface.AllShops;
+        for (int i = 0; shops != null && i < shops.Count && vanLength == 0f; i++)
+            if (shops[i]?.DeliveryVehicle?.Vehicle != null) vanLength = shops[i].DeliveryVehicle.Vehicle.BoundingBoxDimensions.z;
+        int docks = property.LoadingDocks?.Length ?? 0;
+        Mod.Log($"baseddiag: dockroute {property.PropertyCode}: {docks} docks, spawn {from}, delivery van length {vanLength:0.00}");
+        for (int d = 0; d < docks; d++)
+        {
+            var dock = property.LoadingDocks![d];
+            if (dock == null) { Mod.Warn($"baseddiag: dockroute dock {d} is null"); continue; }
+            var van = dock.DynamicOccupant;
+            Mod.Log($"baseddiag: dockroute dock {d} guid {dock.GUID} at {dock.transform.position}, van {(van != null ? van.name : "none")}, output slots {dock.OutputSlots?.Count ?? 0}");
+            var points = dock.accessPoints;
+            for (int i = 0; points != null && i < points.Length; i++)
+                if (points[i] != null) Reach($"access point {i}", points[i].position);
+            var spots = dock.Parking?.ParkingSpots;
+            for (int s = 0; spots != null && s < spots.Count; s++)
+            {
+                var align = spots[s]?.AlignmentPoint;
+                if (align == null) continue;
+                float back = vanLength / 2f + 0.6f;
+                Reach($"parking {s} behind a van facing +forward", align.position - align.forward * back);
+                Reach($"parking {s} behind a van facing -forward", align.position + align.forward * back);
+            }
+            if (van != null) Reach("behind the parked van", van.transform.position - van.transform.forward * (van.BoundingBoxDimensions.z / 2f + 0.6f));
+        }
+
+        void Reach(string what, Vector3 at)
+        {
+            if (!UnityEngine.AI.NavMesh.SamplePosition(at, out var hit, 2f, filter))
+            {
+                Mod.Warn($"baseddiag: dockroute   {what} {at}: no Employee NavMesh within 2 m");
+                return;
+            }
+            var path = new UnityEngine.AI.NavMeshPath();
+            bool found = UnityEngine.AI.NavMesh.CalculatePath(from, hit.position, filter, path);
+            var end = found && path.corners.Length > 0 ? path.corners[path.corners.Length - 1] : from;
+            bool reachable = found && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete && Vector3.Distance(end, hit.position) <= 1f
+                             && Vector3.Distance(hit.position, at) <= 1f;
+            string line = $"baseddiag: dockroute   {what} {at}: mesh {Vector3.Distance(hit.position, at):0.00} m away at {hit.position}, route {(found ? path.status.ToString() : "none")}, employee can get there: {reachable}";
+            if (reachable) Mod.Log(line); else Mod.Warn(line);
+        }
     }
 
     // The employee limit, each waiting place with its route from the door, and where every employee stands.
@@ -310,6 +374,172 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         float seconds = args.Count > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 10f;
         MingWorkers.ProbeSwing(seconds);
         Mod.Log("baseddiag: measuring the hammer swing for " + seconds + " s.");
+    }
+
+    // Finishes the wing and the dock upgrade in Based's own state, so the dock is part of the save as after a purchase.
+    private static void CompleteDock()
+    {
+        if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host can change the construction state.");
+        var state = Mod.Engine.ExportState();
+        foreach (var upgrade in state.Upgrades.Where(u => u.BaseId == MingDefinition.BaseId &&
+                     (u.UpgradeId == MingDefinition.UpgradeId || u.UpgradeId == MingDefinition.DockUpgradeId)))
+        {
+            upgrade.Stage = UpgradeStage.Complete;
+            upgrade.CompletedCycles = upgrade.UpgradeId == MingDefinition.UpgradeId ? 4 : 1;
+        }
+        state.Revision++;
+        Mod.DebugClearFailure();
+        Mod.Engine.RestoreState(state);
+        Mod.Changed();
+        Mod.Log("baseddiag: dockroute: wing and loading dock complete; revision " + state.Revision + ".");
+    }
+
+    private static Il2CppScheduleOne.Property.Property SiteProperty() =>
+        Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(Mod.Sites[0].Base.PropertyId)
+        ?? throw new InvalidOperationException("The property is not loaded.");
+
+    private static IEnumerable<(Il2CppScheduleOne.Employees.Packager Packager, Il2CppScheduleOne.Management.PackagerConfiguration Config)> Packagers()
+    {
+        var property = SiteProperty();
+        foreach (var employee in property.Employees)
+        {
+            var packager = employee?.TryCast<Il2CppScheduleOne.Employees.Packager>();
+            var config = packager?.Configuration?.TryCast<Il2CppScheduleOne.Management.PackagerConfiguration>();
+            if (config != null) yield return (packager!, config);
+        }
+    }
+
+    // Gives every handler at the Sweatshop one route from its loading dock, the setup a player makes in the clipboard.
+    private static void SetDockRoute()
+    {
+        var property = SiteProperty();
+        if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The Sweatshop has no loading dock.");
+        var dock = property.LoadingDocks[0];
+        var shelf = FirstShelf(property);
+        if (shelf == null) Mod.Warn("baseddiag: dockroute route: no storage shelf on the property; the route ends at the dock and moves nothing");
+        int set = 0;
+        foreach (var (packager, config) in Packagers())
+        {
+            var source = new Il2CppScheduleOne.Management.ITransitEntity(dock.Pointer);
+            var destination = new Il2CppScheduleOne.Management.ITransitEntity(shelf != null ? shelf.Pointer : dock.Pointer);
+            config.Routes.AddItem(new Il2CppScheduleOne.Management.AdvancedTransitRoute(source, destination));
+            Mod.Log($"baseddiag: dockroute route: {packager.FirstName} gets a route from dock {dock.GUID} to {(shelf != null ? "shelf " + shelf.GUID + " at " + shelf.transform.position : "the dock")}");
+            set++;
+        }
+        if (set == 0) Mod.Warn("baseddiag: dockroute route: no handler works at the Sweatshop; add one with 'addemployee handler sweatshop'");
+    }
+
+    // The storage rack with the most empty slots, not the employee bed or locker, whose storage takes only their pay.
+    // A full rack takes nothing, and a handler then has no item ready on the route.
+    private static Il2CppScheduleOne.ObjectScripts.PlaceableStorageEntity? FirstShelf(Il2CppScheduleOne.Property.Property property)
+    {
+        Il2CppScheduleOne.ObjectScripts.PlaceableStorageEntity? best = null;
+        int bestFree = -1;
+        foreach (var item in property.BuildableItems)
+        {
+            if (item?.ItemInstance?.ID == null || !item.ItemInstance.ID.Contains("storagerack")) continue;
+            var shelf = item.GetComponent<Il2CppScheduleOne.ObjectScripts.PlaceableStorageEntity>();
+            if (shelf == null) continue;
+            int free = 0;
+            foreach (var slot in shelf.StorageEntity.ItemSlots)
+                if (slot != null && slot.ItemInstance == null) free++;
+            if (free > bestFree) { best = shelf; bestFree = free; }
+        }
+        return best;
+    }
+
+    // Walks the checks a handler makes before it moves anything on a route (Packager.GetTransitRouteReady) and names the
+    // first one that fails, plus what the destination shelf holds now.
+    private static void DockWork()
+    {
+        var property = SiteProperty();
+        int handlers = 0;
+        foreach (var (packager, config) in Packagers())
+        {
+            handlers++;
+            var active = packager.Behaviour?.activeBehaviour;
+            Mod.Log($"baseddiag: dockroute work: {packager.FirstName} at {packager.transform.position}, active {(active != null ? active.Name : "none")}, paid {packager.PaidForToday}");
+            var routes = config.Routes.Routes;
+            for (int i = 0; i < routes.Count; i++)
+            {
+                var route = routes[i];
+                if (route.Source == null || route.Destination == null) { Mod.Warn($"baseddiag: dockroute work:   route {i} misses an end"); continue; }
+                var item = route.GetItemReadyToMove();
+                bool source = packager.Movement.CanGetTo(route.Source, 1f), destination = packager.Movement.CanGetTo(route.Destination, 1f);
+                int capacity = item != null ? packager.Inventory.GetCapacityForItem(item) : -1;
+                Mod.Log($"baseddiag: dockroute work:   route {i}: item ready {(item != null ? item.ID + " x" + item.Quantity : "none")}, reach source {source}, reach destination {destination}, carry capacity {capacity}, source output slots {route.Source.OutputSlots.Count}");
+                if (item != null) continue;
+                // Why nothing is ready: every filled source slot with the filter and the destination's room for it.
+                int filled = 0;
+                foreach (var slot in route.Source.OutputSlots)
+                {
+                    if (slot?.ItemInstance == null) continue;
+                    filled++;
+                    var ai = route.TryCast<Il2CppScheduleOne.Management.AdvancedTransitRoute>();
+                    bool filter = ai == null || ai.Filter.DoesItemMeetFilter(slot.ItemInstance);
+                    int room = route.Destination.GetInputCapacityForItem(slot.ItemInstance, null, true);
+                    int roomNoFilter = route.Destination.GetInputCapacityForItem(slot.ItemInstance, null, false);
+                    Mod.Log($"baseddiag: dockroute work:     source slot {slot.ItemInstance.ID} x{slot.Quantity}: route filter {(filter ? "passes" : "BLOCKS")}, destination room {room} ({roomNoFilter} without player filters), destination input slots {route.Destination.InputSlots.Count}");
+                }
+                if (filled == 0) Mod.Warn($"baseddiag: dockroute work:     the source has {route.Source.OutputSlots.Count} output slots and none holds an item");
+            }
+        }
+        if (handlers == 0) Mod.Warn("baseddiag: dockroute work: no handler works at the Sweatshop");
+        // Every storage rack together, so a delivery counts whichever rack the route ends at.
+        int racks = 0, used = 0, free = 0, soil = 0;
+        foreach (var item in property.BuildableItems)
+        {
+            if (item?.ItemInstance?.ID == null || !item.ItemInstance.ID.Contains("storagerack")) continue;
+            var shelf = item.GetComponent<Il2CppScheduleOne.ObjectScripts.PlaceableStorageEntity>();
+            if (shelf == null) continue;
+            racks++;
+            foreach (var slot in shelf.StorageEntity.ItemSlots)
+            {
+                if (slot == null) continue;
+                if (slot.ItemInstance == null) { free++; continue; }
+                used++;
+                if (slot.ItemInstance.ID == "soil") soil += slot.Quantity;
+            }
+        }
+        if (racks == 0) { Mod.Warn("baseddiag: dockroute work: no storage rack on the property"); return; }
+        Mod.Log($"baseddiag: dockroute work: {racks} racks hold {used} filled and {free} free slots, soil {soil}");
+    }
+
+    // Sends one item from a shop to the Sweatshop's dock through the game's own delivery, arriving in a minute.
+    private static void DockDeliver(int shopIndex, string itemId)
+    {
+        var property = SiteProperty();
+        if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The Sweatshop has no loading dock.");
+        var shop = Il2CppScheduleOne.UI.Shop.ShopInterface.AllShops[shopIndex];
+        if (shop?.DeliveryVehicle?.Vehicle == null) throw new InvalidOperationException("That shop has no delivery vehicle.");
+        if (Il2CppScheduleOne.Registry.GetItem(itemId) == null) throw new ArgumentException("Unknown item: " + itemId);
+        var items = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.DevUtilities.StringIntPair>(
+            new[] { new Il2CppScheduleOne.DevUtilities.StringIntPair(itemId, 5) });
+        var delivery = new Il2CppScheduleOne.Delivery.DeliveryInstance(Guid.NewGuid().ToString(), shop.ShopName, property.PropertyCode, 0, items,
+            Il2CppScheduleOne.Delivery.EDeliveryStatus.InTransit, 1);
+        Il2CppScheduleOne.Delivery.DeliveryManager.Instance.SendDelivery(delivery);
+        Mod.Log($"baseddiag: dockroute deliver: 5 {itemId} from '{shop.ShopName}' to {property.PropertyCode} dock 0 in 1 minute");
+    }
+
+    private static void DockRoutes()
+    {
+        var property = SiteProperty();
+        var dock = property.LoadingDocks != null && property.LoadingDocks.Length > 0 ? property.LoadingDocks[0] : null;
+        int handlers = 0;
+        foreach (var (packager, config) in Packagers())
+        {
+            handlers++;
+            var routes = config.Routes.Routes;
+            Mod.Log($"baseddiag: dockroute routes: {packager.FirstName} has {routes.Count} routes; dock {(dock == null ? "missing" : dock.GUID.ToString())}");
+            for (int i = 0; i < routes.Count; i++)
+            {
+                var route = routes[i];
+                string Side(Il2CppScheduleOne.Management.ITransitEntity? e) =>
+                    e == null ? "none" : e.Pointer == dock?.Pointer ? "the loading dock" : e.Name;
+                Mod.Log($"baseddiag: dockroute routes:   {i}: from {Side(route.Source)} to {Side(route.Destination)}");
+            }
+        }
+        if (handlers == 0) Mod.Warn("baseddiag: dockroute routes: no handler works at the Sweatshop");
     }
 
     // Moves the upgrade straight to a stage, so one run can look at every construction state.
