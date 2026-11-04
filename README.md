@@ -2,6 +2,8 @@
 
 > 🛟 **Need help or found a bug?** Get support at [support.doodesch.de/based](https://support.doodesch.de/based).
 
+**Download:** [Nexus Mods](https://www.nexusmods.com/schedule1/mods/3034) · [Thunderstore](https://thunderstore.io/c/schedule-i/p/DooDesch/Based/) · [GitHub Releases](https://github.com/DooDesch-Mods/ScheduleOne-Based/releases)
+
 ![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
@@ -62,9 +64,26 @@ Wait until no delivery is on its way to the Sweatshop, since the dock goes with 
 
 - [MelonLoader](https://melonwiki.xyz/) 0.7.3 or newer
 - [S1API](https://thunderstore.io/c/schedule-i/p/ifBars/S1API_Forked/) 3.2.1 or newer
-- [Personnel](https://thunderstore.io/c/schedule-i/p/DooDesch/Personnel/) 2.4.6 or newer
-- [Sideload](https://thunderstore.io/c/schedule-i/p/DooDesch/Sideload/) 1.36.1 or newer
-- [MapExpansions](https://thunderstore.io/c/schedule-i/p/DooDesch/MapExpansions/) 1.0.0 or newer
+- [Personnel](https://www.nexusmods.com/schedule1/mods/2275) 2.4.6 or newer
+- [Sideload](https://www.nexusmods.com/schedule1/mods/2360) 1.36.1 or newer
+- [MapExpansions](https://www.nexusmods.com/schedule1/mods/3033) 1.0.0 or newer
+
+## Installation
+
+### Recommended: Nexus Mods
+
+1. Install **MelonLoader 0.7.3** for Schedule I ([melonwiki.xyz](https://melonwiki.xyz/)).
+2. Download Based from [Nexus Mods](https://www.nexusmods.com/schedule1/mods/3034) and install it with Vortex,
+   or put **`Based.dll`** into your Schedule I `Mods/` folder.
+3. Get the mods under Requirements from their Nexus pages the same way.
+
+### Thunderstore mod manager
+
+Install with a mod manager (r2modman / Gale) from the Schedule I community, or use the [Thunderstore page](https://thunderstore.io/c/schedule-i/p/DooDesch/Based/).
+
+### Manual
+
+Download the zip from [GitHub Releases](https://github.com/DooDesch-Mods/ScheduleOne-Based/releases) and put `Based.dll` into your Schedule I `Mods/` folder.
 
 ## Credits
 
