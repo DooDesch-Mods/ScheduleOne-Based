@@ -4,6 +4,17 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.1.3] - 2026-11-05
+
+### Fixed
+- Employees who were upstairs in the Sweatshop expansion when the save loaded no longer get stuck there, so the handler
+  empties the loading dock again.
+- Employees no longer end up on the Sweatshop roof while waiting. They wait in the yard by the outside stairs.
+
+### Changed
+- Based asks for MapExpansions 1.1.0, which both fixes need. With an older one Based still runs and warns in
+  `MelonLoader/Latest.log`.
+- Based stays off with an S1API older than 3.2.1, and Mrs. Ming says so.
 ## [1.1.2] - 2026-11-05
 
 ### Changed
