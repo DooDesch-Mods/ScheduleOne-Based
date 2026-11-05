@@ -62,7 +62,7 @@ Wait until no delivery is on its way to the Sweatshop, since the dock goes with 
 - [S1API](https://thunderstore.io/c/schedule-i/p/ifBars/S1API_Forked/) 3.2.1 or newer
 - [Personnel](https://thunderstore.io/c/schedule-i/p/DooDesch/Personnel/) 2.4.6 or newer
 - [Sideload](https://thunderstore.io/c/schedule-i/p/DooDesch/Sideload/) 1.36.1 or newer
-- [MapExpansions](https://thunderstore.io/c/schedule-i/p/DooDesch/MapExpansions/) 1.0.0 or newer
+- [MapExpansions](https://thunderstore.io/c/schedule-i/p/DooDesch/MapExpansions/) 1.0.4 or newer
 
 ## Community
 
