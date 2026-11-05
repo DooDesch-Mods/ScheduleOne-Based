@@ -115,9 +115,16 @@ public static class MingWorld
     {
         var state = new WorldStateDefinition
         {
-            Id = id, NavigationBounds = BoundsOf(-65.5f, -1f, 134.5f, -53.5f, 3.5f, 145.5f)
+            // The volume ends just west of the cut wall. The old room and the stairs keep only the vanilla NavMesh, so
+            // the first doorway probe lies on it and the bake joins the two meshes with a seam. A volume over the old
+            // room bakes a second floor there that nothing connects to the stairs, and employees who load upstairs
+            // stand on it and cannot leave.
+            Id = id, NavigationBounds = BoundsOf(-60.4f, -1f, 134.5f, -53.5f, 3.5f, 145.5f)
         };
         state.NavigationAgents.AddRange(new[] { "Humanoid", "Ignore Costs", "Employee" });
+        // The old bay east of the cut wall is part of the vanilla room and keeps the vanilla NavMesh. The bake leaves it
+        // out and joins its edges to the new floor, so a full room of placed items cannot cut the only seam.
+        state.NavigationExistingFloor.Add(BoundsOf(-60.4f, FloorY, 137.9f, -56f, 2.4f, 141.1f));
         // The cut opens the former external walls while keeping the roof above them; the main room and its
         // former bay become one space. It takes the old floor along, so the new sheet continues it at the same height.
         state.Rules.Add(new ObjectRule
@@ -273,12 +280,11 @@ public static class MingWorld
             property.Bounds.Add(Wing);
             state.PropertyExtensions.Add(property);
         }
-        if (morning == 4)
-        {
-            state.NavigationProbes.Add(new Vector3(-60.7f, FloorY, 136.7f));
-            state.NavigationProbes.Add(new Vector3(-59.1f, FloorY, 136.7f));
-            state.NavigationProbes.Add(new Vector3(-58f, FloorY, 139.5f));
-        }
+        // The first two probes straddle the cut wall. The old room's probe lies on the vanilla NavMesh, far enough from the
+        // volume that a path query does not snap it onto the new mesh, so the bake sees the gap and lays the seam.
+        state.NavigationProbes.Add(new Vector3(-61.3f, FloorY, 136.7f));
+        state.NavigationProbes.Add(new Vector3(-59.1f, FloorY, 136.7f));
+        if (morning == 4) state.NavigationProbes.Add(new Vector3(-58f, FloorY, 139.5f));
         // The mixer stands in the south-east corner while it is on site.
         state.NavigationProbes.Add(morning is 2 or 3 ? new Vector3(-56.3f, FloorY, 137f) : new Vector3(-55.2f, FloorY, 136.8f));
         state.NavigationProbes.Add(new Vector3(-55.2f, FloorY, 138.5f));
