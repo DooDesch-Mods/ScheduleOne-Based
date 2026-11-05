@@ -74,12 +74,12 @@ public sealed class Mod : MelonMod
     {
         Instance = this;
         Text.Register();
-        foreach (var site in Sites) site.Validate();
+        SiteDefinition.ValidateAll(Sites);
         Engine = new UpgradeEngine(Sites.Select(s => s.Base), new HostAuthority());
         MissingMods.Check();
         if (MissingMods.Any)
         {
-            LoggerInstance.Error("Based stays off: " + MissingMods.Line + " " + Sites[0].VendorNpcId + " names them in the dialogue.");
+            LoggerInstance.Error("Based stays off: " + MissingMods.Line + " " + string.Join(", ", Sites.Select(s => s.VendorNpcId).Distinct()) + " names them in the dialogue.");
             return;
         }
         InitializeWithRequiredMods();
@@ -242,7 +242,7 @@ public sealed class Mod : MelonMod
 
     private static void TickFolder()
     {
-        try { ProjectFolder.Tick(Sites[0]); }
+        try { ProjectFolder.Tick(); }
         catch (Exception error) { Contain("project folder", error); }
     }
 
@@ -404,11 +404,23 @@ public sealed class Mod : MelonMod
     internal static bool Owns(SiteDefinition site) => S1API.Property.PropertyManager.GetOwnedProperties()
         .Any(p => p.PropertyCode == site.Base.PropertyId);
 
+    // A site by base id, property code or index; without a key the first site, so old commands keep their meaning.
+    internal static SiteDefinition FindSite(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return Sites[0];
+        var site = Sites.FirstOrDefault(s => string.Equals(s.Base.Id, key, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(s.Base.PropertyId, key, StringComparison.OrdinalIgnoreCase));
+        if (site != null) return site;
+        if (int.TryParse(key, out int index) && index >= 0 && index < Sites.Count) return Sites[index];
+        throw new ArgumentException("Unknown site '" + key + "'. Known: "
+            + string.Join(", ", Sites.Select((s, i) => i + "=" + s.Base.Id + " (" + s.Base.PropertyId + ")")) + ".");
+    }
+
     private static string? ValidatePurchase(PurchaseCommand command)
     {
         var site = Sites.FirstOrDefault(s => s.Base.Id == command.BaseId);
         if (site == null) return "unknown-base";
-        if (!Owns(site)) return Text.T("Buy the Sweatshop first.");
+        if (!Owns(site)) return Text.T(site.BuyFirst);
         // Only the expansion builds into the room; a follow-up stands outside it.
         if (command.Kind != PurchaseKind.Construction || command.UpgradeId != site.UpgradeId) return null;
         var items = BlockingItems(site);
@@ -421,7 +433,7 @@ public sealed class Mod : MelonMod
     internal static string Purchase(SiteDefinition site, string upgradeId, PurchaseKind kind)
     {
         if (Failure.Length > 0) return Text.T("Construction paused because the expansion could not be applied.");
-        if (!Owns(site)) return Text.T("Buy the Sweatshop first.");
+        if (!Owns(site)) return Text.T(site.BuyFirst);
         if (!NativeBus.IsHost && !_snapshotReceived) return Text.T("Waiting for the host's construction plan.");
         if (kind == PurchaseKind.Construction && upgradeId == site.UpgradeId)
         {

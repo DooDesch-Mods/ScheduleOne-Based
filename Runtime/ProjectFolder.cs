@@ -21,9 +21,17 @@ namespace Based.Runtime;
 
 // The plan as an item. To the game it is a wall decoration: the definition is a clone of a vanilla artwork, so placing,
 // saving, co-op and picking it up by right click are the game's own. The look comes from the item id on every peer.
+// Each site has its own item, so a folder knows which plan it opens and carries that property's name.
 internal static class ProjectFolder
 {
-    internal const string ItemId = "based_project_folder";
+    private sealed class Folder
+    {
+        public SiteDefinition Site = null!;
+        public BuildableItemDefinition? Definition;
+        public readonly List<BuildableItem> Hung = new();
+        public bool Gift;
+    }
+
     private const string IconResource = "Based.Assets.folder-icon.png";
     private const float Standoff = .002f, BoxDepth = .02f, TalkDepth = .04f, InteractionRange = 4f, ClickCooldown = .35f;
     private const float HeldScale = .173f;
@@ -33,130 +41,144 @@ internal static class ProjectFolder
     private static readonly Vector3 HeldOffset = new(.13f, .23f, .013f);
     private static readonly string[] WallDonors = { "artworklines", "artworkmillie", "artworkoffer", "artworkbeachday", "artworkmenace", "artworkrapscallion" };
     private static readonly string[] HandDonors = { "friendlynote1", "friendlynote2", "friendlynote3" };
-    private static readonly List<BuildableItem> Hung = new();
-    private static BuildableItemDefinition? _definition;
+    private static readonly Dictionary<string, Folder> Folders = new(StringComparer.Ordinal);
     private static Sprite? _icon;
     private static Transform? _holder;
-    private static SiteDefinition? _giftFor;
     private static IntPtr _placing;
     private static float _nextClick;
     private static bool _failed;
 
-    internal static bool Holding
+    private static Folder Of(SiteDefinition site)
+    {
+        if (!Folders.TryGetValue(site.FolderItemId, out var folder))
+            Folders[site.FolderItemId] = folder = new Folder { Site = site };
+        return folder;
+    }
+
+    // The site whose folder this item is, or nothing for every other item.
+    internal static SiteDefinition? SiteOf(string? itemId) =>
+        itemId == null ? null : Mod.Sites.FirstOrDefault(site => site.FolderItemId == itemId);
+
+    // The site of the folder in the hand.
+    internal static SiteDefinition? HeldSite
     {
         get
         {
             var inventory = PlayerSingleton<PlayerInventory>.Instance;
-            return inventory != null && inventory.EquippedItem != null && inventory.EquippedItem.ID == ItemId;
+            return inventory == null || inventory.EquippedItem == null ? null : SiteOf(inventory.EquippedItem.ID);
         }
     }
 
-    private static bool Carried
+    private static bool Carried(SiteDefinition site)
     {
-        get
-        {
-            var inventory = PlayerSingleton<PlayerInventory>.Instance;
-            return inventory != null && inventory.GetAmountOfItem(ItemId) > 0;
-        }
+        var inventory = PlayerSingleton<PlayerInventory>.Instance;
+        return inventory != null && inventory.GetAmountOfItem(site.FolderItemId) > 0;
+    }
+
+    private static List<BuildableItem> Hung(SiteDefinition site)
+    {
+        var hung = Of(site).Hung;
+        hung.RemoveAll(item => item == null || item.IsDestroyed);
+        return hung;
     }
 
     // Offered only while nothing else tells the player how the work is going. Doubles would do no harm.
-    internal static bool Offered(UpgradeStage stage)
-    {
-        Hung.RemoveAll(item => item == null || item.IsDestroyed);
-        return stage is UpgradeStage.RightsOwned or UpgradeStage.Constructing && Hung.Count == 0 && !Carried;
-    }
+    internal static bool Offered(SiteDefinition site, UpgradeStage stage) =>
+        stage is UpgradeStage.RightsOwned or UpgradeStage.Constructing && Hung(site).Count == 0 && !Carried(site);
 
     // A folder in the pocket or on a wall: the player still has the plans.
-    internal static bool Present
+    internal static bool Present(SiteDefinition site) => Hung(site).Count > 0 || Carried(site);
+
+    internal static bool Fits(SiteDefinition site)
     {
-        get
-        {
-            Hung.RemoveAll(item => item == null || item.IsDestroyed);
-            return Hung.Count > 0 || Carried;
-        }
+        var definition = Of(site).Definition;
+        var inventory = PlayerSingleton<PlayerInventory>.Instance;
+        return definition != null && inventory != null && inventory.CanItemFitInInventory(definition.GetDefaultInstance(1), 1);
     }
 
-    internal static bool Fits
-    {
-        get
-        {
-            var inventory = PlayerSingleton<PlayerInventory>.Instance;
-            return _definition != null && inventory != null && inventory.CanItemFitInInventory(_definition.GetDefaultInstance(1), 1);
-        }
-    }
-
-    internal static void GiveAfterPayment(SiteDefinition site) => _giftFor = site;
+    internal static void GiveAfterPayment(SiteDefinition site) => Of(site).Gift = true;
 
     internal static void Register()
     {
         if (_failed) return;
-        if (_definition == null && !Build()) return;
-        if (!Registry.ItemExists(ItemId))
+        foreach (var site in Mod.Sites)
         {
-            Registry.Instance.AddToRegistry(_definition);
-            Mod.Log("Project folder item registered.");
-            return;
+            var folder = Of(site);
+            if (folder.Definition == null && !Build(folder)) return;
+            if (!Registry.ItemExists(site.FolderItemId))
+            {
+                Registry.Instance.AddToRegistry(folder.Definition);
+                Mod.Log("Project folder item registered: " + site.FolderItemId + ".");
+                continue;
+            }
+            var found = Registry.GetItem(site.FolderItemId);
+            if (found != null && !string.Equals(found.ID, site.FolderItemId, StringComparison.OrdinalIgnoreCase))
+                MelonLoader.MelonLogger.Error("[Based] The project folder's id " + site.FolderItemId + " collides with " + found.ID + "; the item is unavailable.");
         }
-        var found = Registry.GetItem(ItemId);
-        if (found != null && !string.Equals(found.ID, ItemId, StringComparison.OrdinalIgnoreCase))
-            MelonLoader.MelonLogger.Error("[Based] The project folder's id collides with " + found.ID + "; the item is unavailable.");
     }
 
     internal static void Reset()
     {
-        Hung.Clear();
-        _giftFor = null;
+        foreach (var folder in Folders.Values)
+        {
+            folder.Hung.Clear();
+            folder.Gift = false;
+        }
         _placing = IntPtr.Zero;
         PlanBoard.Reset();
     }
 
-    internal static void Tick(SiteDefinition site)
+    internal static void Tick()
     {
-        if (_giftFor != null && Mod.Engine.GetUpgrade(_giftFor.Base.Id, _giftFor.UpgradeId).Stage != UpgradeStage.RightsMissing)
+        foreach (var site in Mod.Sites)
         {
-            _giftFor = null;
-            Give();
+            var folder = Of(site);
+            if (folder.Gift && Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId).Stage != UpgradeStage.RightsMissing)
+            {
+                folder.Gift = false;
+                Give(site);
+            }
+            if (folder.Hung.RemoveAll(item => item == null || item.IsDestroyed) > 0) Mod.Log("A project folder left the wall: " + site.Base.Id + ".");
         }
-        if (Hung.RemoveAll(item => item == null || item.IsDestroyed) > 0) Mod.Log("A project folder left the wall.");
-        bool holding = Holding;
-        SyncPlacement(holding);
-        PlanBoard.Tick(site, holding || Hung.Count > 0);
-        if (holding) PollClick(site);
+        var held = HeldSite;
+        SyncPlacement(held != null);
+        foreach (var site in Mod.Sites) PlanBoard.Tick(site, held == site || Of(site).Hung.Count > 0);
+        if (held != null) PollClick(held);
     }
 
     // Returns what the plan shows when the item could not be handed over, or nothing.
-    internal static string Give()
+    internal static string Give(SiteDefinition site)
     {
+        var definition = Of(site).Definition;
         var inventory = PlayerSingleton<PlayerInventory>.Instance;
-        if (_definition == null || inventory == null)
+        if (definition == null || inventory == null)
         {
-            Mod.Warn("Project folder not given: the " + (_definition == null ? "item" : "inventory") + " is not ready.");
+            Mod.Warn("Project folder for " + site.Base.Id + " not given: the " + (definition == null ? "item" : "inventory") + " is not ready.");
             return Text.T("No room for the project folder.");
         }
-        var item = _definition.GetDefaultInstance(1);
+        var item = definition.GetDefaultInstance(1);
         if (!inventory.CanItemFitInInventory(item, 1))
         {
-            Mod.Log("Project folder not given: the inventory is full.");
-            Notify(Text.T("No room for the project folder."));
+            Mod.Log("Project folder for " + site.Base.Id + " not given: the inventory is full.");
+            Notify(site, Text.T("No room for the project folder."));
             return Text.T("No room for the project folder.");
         }
         inventory.AddItemToInventory(item);
-        Notify(Text.T("Left click to read, or hang it on a wall."));
-        Mod.Log("Project folder added to the inventory.");
+        Notify(site, Text.T("Left click to read, or hang it on a wall."));
+        Mod.Log("Project folder added to the inventory: " + site.Base.Id + ".");
         return "";
     }
 
     internal static void NoteClosed() => _nextClick = Time.unscaledTime + ClickCooldown;
 
-    // The item carries its property's name. Based has one site, so one folder item; a second site needs its own item.
-    private static string DisplayName => Text.T("{0} - Project folder", Text.T(Mod.Sites[0].PropertyName));
+    // The item carries its property's name.
+    private static string DisplayName(SiteDefinition site) => Text.T("{0} - Project folder", Text.T(site.PropertyName));
 
-    private static void Notify(string line)
+    private static void Notify(SiteDefinition site, string line)
     {
         var notifications = Singleton<NotificationsManager>.Instance;
         if (notifications == null) { Mod.Warn("No notification shown: the notification manager is not ready."); return; }
-        notifications.SendNotification(DisplayName, line, _icon, 8f, false);
+        notifications.SendNotification(DisplayName(site), line, _icon, 8f, false);
     }
 
     // The ghost shows on a wall that takes the item, where the game's own click hangs it. Anywhere else the click reads it.
@@ -177,7 +199,7 @@ internal static class ProjectFolder
         BuildPlan.Open(site, standalone: true);
     }
 
-    internal static void DebugOpen() => Open(Mod.Sites[0], "console");
+    internal static void DebugOpen(SiteDefinition site) => Open(site, "console");
 
     private static bool AimedAtWall()
     {
@@ -200,10 +222,11 @@ internal static class ProjectFolder
 
     // Hangs a folder on the wall nearest to the player through the game's own spawn, as a placement would.
     // A co-op join test needs one on a wall: its spawn data carries the item to a joining client.
-    internal static string DebugWall()
+    internal static string DebugWall(SiteDefinition site)
     {
         if (!Il2CppFishNet.InstanceFinder.IsServer) throw new InvalidOperationException("Only the host can hang a folder by console.");
-        if (_definition == null) throw new InvalidOperationException("The project folder item is not built.");
+        var definition = Of(site).Definition;
+        if (definition == null) throw new InvalidOperationException("The project folder item of " + site.Base.Id + " is not built.");
         var manager = NetworkSingleton<BuildManager>.Instance;
         if (manager == null) throw new InvalidOperationException("The build manager is not ready.");
         var player = Player.Local;
@@ -225,16 +248,16 @@ internal static class ProjectFolder
             bestDistance = distance;
         }
         if (best == null) throw new InvalidOperationException("No wall surface in the loaded world.");
-        var item = manager.CreateSurfaceItem(_definition.GetDefaultInstance(1), best, best.GetRelativePosition(point), Quaternion.identity);
+        var item = manager.CreateSurfaceItem(definition.GetDefaultInstance(1), best, best.GetRelativePosition(point), Quaternion.identity);
         string where = best.ParentProperty.PropertyName + " wall " + best.name + " at " + point + " (" + bestDistance.ToString("0.0") + " m away)";
         if (item == null) throw new InvalidOperationException("The game did not create the folder on " + where + ".");
         return where;
     }
 
-    internal static string DebugState()
+    internal static string DebugState(SiteDefinition site)
     {
-        var hung = string.Join("; ", Hung.Where(i => i != null).Select(i => i.transform.position.ToString()));
-        return "holding=" + Holding + ", carried=" + Carried + ", aimedAtWall=" + AimedAtWall() + ", hung=[" + hung + "]";
+        var hung = string.Join("; ", Hung(site).Select(i => i.transform.position.ToString()));
+        return site.Base.Id + ": holding=" + (HeldSite == site) + ", carried=" + Carried(site) + ", aimedAtWall=" + AimedAtWall() + ", hung=[" + hung + "]";
     }
 #endif
 
@@ -273,14 +296,14 @@ internal static class ProjectFolder
     }
 
     // Hides the artwork the prefab brought and puts the folder where it hung.
-    internal static void Dress(BuildableItem item, bool ghost)
+    internal static void Dress(SiteDefinition site, BuildableItem item, bool ghost)
     {
         Transform root = item.transform;
         if (root.Find(PlanBoard.ModelName) != null) return;
         foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) renderer.enabled = false;
         var caption = FindNamed(root, "Name");
         if (caption != null) caption.gameObject.SetActive(false);
-        var model = PlanBoard.CreateModel(root);
+        var model = PlanBoard.CreateModel(site, root);
         model.transform.localPosition = new Vector3(0f, 0f, Standoff);
         FitBox(item);
         if (ghost)
@@ -298,9 +321,9 @@ internal static class ProjectFolder
         interact.SetMessage(Text.T("Read plan"));
         interact.MaxInteractionRange = InteractionRange;
         interact.RequiresUniqueClick = true;
-        interact.onInteractStart.AddListener((UnityAction)(() => Open(Mod.Sites[0], "interaction on the wall")));
-        Hung.Add(item);
-        Mod.Log("Project folder hung at " + root.position + ".");
+        interact.onInteractStart.AddListener((UnityAction)(() => Open(site, "interaction on the wall")));
+        Of(site).Hung.Add(item);
+        Mod.Log("Project folder hung at " + root.position + ": " + site.Base.Id + ".");
     }
 
     // The placement code measures wall penetration with this box. The prefab's box is turned about z, which that code ignores.
@@ -349,8 +372,9 @@ internal static class ProjectFolder
         return null;
     }
 
-    private static bool Build()
+    private static bool Build(Folder folder)
     {
+        var site = folder.Site;
         var wall = WallDonors.Select(id => Registry.GetItem(id)?.TryCast<BuildableItemDefinition>())
             .FirstOrDefault(d => d != null && d.BuiltItem != null && d.BuiltItem.TryCast<SurfaceItem>() != null);
         var note = HandDonors.Select(id => Registry.GetItem(id)?.TryCast<StorableItemDefinition>()).FirstOrDefault(d => d != null);
@@ -360,12 +384,12 @@ internal static class ProjectFolder
             MelonLoader.MelonLogger.Error("[Based] The project folder is unavailable: this game build has no " + (wall == null ? "wall artwork" : "friendly note") + " to clone.");
             return false;
         }
-        _icon = LoadIcon();
+        _icon ??= LoadIcon();
         var definition = UnityEngine.Object.Instantiate(wall);
         definition.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-        definition.name = "Based_ProjectFolder";
-        definition.ID = ItemId;
-        definition.Name = DisplayName;
+        definition.name = "Based_ProjectFolder_" + site.FolderItemId;
+        definition.ID = site.FolderItemId;
+        definition.Name = DisplayName(site);
         definition.Description = Text.T("Left click to read, or hang it on a wall.");
         definition.Icon = _icon != null ? _icon : note.Icon;
         definition.Category = note.Category;
@@ -388,21 +412,21 @@ internal static class ProjectFolder
         definition.StationItem = note.StationItem;
         definition.CombatUtility = note.CombatUtility;
         definition.BuildSoundType = BuildableItemDefinition.EBuildSoundType.Cardboard;
-        DressHand(definition);
-        _definition = definition;
-        Mod.Log("Project folder item built from " + wall.ID + " and " + note.ID + ".");
+        DressHand(site, definition);
+        folder.Definition = definition;
+        Mod.Log("Project folder item " + site.FolderItemId + " built from " + wall.ID + " and " + note.ID + ".");
         return true;
     }
 
     // An item takes one of two routes into the hand, chosen by the donor. Both get a private copy wearing the folder.
-    private static void DressHand(BuildableItemDefinition definition)
+    private static void DressHand(SiteDefinition site, BuildableItemDefinition definition)
     {
         if (definition.EquippableData != null && definition.EquippableData.FirstPersonEquippedItemPrefab != null)
         {
             var data = UnityEngine.Object.Instantiate(definition.EquippableData);
             data.hideFlags |= HideFlags.DontUnloadUnusedAsset;
             data.name = "Based_FolderEquippableData";
-            var prefab = CloneForHand(data.FirstPersonEquippedItemPrefab.gameObject).GetComponent<FPEquippedItem>();
+            var prefab = CloneForHand(site, data.FirstPersonEquippedItemPrefab.gameObject).GetComponent<FPEquippedItem>();
             if (prefab == null) Mod.Warn("The cloned first-person prefab lost its component; the hand shows the donor.");
             else
             {
@@ -411,11 +435,11 @@ internal static class ProjectFolder
             }
         }
         if (definition.Equippable != null)
-            definition.Equippable = CloneForHand(definition.Equippable.gameObject).GetComponent<Equippable>();
+            definition.Equippable = CloneForHand(site, definition.Equippable.gameObject).GetComponent<Equippable>();
     }
 
     // The clone sits under an inactive parent so its Awake never runs. Deactivating the clone itself would carry over to every copy.
-    private static GameObject CloneForHand(GameObject donor)
+    private static GameObject CloneForHand(SiteDefinition site, GameObject donor)
     {
         if (_holder == null)
         {
@@ -427,7 +451,7 @@ internal static class ProjectFolder
         var clone = UnityEngine.Object.Instantiate(donor, _holder);
         clone.name = "Based_FolderHeld";
         foreach (var renderer in clone.GetComponentsInChildren<Renderer>(true)) renderer.enabled = false;
-        var model = PlanBoard.CreateModel(clone.transform);
+        var model = PlanBoard.CreateModel(site, clone.transform);
         model.transform.localPosition = HeldOffset;
         // The note's sheet is turned about its height; the folder's face points the other way round than the sheet's.
         model.transform.localRotation = new Quaternion(3.700832E-08f, -0.99805033f, 0.06241523f, 2.9098615E-07f) * Quaternion.Euler(0f, 180f, 0f);
@@ -460,8 +484,9 @@ internal static class DressHungFolder
 {
     private static void Postfix(SurfaceItem __instance, ItemInstance instance)
     {
-        if (instance == null || instance.ID != ProjectFolder.ItemId) return;
-        try { ProjectFolder.Dress(__instance, ghost: false); }
+        var site = ProjectFolder.SiteOf(instance?.ID);
+        if (site == null) return;
+        try { ProjectFolder.Dress(site, __instance, ghost: false); }
         catch (Exception error) { Mod.Warn("Dressing a hung project folder failed: " + error); }
     }
 }
@@ -471,8 +496,9 @@ internal static class DressFolderGhost
 {
     private static void Postfix(BuildableItemDefinition itemDefinition, SurfaceItem __result)
     {
-        if (__result == null || itemDefinition == null || itemDefinition.ID != ProjectFolder.ItemId) return;
-        try { ProjectFolder.Dress(__result, ghost: true); }
+        var site = ProjectFolder.SiteOf(itemDefinition?.ID);
+        if (__result == null || site == null) return;
+        try { ProjectFolder.Dress(site, __result, ghost: true); }
         catch (Exception error) { Mod.Warn("Dressing the project folder ghost failed: " + error); }
     }
 }
@@ -483,7 +509,7 @@ internal static class SwitchFolderGhostAndHand
     private static void Postfix(BuildUpdate_Surface __instance)
     {
         var item = __instance.ItemInstance;
-        if (item == null || item.ID != ProjectFolder.ItemId) return;
+        if (ProjectFolder.SiteOf(item?.ID) == null) return;
         try
         {
             var ghost = __instance.GhostModel;

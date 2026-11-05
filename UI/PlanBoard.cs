@@ -6,133 +6,152 @@ using UnityEngine.UI;
 
 namespace Based.UI;
 
-// The plan as a texture for the folder in the world. Every folder shows the same page, so one hidden surface paints one
-// texture, and the lit material lets it darken with the room. The camera only runs after the page changed.
+// The plan as a texture for the folder in the world. Every folder of one site shows the same page, so one hidden
+// surface per site paints one texture, and the lit material lets it darken with the room. The camera only runs after
+// the page changed.
 internal static class PlanBoard
 {
+    private sealed class Board
+    {
+        public RenderTexture? Texture;
+        public Material? Material;
+        public GameObject? Root;
+        public Camera? Camera;
+        public SurfaceHandle? Surface;
+        public string LastState = "";
+        public float NextCheck;
+        public int PaintUntil;
+    }
+
     internal const string ModelName = "Based_ProjectFolder";
     // Large enough on the wall to read the page from across the room.
     internal const float Width = 1.5f, Height = .872f, Depth = .012f;
-    private const string SurfaceId = "based-plan-board";
     private const int PixelWidth = 1720, PixelHeight = 1000;
     private const float CornerRadius = .03f, CheckInterval = 1f;
     private const int CornerSegments = 6, PaintFrames = 60, PaintEvery = 5;
-    private static readonly Vector3 HiddenAt = new(0f, -4000f, 0f);
+    // Each site's hidden camera stands apart, so one board never films another.
+    private static readonly Vector3 HiddenAt = new(0f, -4000f, 0f), BoardSpacing = new(20f, 0f, 0f);
     private static readonly Color BoardColour = new(.27f, .18f, .11f);
-    private static RenderTexture? _texture;
-    private static Material? _material;
+    private static readonly Dictionary<string, Board> Boards = new(StringComparer.Ordinal);
     private static Mesh? _mesh;
-    private static GameObject? _root;
-    private static Camera? _camera;
-    private static SurfaceHandle? _surface;
-    private static string _lastState = "";
-    private static float _nextCheck;
-    private static int _paintUntil;
 
-    // The texture outlives scene changes, because the held model built once at game start points at this material.
-    internal static Material? Material
+    private static Board Of(SiteDefinition site)
     {
-        get
-        {
-            if (_material != null) return _material;
-            Shader lit = Shader.Find("Universal Render Pipeline/Lit");
-            if (lit == null)
-            {
-                Mod.Warn("The URP Lit shader is not loaded; the project folder has no face.");
-                return null;
-            }
-            _texture = new RenderTexture(PixelWidth, PixelHeight, 16, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
-            {
-                name = "Based_PlanBoard",
-                useMipMap = true,
-                autoGenerateMips = true,
-                filterMode = FilterMode.Trilinear,
-                anisoLevel = 4,
-                hideFlags = HideFlags.HideAndDontSave
-            };
-            _material = new Material(lit) { name = "Based_PlanBoard", hideFlags = HideFlags.HideAndDontSave };
-            _material.SetTexture("_BaseMap", _texture);
-            _material.SetColor("_BaseColor", Color.white);
-            _material.SetFloat("_Smoothness", .15f);
-            UnityEngine.Object.DontDestroyOnLoad(_material);
-            return _material;
-        }
+        if (!Boards.TryGetValue(site.BoardSurfaceId, out var board)) Boards[site.BoardSurfaceId] = board = new Board();
+        return board;
     }
 
-    internal static GameObject CreateModel(Transform parent)
+    // The texture outlives scene changes, because the held model built once at game start points at this material.
+    private static Material? MaterialOf(SiteDefinition site)
+    {
+        var board = Of(site);
+        if (board.Material != null) return board.Material;
+        Shader lit = Shader.Find("Universal Render Pipeline/Lit");
+        if (lit == null)
+        {
+            Mod.Warn("The URP Lit shader is not loaded; the project folder of " + site.Base.Id + " has no face.");
+            return null;
+        }
+        board.Texture = new RenderTexture(PixelWidth, PixelHeight, 16, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
+        {
+            name = "Based_PlanBoard_" + site.BoardSurfaceId,
+            useMipMap = true,
+            autoGenerateMips = true,
+            filterMode = FilterMode.Trilinear,
+            anisoLevel = 4,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        board.Material = new Material(lit) { name = "Based_PlanBoard_" + site.BoardSurfaceId, hideFlags = HideFlags.HideAndDontSave };
+        board.Material.SetTexture("_BaseMap", board.Texture);
+        board.Material.SetColor("_BaseColor", Color.white);
+        board.Material.SetFloat("_Smoothness", .15f);
+        UnityEngine.Object.DontDestroyOnLoad(board.Material);
+        return board.Material;
+    }
+
+    internal static GameObject CreateModel(SiteDefinition site, Transform parent)
     {
         var model = new GameObject(ModelName);
         model.transform.SetParent(parent, false);
         model.AddComponent<MeshFilter>().sharedMesh = _mesh ??= BuildMesh();
         var renderer = model.AddComponent<MeshRenderer>();
-        renderer.sharedMaterial = Material;
+        renderer.sharedMaterial = MaterialOf(site);
         renderer.shadowCastingMode = ShadowCastingMode.Off;
         return model;
     }
 
-    // Runs while a folder exists in the world or in a hand. Without one the page stays down.
+    // Runs while a folder of the site exists in the world or in a hand. Without one the page stays down.
     internal static void Tick(SiteDefinition site, bool wanted)
     {
         if (!wanted) return;
+        var board = Of(site);
         // Leaving the save destroys the root with the scene, which leaves the handle behind it stale.
-        if (_root == null)
+        if (board.Root == null)
         {
-            Reset();
-            if (!Mount(site)) return;
+            Reset(site);
+            if (!Mount(site, board)) return;
         }
-        if (Time.unscaledTime >= _nextCheck)
+        if (Time.unscaledTime >= board.NextCheck)
         {
-            _nextCheck = Time.unscaledTime + CheckInterval;
+            board.NextCheck = Time.unscaledTime + CheckInterval;
             string state = BuildPlan.WallState(site);
-            if (state != _lastState)
+            if (state != board.LastState)
             {
-                _lastState = state;
-                _surface!.Emit("plan.changed", state);
-                _paintUntil = Time.frameCount + PaintFrames;
-                Mod.Log("Project folder page repainted.");
+                board.LastState = state;
+                board.Surface!.Emit("plan.changed", state);
+                board.PaintUntil = Time.frameCount + PaintFrames;
+                Mod.Log("Project folder page repainted: " + site.Base.Id + ".");
             }
         }
-        if (Time.frameCount <= _paintUntil && Time.frameCount % PaintEvery == 0) _camera!.Render();
+        if (Time.frameCount <= board.PaintUntil && Time.frameCount % PaintEvery == 0) board.Camera!.Render();
     }
 
     internal static void Reset()
     {
-        if (_surface == null && _root == null) return;
-        Surfaces.Unmount(SurfaceId);
-        if (_root != null) UnityEngine.Object.Destroy(_root);
-        _root = null;
-        _camera = null;
-        _surface = null;
-        _lastState = "";
-        Mod.Log("Project folder page taken down.");
+        foreach (var site in Mod.Sites) Reset(site);
     }
 
-    private static bool Mount(SiteDefinition site)
+    private static void Reset(SiteDefinition site)
+    {
+        var board = Of(site);
+        if (board.Surface == null && board.Root == null) return;
+        Surfaces.Unmount(site.BoardSurfaceId);
+        if (board.Root != null) UnityEngine.Object.Destroy(board.Root);
+        board.Root = null;
+        board.Camera = null;
+        board.Surface = null;
+        board.LastState = "";
+        Mod.Log("Project folder page taken down: " + site.Base.Id + ".");
+    }
+
+    private static bool Mount(SiteDefinition site, Board board)
     {
         if (!Surfaces.Available)
         {
             Mod.Warn("Sideload Surfaces is missing; the project folder stays blank.");
             return false;
         }
-        if (Material == null) return false;
-        _root = new GameObject("Based_PlanBoard");
-        _root.transform.position = HiddenAt;
-        _camera = _root.AddComponent<Camera>();
-        _camera.orthographic = true;
-        _camera.orthographicSize = 1f;
-        _camera.nearClipPlane = .1f;
-        _camera.farClipPlane = 5f;
-        _camera.clearFlags = CameraClearFlags.SolidColor;
-        _camera.backgroundColor = BoardColour;
-        _camera.allowHDR = false;
-        _camera.allowMSAA = false;
-        _camera.targetTexture = _texture;
-        _camera.enabled = false;
+        if (MaterialOf(site) == null) return false;
+        int index = 0;
+        while (index < Mod.Sites.Count && Mod.Sites[index] != site) index++;
+        var root = board.Root = new GameObject("Based_PlanBoard_" + site.BoardSurfaceId);
+        root.transform.position = HiddenAt + BoardSpacing * index;
+        var camera = board.Camera = root.AddComponent<Camera>();
+        camera.orthographic = true;
+        camera.orthographicSize = 1f;
+        camera.nearClipPlane = .1f;
+        camera.farClipPlane = 5f;
+        camera.clearFlags = CameraClearFlags.SolidColor;
+        camera.backgroundColor = BoardColour;
+        camera.allowHDR = false;
+        camera.allowMSAA = false;
+        camera.targetTexture = board.Texture;
+        camera.enabled = false;
         var canvasObject = new GameObject("Canvas");
-        canvasObject.transform.SetParent(_root.transform, false);
+        canvasObject.transform.SetParent(root.transform, false);
         var canvas = canvasObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceCamera;
-        canvas.worldCamera = _camera;
+        canvas.worldCamera = camera;
         canvas.planeDistance = 1f;
         var holder = new GameObject("Plan");
         var rect = holder.AddComponent<RectTransform>();
@@ -141,11 +160,11 @@ internal static class PlanBoard
         rect.anchorMax = Vector2.one;
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
-        _surface = Surfaces.Mount(rect, SurfaceId, "Based.Assets.based", designShortSide: 500)
+        board.Surface = Surfaces.Mount(rect, site.BoardSurfaceId, "Based.Assets.based", designShortSide: 500)
             .OnCall("plan.state", _ => BuildPlan.WallState(site));
-        _lastState = "";
-        _paintUntil = Time.frameCount + PaintFrames;
-        Mod.Log("Project folder page mounted.");
+        board.LastState = "";
+        board.PaintUntil = Time.frameCount + PaintFrames;
+        Mod.Log("Project folder page mounted: " + site.Base.Id + ".");
         return true;
     }
 
