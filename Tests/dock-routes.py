@@ -3,10 +3,10 @@ In-game check: a handler carries a delivery from the Sweatshop loading dock onto
 dock survives saving and loading.
 
 Needs Debug builds of Based (`baseddiag dockroute`) and MapExpansions (`mxreach place|setup`) in a running test
-slot. It finishes the wing and the dock in the save, hires a handler, builds a locker and a shelf on the old floor,
-orders soil to the dock, then saves and reloads save 5 once.
+slot. It finishes the wing and the dock in the save, hires a handler, builds a locker on the old floor and a shelf
+on the old floor or in the wing (`--where`), orders soil to the dock, then saves and reloads save 5 once.
 
-    python _wt-Based-dockroute/tests/dock-routes.py [--slot mptest] [--save 5]
+    python Based/Tests/dock-routes.py [--slot mptest] [--save 5] [--where old|wing]
 """
 import argparse
 import os
@@ -111,8 +111,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slot", default="mptest")
     ap.add_argument("--save", type=int, default=5)
+    ap.add_argument("--where", choices=("old", "wing"), default="old", help="floor the shelf is built on")
     args = ap.parse_args()
     run = Run(args.slot, args.save)
+    print("[info] shelf on the %s floor" % args.where, flush=True)
 
     run.cmd("settime 0800", wait=1.0)
     log = run.cmd("baseddiag dockroute build", wait=6.0)
@@ -120,8 +122,8 @@ def main():
     run.check("the dock stands", has(log, "dockroute dock 0 guid"), pick(log, "dockroute dock 0"))
     run.cmd("addemployee handler sweatshop", wait=4.0)
     # A save that already holds a locker and a rack (an earlier test) keeps them; a full floor is not a failure then.
-    for item in ("locker", "smallstoragerack"):
-        log = run.cmd("mxreach place sweatshop %s old" % item, wait=2.0)
+    for item, where in (("locker", "old"), ("smallstoragerack", args.where)):
+        log = run.cmd("mxreach place sweatshop %s %s" % (item, where), wait=2.0)
         print("      " + (pick(log, "mxreach place") or "no reply to mxreach place " + item), flush=True)
     log = run.cmd("mxreach setup sweatshop", wait=1.0)
     run.check("the handler has a locker and is paid", has(log, "mxreach setup: handler") and "locker none" not in pick(log, "setup: handler"), pick(log, "setup: handler"))
