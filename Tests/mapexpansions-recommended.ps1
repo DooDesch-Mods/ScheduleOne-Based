@@ -57,8 +57,18 @@ foreach ($v in $Versions) {
     $req = $lines | Where-Object { $_ -match '\[Requirements\] MapExpansions' }
     $req | ForEach-Object { Write-Host "  $_" }
     Check "MapExpansions ${v}: Based initialized" ([bool]($lines | Where-Object { $_ -match 'Based initialized' })) (($lines | Where-Object { $_ -match 'Based stays off' }) -join ' | ')
-    $hard = $lines | Where-Object { $_ -match '\[Based\] Required mods are installed: .*MapExpansions 1\.0\.0\+' }
-    Check "MapExpansions ${v}: hard minimum met" ([bool]$hard) (($lines | Where-Object { $_ -match '\[Requirements\].*not usable|too old' }) -join ' | ')
+    $usable = $lines | Where-Object { $_ -match '\[Based\] \[Requirements\] every dependency in thunderstore/manifest\.json is usable: ' }
+    $usable | ForEach-Object { Write-Host "  $_" }
+    $problems = ($lines | Where-Object { $_ -match '\[Requirements\].*not usable|too old' }) -join ' | '
+    Check "MapExpansions ${v}: hard minimum 1.0.0 met" ([bool]($usable | Where-Object { $_ -match 'MapExpansions 1\.0\.0\+' })) $problems
+    # The other minimums come from thunderstore/manifest.json.
+    $manifest = Get-Content (Join-Path $PSScriptRoot '..\thunderstore\manifest.json') -Raw | ConvertFrom-Json
+    foreach ($dep in $manifest.dependencies) {
+        if ($dep -notmatch '^[^-]+-([^-]+)-(\d+\.\d+\.\d+)$' -or $Matches[1] -in 'MelonLoader', 'MapExpansions') { continue }
+        $name = if ($Matches[1] -eq 'S1API_Forked') { 'S1API \(Forked by Bars\)' } else { [regex]::Escape($Matches[1]) }
+        $min = [regex]::Escape($Matches[2])
+        Check "MapExpansions ${v}: manifest minimum $dep checked" ([bool]($usable | Where-Object { $_ -match "$name $min\+" })) $problems
+    }
     if ([version]$v -lt [version]'1.0.4') {
         Check "MapExpansions ${v}: warns below 1.0.4" ([bool]($req | Where-Object { $_ -match 'older than the recommended 1\.0\.4' })) ($req -join ' | ')
     } else {
