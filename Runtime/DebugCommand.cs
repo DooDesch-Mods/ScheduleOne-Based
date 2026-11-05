@@ -200,18 +200,34 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             agentTypeID = Il2CppScheduleOne.DevUtilities.NavMeshUtility.GetNavMeshAgentID("Employee"),
             areaMask = UnityEngine.AI.NavMesh.AllAreas
         };
+        // A placed item can stand on a waiting place; the game then walks the employee to the nearest NavMesh, so the
+        // route goes to the closest point within 2 m and the line names how far off it lies.
         for (int i = 0; i < places.Length; i++)
         {
+            var at = places[i].position;
+            if (!UnityEngine.AI.NavMesh.SamplePosition(at, out var hit, 2f, filter))
+            {
+                Mod.Warn("baseddiag: place " + i + " at " + at + " route none, no Employee NavMesh within 2 m");
+                continue;
+            }
             var path = new UnityEngine.AI.NavMeshPath();
-            bool found = UnityEngine.AI.NavMesh.CalculatePath(property.NPCSpawnPoint.position, places[i].position, filter, path);
-            Mod.Log("baseddiag: place " + i + " at " + places[i].position + " route " + (found ? path.status.ToString() : "none"));
+            bool found = UnityEngine.AI.NavMesh.CalculatePath(property.NPCSpawnPoint.position, hit.position, filter, path);
+            string line = "baseddiag: place " + i + " at " + at + " route " + (found ? path.status.ToString() : "none")
+                + ", mesh " + Vector3.Distance(hit.position, at).ToString("0.00") + " m away";
+            if (found && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete) Mod.Log(line); else Mod.Warn(line);
         }
         for (int i = 0; i < property.Employees.Count; i++)
         {
             var employee = property.Employees[i];
             var agent = employee.GetComponentInChildren<UnityEngine.AI.NavMeshAgent>(true);
-            Mod.Log("baseddiag: employee " + employee.name + " index " + employee.EmployeeIndex + " at " + agent.transform.position
-                + ", waits at " + places[employee.EmployeeIndex].position + ", agent type " + agent.agentTypeID + ", on mesh " + agent.isOnNavMesh);
+            // An employee whose NavMesh piece has no way down to the street cannot reach the dock or the stairs.
+            var street = new UnityEngine.AI.NavMeshPath();
+            bool found = UnityEngine.AI.NavMesh.CalculatePath(agent.transform.position, property.NPCSpawnPoint.position, filter, street);
+            bool reaches = found && street.status == UnityEngine.AI.NavMeshPathStatus.PathComplete;
+            string line = "baseddiag: employee " + employee.name + " index " + employee.EmployeeIndex + " at " + agent.transform.position
+                + ", waits at " + places[employee.EmployeeIndex].position + ", agent type " + agent.agentTypeID + ", on mesh " + agent.isOnNavMesh
+                + ", route to the street " + (found ? street.status.ToString() : "none") + ", reaches the street " + reaches;
+            if (reaches) Mod.Log(line); else Mod.Warn(line);
         }
     }
 

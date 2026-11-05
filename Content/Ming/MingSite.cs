@@ -41,10 +41,12 @@ internal static class MingSite
             new(PlanRoomKind.Opening, -56.06f, 137.9f, -55.94f, 141.1f),
             new(PlanRoomKind.Opening, -60f, 141.04f, -56f, 141.16f)
         },
+        // Beside the game's own waiting place at the foot of the outside stairs, in the yard. Inside the room the
+        // player's furniture stands wherever there is floor, and employees waiting there stand in the way.
         StaffPlaces = new UnityEngine.Vector3[]
         {
-            new(-58.5f, MingWorld.FloorY, 136.9f),
-            new(-55.2f, MingWorld.FloorY, 136.8f)
+            new(-62.9f, -4f, 144.7f),
+            new(-63.9f, -4f, 144.3f)
         },
         RegisterWorld = () =>
         {
