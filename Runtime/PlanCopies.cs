@@ -51,8 +51,7 @@ internal static class PlanCopies
 
     private static SiteDefinition[] Eligible()
     {
-        if (ProjectFolder.Present) return Array.Empty<SiteDefinition>();
-        return Mod.Sites.Where(site => Mod.Owns(site) &&
+        return Mod.Sites.Where(site => !ProjectFolder.Present(site) && Mod.Owns(site) &&
             Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId).Stage != UpgradeStage.RightsMissing).ToArray();
     }
 
@@ -135,7 +134,7 @@ internal static class PlanCopies
                 Mod.Log("Ray's offer: cash " + cash + " is below $" + Price + "; he asks the player to come back.");
                 b.AddNode("ENTRY", Text.T("Copies are {0}, cash. Come back when you have it.", price));
             }
-            else if (!ProjectFolder.Fits)
+            else if (!(sites.Length > 0 ? sites : Mod.Sites).Any(ProjectFolder.Fits))
             {
                 Mod.Log("Ray's offer: the inventory has no room for a folder; he asks the player to make room.");
                 b.AddNode("ENTRY", Text.T("Make some room in your pockets first."));
@@ -205,7 +204,7 @@ internal static class PlanCopies
             if (!Eligible().Contains(site)) { Mod.Warn("Plan copy for " + site.Base.Id + " refused: the player no longer qualifies."); return; }
             float cash = Money.GetCashBalance();
             if (cash < Price) { Mod.Warn("Plan copy for " + site.Base.Id + " refused: cash " + cash + " is below " + Price + "."); return; }
-            string refused = ProjectFolder.Give();
+            string refused = ProjectFolder.Give(site);
             if (refused.Length > 0) { Mod.Warn("Plan copy for " + site.Base.Id + " not handed over (" + refused + "); no cash taken."); return; }
             Money.ChangeCashBalance(-Price, true, true);
             Mod.Log("Ray sold a copy of the " + site.Base.Id + " plans for $" + Price + "; cash " + cash + " -> " + Money.GetCashBalance() + ".");

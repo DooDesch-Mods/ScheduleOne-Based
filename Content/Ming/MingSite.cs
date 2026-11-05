@@ -15,8 +15,11 @@ internal static class MingSite
         ProgressChoice = "How is the construction going?",
         VendorLine = "Oh yes, very good! Bigger room, yes? Here is the plan.",
         Title = "Expansion: Sweatshop",
+        FolderItemId = "based_project_folder",
+        BoardSurfaceId = "based-plan-board",
         QuestType = typeof(MingConstructionQuest),
         OrderEntry = "Order the construction from Mrs. Ming",
+        BuyFirst = "Buy the Sweatshop first.",
         QuestMarker = new UnityEngine.Vector3(-57f, MingWorld.FloorY, 140f),
         PhaseTitles = new Dictionary<string, string>
         {
@@ -49,6 +52,12 @@ internal static class MingSite
             MingDock.Register();
         },
         Crew = new Crew(),
+#if DEBUG
+        // A lambda, so MapExpansions types load only when the probe runs.
+        Room = new SiteRoom(MingDefinition.ExpansionId, "complete", "ming-wing-floor", MingWorld.Wing,
+            () => MingWorld.Create().WorldStates.Single(x => x.Id == "complete").PropertyExtensions
+                .SelectMany(extension => extension.Surfaces.Select(surface => (extension.Id, surface.Id))).ToArray()),
+#endif
         FollowUps = new[]
         {
             new SiteFollowUp(MingDefinition.DockUpgradeId, "Loading dock: Sweatshop", "Ready for deliveries",
@@ -62,6 +71,16 @@ internal static class MingSite
         public void Update(UpgradeStage stage, string? phase) => MingWorkers.Update(stage, phase);
         public void Tick() => MingWorkers.Tick();
         public void Cleanup() => MingWorkers.Cleanup();
+        public int ActiveCount => MingWorkers.ActiveCount;
+#if DEBUG
+        public void Diagnostics() => MingWorkers.Diagnostics();
+        public float HammerContactNormalizedTime
+        {
+            get => MingWorkers.HammerContactNormalizedTime;
+            set => MingWorkers.HammerContactNormalizedTime = value;
+        }
+        public void ProbeSwing(float seconds) => MingWorkers.ProbeSwing(seconds);
+#endif
     }
 }
 

@@ -32,7 +32,7 @@ def _bridge():
 sys.path.insert(0, _bridge())
 from s1 import Game  # noqa: E402
 
-REGISTERED = r"\[Based\].*Project folder item registered\."
+REGISTERED = r"\[Based\].*Project folder item registered"
 HUNG = r"\[Based\].*Project folder hung at"
 JOIN_START = r"Joining as client to:"
 # A missing definition shows as the registry's warning, then as the null dereference in CreateInstanceAndRead. During a

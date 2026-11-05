@@ -2,7 +2,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using Based.Content.Ming;
+using Based.Content;
 using HarmonyLib;
 using Il2CppScheduleOne.Building;
 using Il2CppScheduleOne.EntityFramework;
@@ -19,29 +19,34 @@ using Property = Il2CppScheduleOne.Property.Property;
 
 namespace Based.Runtime;
 
-/// <summary>Creates native acceptance fixtures in the isolated Ming host world and records their saved identity.</summary>
-public static class RoomProbe
+/// <summary>Creates native acceptance fixtures in the isolated host world of one site and records their saved identity.</summary>
+internal static class RoomProbe
 {
-    private const string PropertyCode = "sweatshop";
-    private const string ExtensionId = "ming-wing-floor";
-    private static string TilePrefix => $"MapExpansions.{MingDefinition.ExpansionId}.{ExtensionId}.Tile.";
+    private static SiteDefinition _site = null!;
+    private static SiteRoom Room(SiteDefinition site) =>
+        site.Room ?? throw new InvalidOperationException(site.Base.Id + " describes no room for the acceptance probe.");
+    private static string TilePrefix => $"MapExpansions.{Room(_site).ExpansionId}.{Room(_site).FloorExtensionId}.Tile.";
 
-    public static void Execute(IReadOnlyList<string> args)
+    // Records from before sites were named belong to the first site.
+    private static SiteDefinition SiteOf(RoomProbeTarget record) => Mod.FindSite(record.Site);
+
+    internal static void Execute(SiteDefinition site, IReadOnlyList<string> args)
     {
+        _site = site;
         string action = args.Count == 0 ? "inspect" : args[0].ToLowerInvariant();
         switch (action)
         {
             case "inspect": Inspect(); break;
             case "verify": Verify(); break;
-            case "place": RequireHost(); Place(args); break;
-            case "surface": RequireHost(); PlaceSurface(args); break;
+            case "place": RequireHost(_site); Place(args); break;
+            case "surface": RequireHost(_site); PlaceSurface(args); break;
             default: throw new ArgumentException("baseddiag room inspect | place <vanillaItemId> [tileX tileY rotation] | surface <vanillaItemId> [surfaceId] | verify");
         }
     }
 
     public static void ResetForMenu() => RoomProbeSave.BeginLoad();
 
-    private static void RequireHost()
+    private static void RequireHost(SiteDefinition site)
     {
         string location = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
         string[] allowed = {
@@ -53,8 +58,9 @@ public static class RoomProbe
         foreach (var peer in Il2CppFishNet.InstanceFinder.ServerManager.Clients)
             if (peer.Value != null && !peer.Value.IsHost)
                 throw new InvalidOperationException("Room fixture mutations require an isolated host without remote peers.");
-        if (!MapExpansionsApi.IsWorldStateApplied(MingDefinition.ExpansionId) || MapExpansionsApi.GetWorldState(MingDefinition.ExpansionId) != "complete")
-            throw new InvalidOperationException("Ming's completed world state must be applied before placing acceptance objects.");
+        var room = Room(site);
+        if (!MapExpansionsApi.IsWorldStateApplied(room.ExpansionId) || MapExpansionsApi.GetWorldState(room.ExpansionId) != room.CompleteState)
+            throw new InvalidOperationException("The completed world state of " + site.Base.Id + " must be applied before placing acceptance objects.");
         if (!string.IsNullOrEmpty(Mod.Failure)) throw new InvalidOperationException("Based has a retained runtime failure: " + Mod.Failure);
         if (RoomProbeSave.Instance == null) throw new InvalidOperationException("S1API has not registered RoomProbeSave.");
     }
@@ -62,18 +68,18 @@ public static class RoomProbe
     private static Property Property()
     {
         foreach (var property in Il2CppScheduleOne.Property.Property.Properties)
-            if (property != null && property.PropertyCode == PropertyCode) return property;
-        throw new InvalidOperationException("The existing Ming property is not loaded.");
+            if (property != null && property.PropertyCode == _site.Base.PropertyId) return property;
+        throw new InvalidOperationException("The property " + _site.Base.PropertyId + " is not loaded.");
     }
 
     private static Grid Grid()
     {
         var property = Property();
         if (property.Grids == null || property.Grids.Count == 0 || property.Grids[0] == null)
-            throw new InvalidOperationException("Ming's original floor grid 0 is unavailable.");
+            throw new InvalidOperationException("The original floor grid 0 of " + _site.Base.PropertyId + " is unavailable.");
         var grid = property.Grids[0];
         if (grid.GUID.ToString() != grid._guid || Il2Cpp.GUIDManager.GetObject<Grid>(grid.GUID)?.Pointer != grid.Pointer)
-            throw new InvalidOperationException("Ming's original baked grid GUID or registry readback does not match.");
+            throw new InvalidOperationException("The original baked grid GUID of " + _site.Base.PropertyId + " or its registry readback does not match.");
         return grid;
     }
 
@@ -179,7 +185,7 @@ public static class RoomProbe
             {
                 if (candidate.Rotation is not (0 or 90 or 180 or 270)) throw new ArgumentException("Rotation must be 0, 90, 180 or 270.");
                 if (!ValidateGrid(handler, grid, candidate.X, candidate.Y, candidate.Rotation, out reason)) continue;
-                var record = new RoomProbeTarget { Kind = "grid", ItemId = args[1], TargetGuid = Il2Cpp.GUIDManager.GenerateUniqueGUID().ToString(), GridGuid = grid.GUID.ToString(), X = candidate.X, Y = candidate.Y, Rotation = candidate.Rotation };
+                var record = new RoomProbeTarget { Site = _site.Base.Id, Kind = "grid", ItemId = args[1], TargetGuid = Il2Cpp.GUIDManager.GenerateUniqueGUID().ToString(), GridGuid = grid.GUID.ToString(), X = candidate.X, Y = candidate.Y, Rotation = candidate.Rotation };
                 evidence.Targets.Add(record);
                 var item = manager.CreateGridItem(definition.GetDefaultInstance(1), grid, new Vector2(candidate.X, candidate.Y), candidate.Rotation, record.TargetGuid);
                 ConfirmNative(item, record);
@@ -194,13 +200,12 @@ public static class RoomProbe
 
     private static IEnumerable<(string Id, Surface Surface)> Surfaces()
     {
-        var definition = MingWorld.Create().WorldStates.Single(x => x.Id == "complete");
-        foreach (var extension in definition.PropertyExtensions)
-        foreach (var description in extension.Surfaces)
+        var room = Room(_site);
+        foreach (var (extension, id) in room.Surfaces())
         {
-            var guid = new Il2CppSystem.Guid(new Guid(MD5.HashData(Encoding.UTF8.GetBytes($"mapexpansions/{MingDefinition.ExpansionId}/surface/{extension.Id}/{description.Id}"))).ToString());
+            var guid = new Il2CppSystem.Guid(new Guid(MD5.HashData(Encoding.UTF8.GetBytes($"mapexpansions/{room.ExpansionId}/surface/{extension}/{id}"))).ToString());
             var surface = Il2Cpp.GUIDManager.GetObject<Surface>(guid);
-            if (surface != null && surface.ParentProperty?.PropertyCode == PropertyCode) yield return (description.Id, surface);
+            if (surface != null && surface.ParentProperty?.PropertyCode == _site.Base.PropertyId) yield return (id, surface);
         }
     }
 
@@ -244,7 +249,7 @@ public static class RoomProbe
                 if (collider == null || surface.SurfaceType != Surface.ESurfaceType.Wall) continue;
                 var faces = new List<Vector3>();
                 foreach (var face in surface.ValidFaces) faces.Add(Face(face));
-                foreach (var face in faces.OrderByDescending(f => Vector3.Dot(surface.transform.TransformDirection(f), MingWorld.Wing.center - collider.bounds.center)))
+                foreach (var face in faces.OrderByDescending(f => Vector3.Dot(surface.transform.TransformDirection(f), Room(_site).Area.center - collider.bounds.center)))
                 {
                     Vector3 point = collider.transform.TransformPoint(collider.center + Vector3.Scale(face, collider.size * .5f));
                     if (!handler.IsSurfaceValidForItem(surface, collider, point)) continue;
@@ -260,7 +265,7 @@ public static class RoomProbe
                     }
                     if (ghost.GetPenetration(out px, out pz, out py) && Mathf.Max(Mathf.Abs(px), Mathf.Max(Mathf.Abs(pz), Mathf.Abs(py))) > .01f) continue;
                     if (!surface.ParentProperty.DoBoundsContainPoint(ghost.BoundingCollider.bounds.center) || OverlapsPlacedItem(ghost)) continue;
-                    var record = new RoomProbeTarget { Kind = "surface", ItemId = args[1], TargetGuid = Il2Cpp.GUIDManager.GenerateUniqueGUID().ToString(), SurfaceGuid = surface.GUID.ToString(), SurfaceId = pair.Id };
+                    var record = new RoomProbeTarget { Site = _site.Base.Id, Kind = "surface", ItemId = args[1], TargetGuid = Il2Cpp.GUIDManager.GenerateUniqueGUID().ToString(), SurfaceGuid = surface.GUID.ToString(), SurfaceId = pair.Id };
                     evidence.Targets.Add(record);
                     var item = manager.CreateSurfaceItem(definition.GetDefaultInstance(1), surface, surface.GetRelativePosition(ghost.transform.position), surface.GetRelativeRotation(ghost.transform.rotation), record.TargetGuid);
                     ConfirmNative(item, record);
@@ -277,7 +282,7 @@ public static class RoomProbe
     private static void ConfirmNative(BuildableItem? item, RoomProbeTarget record)
     {
         if (item == null || item.IsDestroyed || !item.Initialized || item.GUID.ToString() != record.TargetGuid || item.ItemInstance?.ID != record.ItemId ||
-            item.ParentProperty?.PropertyCode != PropertyCode || item.NetworkObject == null || !item.NetworkObject.IsSpawned ||
+            item.ParentProperty?.PropertyCode != SiteOf(record).Base.PropertyId || item.NetworkObject == null || !item.NetworkObject.IsSpawned ||
             Il2Cpp.GUIDManager.GetObject<BuildableItem>(item.GUID)?.Pointer != item.Pointer)
             throw new InvalidOperationException($"Native item creation/readback failed for {record.TargetGuid}; evidence retained, do not replay placement.");
         if (record.Kind == "grid")
@@ -336,7 +341,7 @@ public static class RoomProbe
     {
         var save = RoomProbeSave.Instance;
         if (save == null || save.Data.Targets.Count == 0) return;
-        RequireHost();
+        foreach (var site in save.Data.Targets.Select(SiteOf).Distinct()) RequireHost(site);
         foreach (var record in save.Data.Targets) Capture(record, Find(record));
         save.Data.CaptureProcessId = Environment.ProcessId;
         save.Data.SaveCaptures++;
@@ -402,6 +407,8 @@ public sealed class RoomProbeState
 
 public sealed class RoomProbeTarget
 {
+    // The base id of the site; empty in records written before there was more than one site.
+    public string Site { get; set; } = "";
     public string Kind { get; set; } = "";
     public string ItemId { get; set; } = "";
     public string TargetGuid { get; set; } = "";

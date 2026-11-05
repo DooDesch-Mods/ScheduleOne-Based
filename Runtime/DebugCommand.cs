@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Based.Core;
 using Based.UI;
-using Based.Content.Ming;
+using Based.Content;
 using S1API.Console;
 using UnityEngine;
 
@@ -14,27 +14,42 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag status | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+
+    // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
+    private static SiteDefinition _site = null!;
 
     public override void ExecuteCommand(List<string> args)
     {
+        args = new List<string>(args);
+        int token = args.FindIndex(a => a.StartsWith("site=", StringComparison.OrdinalIgnoreCase));
+        string? siteKey = null;
+        if (token >= 0)
+        {
+            siteKey = args[token].Substring("site=".Length);
+            args.RemoveAt(token);
+        }
         string action = args.Count == 0 ? "status" : args[0];
         try
         {
+            _site = Mod.FindSite(siteKey);
             switch (action)
             {
+                case "sites":
+                    Sites();
+                    break;
                 case "status":
-                    Mod.Log("baseddiag: " + BuildPlan.State(Mod.Sites[0]));
+                    Mod.Log("baseddiag: " + BuildPlan.State(_site));
                     break;
                 case "plan":
-                    Mod.DebugPlan(Mod.Sites[0]);
+                    Mod.DebugPlan(_site);
                     Mod.Log("baseddiag: plan opened through the vendor conversation.");
                     break;
                 case "ray":
                     PlanCopies.DebugTalk(args.Count > 1 ? args[1] : "");
                     break;
                 case "blockers":
-                    Mod.DebugBlockers(Mod.Sites[0]);
+                    Mod.DebugBlockers(_site);
                     break;
                 case "planfree":
                     Mod.DebugFreeConversation = args.Count > 1 && args[1] == "on";
@@ -63,7 +78,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     DockProbe.Execute(args.Skip(1).ToArray());
                     break;
                 case "room":
-                    RoomProbe.Execute(args.Skip(1).ToArray());
+                    RoomProbe.Execute(_site, args.Skip(1).ToArray());
                     break;
                 case "dockroute":
                     if (args.Count > 3 && args[1] == "deliver") DockDeliver(int.Parse(args[2]), args[3]);
@@ -73,7 +88,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     else DockRoute(args.Count > 1 && args[1] == "build");
                     break;
                 case "workers":
-                    MingWorkers.Diagnostics();
+                    Crew().Diagnostics();
                     break;
                 case "network":
                     NetworkProbe.Execute();
@@ -116,12 +131,12 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         catch (Exception error) { Mod.Warn("baseddiag " + action + " failed: " + error); }
     }
 
-    // Whether an employee can reach the Sweatshop's loading docks: each access point, and the spot behind a parked van
+    // Whether an employee can reach the site's loading docks: each access point, and the spot behind a parked van
     // where the game moves the first one, on the Employee NavMesh and on a route from the employees' spawn point.
     private static void DockRoute(bool build)
     {
         if (build) CompleteDock();
-        var property = Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(Mod.Sites[0].Base.PropertyId);
+        var property = Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(_site.Base.PropertyId);
         if (property == null) throw new InvalidOperationException("The property is not loaded.");
         var filter = new UnityEngine.AI.NavMeshQueryFilter
         {
@@ -176,7 +191,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     // The employee limit, each waiting place with its route from the door, and where every employee stands.
     private static void Staff()
     {
-        var property = Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(Mod.Sites[0].Base.PropertyId);
+        var property = Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(_site.Base.PropertyId);
         if (property == null) throw new InvalidOperationException("The property is not loaded.");
         var places = property.EmployeeIdlePoints;
         Mod.Log("baseddiag: staff " + property.Employees.Count + "/" + property.EmployeeCapacity + ", places " + places.Length + ", spawn " + property.NPCSpawnPoint.position);
@@ -205,11 +220,11 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     {
         switch (action)
         {
-            case "give": Mod.Log("baseddiag: folder given, answer '" + ProjectFolder.Give() + "'."); break;
-            case "open": ProjectFolder.DebugOpen(); break;
+            case "give": Mod.Log("baseddiag: folder given, answer '" + ProjectFolder.Give(_site) + "'."); break;
+            case "open": ProjectFolder.DebugOpen(_site); break;
             case "hang": ProjectFolder.DebugHang(); break;
-            case "wall": Mod.Log("baseddiag: folder hung on the " + ProjectFolder.DebugWall() + "."); break;
-            case "state": Mod.Log("baseddiag: folder " + ProjectFolder.DebugState()); break;
+            case "wall": Mod.Log("baseddiag: folder hung on the " + ProjectFolder.DebugWall(_site) + "."); break;
+            case "state": Mod.Log("baseddiag: folder " + ProjectFolder.DebugState(_site)); break;
             default: throw new ArgumentException("baseddiag folder give|open|hang|wall|state");
         }
     }
@@ -223,7 +238,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             Mod.Log("baseddiag: journal details closed.");
             return;
         }
-        string title = Text.T(Mod.Sites[0].Title);
+        string title = Text.T(_site.Title);
         foreach (var quest in UnityEngine.Object.FindObjectsOfType<Il2CppScheduleOne.Quests.Quest>(true))
         {
             if (quest.Title != title) continue;
@@ -237,7 +252,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     // Lists the lights and ceiling fan parts around the site, for checks of light reach, shadows and wall clearance.
     private static void Lights()
     {
-        var site = new Vector3(-58f, 2f, 140f);
+        var site = PlanCentre(_site) + Vector3.up * 2f;
         foreach (var light in UnityEngine.Object.FindObjectsOfType<Light>())
         {
             Vector3 at = light.transform.position;
@@ -374,35 +389,35 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     {
         if (args.Count > 2 && args[1] == "set")
         {
-            MingWorkers.HammerContactNormalizedTime = float.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture);
-            Mod.Log("baseddiag: hammer contact time " + MingWorkers.HammerContactNormalizedTime + ".");
+            Crew().HammerContactNormalizedTime = float.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture);
+            Mod.Log("baseddiag: hammer contact time " + Crew().HammerContactNormalizedTime + ".");
             return;
         }
         float seconds = args.Count > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 10f;
-        MingWorkers.ProbeSwing(seconds);
+        Crew().ProbeSwing(seconds);
         Mod.Log("baseddiag: measuring the hammer swing for " + seconds + " s.");
     }
 
-    // Finishes the wing and the dock upgrade in Based's own state, so the dock is part of the save as after a purchase.
+    // Finishes the expansion and every follow-up in Based's own state, so the dock is part of the save as after a purchase.
     private static void CompleteDock()
     {
         if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host can change the construction state.");
         var state = Mod.Engine.ExportState();
-        foreach (var upgrade in state.Upgrades.Where(u => u.BaseId == MingDefinition.BaseId &&
-                     (u.UpgradeId == MingDefinition.UpgradeId || u.UpgradeId == MingDefinition.DockUpgradeId)))
+        var finished = new HashSet<string>(_site.FollowUps.Select(f => f.UpgradeId)) { _site.UpgradeId };
+        foreach (var upgrade in state.Upgrades.Where(u => u.BaseId == _site.Base.Id && finished.Contains(u.UpgradeId)))
         {
             upgrade.Stage = UpgradeStage.Complete;
-            upgrade.CompletedCycles = upgrade.UpgradeId == MingDefinition.UpgradeId ? 4 : 1;
+            upgrade.CompletedCycles = _site.UpgradeOf(upgrade.UpgradeId).ConstructionCycles;
         }
         state.Revision++;
         Mod.DebugClearFailure();
         Mod.Engine.RestoreState(state);
         Mod.Changed();
-        Mod.Log("baseddiag: dockroute: wing and loading dock complete; revision " + state.Revision + ".");
+        Mod.Log("baseddiag: dockroute: wing and loading dock complete (" + string.Join(", ", finished) + "); revision " + state.Revision + ".");
     }
 
     private static Il2CppScheduleOne.Property.Property SiteProperty() =>
-        Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(Mod.Sites[0].Base.PropertyId)
+        Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(_site.Base.PropertyId)
         ?? throw new InvalidOperationException("The property is not loaded.");
 
     private static IEnumerable<(Il2CppScheduleOne.Employees.Packager Packager, Il2CppScheduleOne.Management.PackagerConfiguration Config)> Packagers()
@@ -416,11 +431,11 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         }
     }
 
-    // Gives every handler at the Sweatshop one route from its loading dock, the setup a player makes in the clipboard.
+    // Gives every handler at the site one route from its loading dock, the setup a player makes in the clipboard.
     private static void SetDockRoute()
     {
         var property = SiteProperty();
-        if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The Sweatshop has no loading dock.");
+        if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The " + _site.PropertyName + " has no loading dock.");
         var dock = property.LoadingDocks[0];
         var shelf = FirstShelf(property);
         if (shelf == null) Mod.Warn("baseddiag: dockroute route: no storage shelf on the property; the route ends at the dock and moves nothing");
@@ -433,7 +448,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             Mod.Log($"baseddiag: dockroute route: {packager.FirstName} gets a route from dock {dock.GUID} to {(shelf != null ? "shelf " + shelf.GUID + " at " + shelf.transform.position : "the dock")}");
             set++;
         }
-        if (set == 0) Mod.Warn("baseddiag: dockroute route: no handler works at the Sweatshop; add one with 'addemployee handler sweatshop'");
+        if (set == 0) Mod.Warn("baseddiag: dockroute route: no handler works at the " + _site.PropertyName + "; add one with 'addemployee handler " + _site.Base.PropertyId + "'");
     }
 
     // The storage rack with the most empty slots, not the employee bed or locker, whose storage takes only their pay.
@@ -491,7 +506,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 if (filled == 0) Mod.Warn($"baseddiag: dockroute work:     the source has {route.Source.OutputSlots.Count} output slots and none holds an item");
             }
         }
-        if (handlers == 0) Mod.Warn("baseddiag: dockroute work: no handler works at the Sweatshop");
+        if (handlers == 0) Mod.Warn("baseddiag: dockroute work: no handler works at the " + _site.PropertyName);
         // Every storage rack together, so a delivery counts whichever rack the route ends at.
         int racks = 0, used = 0, free = 0, soil = 0;
         foreach (var item in property.BuildableItems)
@@ -512,11 +527,11 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         Mod.Log($"baseddiag: dockroute work: {racks} racks hold {used} filled and {free} free slots, soil {soil}");
     }
 
-    // Sends one item from a shop to the Sweatshop's dock through the game's own delivery, arriving in a minute.
+    // Sends one item from a shop to the site's dock through the game's own delivery, arriving in a minute.
     private static void DockDeliver(int shopIndex, string itemId)
     {
         var property = SiteProperty();
-        if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The Sweatshop has no loading dock.");
+        if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The " + _site.PropertyName + " has no loading dock.");
         var shop = Il2CppScheduleOne.UI.Shop.ShopInterface.AllShops[shopIndex];
         if (shop?.DeliveryVehicle?.Vehicle == null) throw new InvalidOperationException("That shop has no delivery vehicle.");
         if (Il2CppScheduleOne.Registry.GetItem(itemId) == null) throw new ArgumentException("Unknown item: " + itemId);
@@ -546,7 +561,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 Mod.Log($"baseddiag: dockroute routes:   {i}: from {Side(route.Source)} to {Side(route.Destination)}");
             }
         }
-        if (handlers == 0) Mod.Warn("baseddiag: dockroute routes: no handler works at the Sweatshop");
+        if (handlers == 0) Mod.Warn("baseddiag: dockroute routes: no handler works at the " + _site.PropertyName);
     }
 
     // Moves the upgrade straight to a stage, so one run can look at every construction state.
@@ -554,18 +569,20 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     {
         if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host can change the construction state.");
         var state = Mod.Engine.ExportState();
-        var upgrade = state.Upgrades.First(u => u.BaseId == MingDefinition.BaseId && u.UpgradeId == MingDefinition.UpgradeId);
-        var (stage, cycles) = phase switch
+        var upgrade = state.Upgrades.First(u => u.BaseId == _site.Base.Id && u.UpgradeId == _site.UpgradeId);
+        var definition = _site.Upgrade;
+        // The named stages around the construction, and each phase at the night it starts.
+        var stages = new List<(string Id, UpgradeStage Stage, int Cycles)>
         {
-            "none" => (UpgradeStage.RightsMissing, 0),
-            "rights" => (UpgradeStage.RightsOwned, 0),
-            "ordered" => (UpgradeStage.Constructing, 0),
-            "breakthrough" => (UpgradeStage.Constructing, 1),
-            "frame" => (UpgradeStage.Constructing, 2),
-            "roof" => (UpgradeStage.Constructing, 3),
-            "complete" => (UpgradeStage.Complete, 4),
-            _ => throw new ArgumentException("baseddiag phase none|rights|ordered|breakthrough|frame|roof|complete")
+            ("none", UpgradeStage.RightsMissing, 0),
+            ("rights", UpgradeStage.RightsOwned, 0),
+            ("ordered", UpgradeStage.Constructing, 0)
         };
+        stages.AddRange(definition.Phases.Select(p => (p.Id, UpgradeStage.Constructing, p.AfterSleepCycles)));
+        stages.Add(("complete", UpgradeStage.Complete, definition.ConstructionCycles));
+        var match = stages.FirstOrDefault(s => s.Id == phase);
+        if (match.Id == null) throw new ArgumentException("baseddiag phase " + string.Join("|", stages.Select(s => s.Id)));
+        var (stage, cycles) = (match.Stage, match.Cycles);
         upgrade.Stage = stage;
         upgrade.CompletedCycles = cycles;
         if (stage == UpgradeStage.RightsMissing) upgrade.RightsPaid = 0;
@@ -574,13 +591,13 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         Mod.DebugClearFailure();
         Mod.Engine.RestoreState(state);
         Mod.Changed();
-        Mod.Log("baseddiag: construction moved to " + phase + "; revision " + state.Revision + ".");
+        Mod.Log("baseddiag: construction moved to " + phase + " at " + _site.Base.Id + "; revision " + state.Revision + ".");
     }
 
     // Clears the walls item by item, as a player does, so the hold's list can be seen shrinking.
     private static void PackOneBlocker()
     {
-        foreach (var item in Mod.BlockingItems(Mod.Sites[0]))
+        foreach (var item in Mod.BlockingItems(_site))
         {
             string name = item.GetManagementName();
             if (!item.CanBePickedUp(out string reason))
@@ -604,7 +621,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         for (bool moved = true; moved;)
         {
             moved = false;
-            foreach (var item in Mod.BlockingItems(Mod.Sites[0]))
+            foreach (var item in Mod.BlockingItems(_site))
             {
                 if (!item.CanBePickedUp(out _)) continue;
                 string name = item.GetManagementName();
@@ -615,14 +632,40 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             }
         }
         // What still refuses is loaded, like a planted pot. The test save is a fresh copy, so it is dropped with its contents.
-        foreach (var item in Mod.BlockingItems(Mod.Sites[0]))
+        foreach (var item in Mod.BlockingItems(_site))
         {
             item.CanBePickedUp(out string reason);
             Mod.Warn("baseddiag: destroyed " + item.GetManagementName() + " in the test save, pickup refused: " + reason);
             item.Destroy_Server();
         }
-        if (Mod.BlockingItems(Mod.Sites[0]).Length > 0) throw new InvalidOperationException("The marked walls are still blocked after packing.");
+        if (Mod.BlockingItems(_site).Length > 0) throw new InvalidOperationException("The marked walls are still blocked after packing.");
         Mod.Log("baseddiag: marked walls are clear.");
+    }
+
+    private static ISiteCrew Crew() =>
+        _site.Crew ?? throw new InvalidOperationException(_site.Base.Id + " has no construction crew.");
+
+    // The middle of the site's plan drawing, on the floor.
+    private static Vector3 PlanCentre(SiteDefinition site)
+    {
+        if (site.Plan.Count == 0) return site.QuestMarker;
+        float minX = site.Plan.Min(r => r.MinX), maxX = site.Plan.Max(r => r.MaxX);
+        float minZ = site.Plan.Min(r => r.MinZ), maxZ = site.Plan.Max(r => r.MaxZ);
+        return new Vector3((minX + maxX) / 2f, site.QuestMarker.y, (minZ + maxZ) / 2f);
+    }
+
+    // Every registered site with the key the other commands take, its stage and where its plan lies.
+    private static void Sites()
+    {
+        for (int i = 0; i < Mod.Sites.Count; i++)
+        {
+            var site = Mod.Sites[i];
+            var expansion = Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId);
+            string followUps = string.Join(", ", site.FollowUps.Select(f => f.UpgradeId + "=" + Mod.Engine.GetUpgrade(site.Base.Id, f.UpgradeId).Stage));
+            Mod.Log($"baseddiag sites: {i} {site.Base.Id} property {site.Base.PropertyId}, owned {Mod.Owns(site)}, {site.UpgradeId} {expansion.Stage} "
+                + $"({expansion.CompletedCycles}/{site.Upgrade.ConstructionCycles} nights), follow-ups [{followUps}], plan centre {PlanCentre(site)}, "
+                + $"staff places {site.StaffPlaces.Count}, crew {(site.Crew == null ? "none" : site.Crew.ActiveCount + " visible")}, folder {site.FolderItemId}.");
+        }
     }
 }
 #endif

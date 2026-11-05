@@ -1,3 +1,4 @@
+using Based.Content.Ming;
 using Based.Core;
 using System.Text.Json;
 
@@ -34,7 +35,8 @@ var checks = new (string Name, Action Run)[]
     ("pending payment on removed content is released on load", MigratePendingOnRemovedContent),
     ("restored upgrades keep their state when a prerequisite was added", MigrateNewPrerequisite),
     ("employee limit: one becomes three, every other limit doubles", StaffLimits),
-    ("an upgrade without a rights price is ordered directly after its prerequisite", DirectOrder)
+    ("an upgrade without a rights price is ordered directly after its prerequisite", DirectOrder),
+    ("the real Ming definition passes DefinitionRegistry with its saved ids, prices and phases", MingThroughRegistry)
 };
 int failed = 0;
 foreach (var check in checks)
@@ -177,6 +179,30 @@ static void SleepTokens()
     engine = RoundTrip(engine); Equal(false, engine.AdvanceSleep(20).Applied);
     engine.AdvanceSleep(100);
     Equal(2, engine.GetUpgrade("fixture", "A").CompletedCycles);
+}
+// The definition the mod ships, not a fixture: the ids are in player saves and must not move.
+static void MingThroughRegistry()
+{
+    var registry = DefinitionRegistry.Create(new[] { MingDefinition.Create() });
+    var ming = registry["ming.sweatshop"];
+    Equal("sweatshop", ming.PropertyId);
+    Equal("ming.restaurant-wing,ming.loading-dock", string.Join(",", ming.Upgrades.Select(u => u.Id)));
+    var wing = ming.Upgrades[0];
+    var dock = ming.Upgrades[1];
+    Equal(1000, wing.RightsPrice);
+    Equal(3000, wing.ConstructionPrice);
+    Equal(4, wing.ConstructionCycles);
+    Equal("breakthrough@1,frame@2,roof@3", string.Join(",", wing.Phases.Select(p => p.Id + "@" + p.AfterSleepCycles)));
+    Equal("world-state:based_ming_upper:complete", string.Join(",", wing.Effects.Select(e => e.Kind + ":" + e.TargetId + ":" + e.StateId)));
+    Equal(0, dock.RightsPrice);
+    Equal(1500, dock.ConstructionPrice);
+    Equal(1, dock.ConstructionCycles);
+    Equal("ming.restaurant-wing", string.Join(",", dock.Prerequisites));
+    Equal("world-state:based_ming_dock:complete", string.Join(",", dock.Effects.Select(e => e.Kind + ":" + e.TargetId + ":" + e.StateId)));
+    // The engine accepts it, and a new save starts both upgrades without rights.
+    var engine = new UpgradeEngine(new[] { MingDefinition.Create() }, new AuthorityFlag(true));
+    Equal(UpgradeStage.RightsMissing, engine.GetUpgrade("ming.sweatshop", "ming.restaurant-wing").Stage);
+    Equal(UpgradeStage.RightsMissing, engine.GetUpgrade("ming.sweatshop", "ming.loading-dock").Stage);
 }
 static void Definitions()
 {

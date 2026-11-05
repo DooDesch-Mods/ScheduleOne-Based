@@ -63,7 +63,7 @@ internal static class BuildPlan
             .OnCall("plan.take", _ =>
             {
                 RememberNoticeStage(site);
-                _notice = ProjectFolder.Give();
+                _notice = ProjectFolder.Give(site);
                 return _notice;
             })
             .OnCall("plan.buy", kind =>
@@ -204,7 +204,7 @@ internal static class BuildPlan
             wall,
             canOrder = ordering && !locked,
             canBuy = owned && !broken && ordering && !locked,
-            take = !locked && followUp == null && ProjectFolder.Offered(state.Stage) ? Text.T("Take the project folder") : "",
+            take = !locked && followUp == null && ProjectFolder.Offered(site, state.Stage) ? Text.T("Take the project folder") : "",
             buy = buyRights
                 ? Text.T("Buy rights") + " - " + Price(upgrade.RightsPrice)
                 : Text.T("Order construction") + " - " + Price(upgrade.ConstructionPrice),
@@ -219,9 +219,9 @@ internal static class BuildPlan
             cash = Text.T("Cash only"),
             notes = Notes(site, followUp, state.Stage),
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
-                : !owned ? Text.T("Buy the Sweatshop first.")
+                : !owned ? Text.T(site.BuyFirst)
                 : Mod.HeldBy.Length > 0 ? Text.T("On hold: move {0} off the red walls.", Mod.HeldBy)
-                : locked && !wall && ordering ? Text.T("Order the construction from Mrs. Ming")
+                : locked && !wall && ordering ? Text.T(site.OrderEntry)
                 : state.Stage == _noticeStage && upgradeId == _noticeUpgrade ? _notice : "",
             // The confirmation answers a purchase, so it ends with the ordering. Every other status stays until it clears.
             payment = locked || (!ordering && Payments.StatusText == Text.T("Payment confirmed.")) ? "" : Payments.StatusText,

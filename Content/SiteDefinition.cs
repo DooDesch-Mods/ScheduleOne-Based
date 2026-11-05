@@ -11,12 +11,25 @@ internal readonly record struct PlanRoom(PlanRoomKind Kind, float MinX, float Mi
 // A stage ordered in the project folder once the first expansion is done. Text fields hold the English key.
 internal sealed record SiteFollowUp(string UpgradeId, string Title, string Done, IReadOnlyList<string> Notes);
 
+#if DEBUG
+// What the room acceptance probe needs: the expansion with its finished state, the extension that adds the floor tiles,
+// the new area, and every surface of the finished state as (extension id, surface id).
+internal sealed record SiteRoom(string ExpansionId, string CompleteState, string FloorExtensionId, Bounds Area,
+    Func<IEnumerable<(string Extension, string Surface)>> Surfaces);
+#endif
+
 internal interface ISiteCrew
 {
     void Initialize(Action<string> info, Action<string> warn);
     void Update(UpgradeStage stage, string? phase);
     void Tick();
     void Cleanup();
+    int ActiveCount { get; }
+#if DEBUG
+    void Diagnostics();
+    float HammerContactNormalizedTime { get; set; }
+    void ProbeSwing(float seconds);
+#endif
 }
 
 // Everything the core needs from one piece of content: who sells it, what must stay free and how the plan draws it.
@@ -32,8 +45,13 @@ internal sealed class SiteDefinition
     public string ProgressChoice { get; init; } = "";
     public string VendorLine { get; init; } = "";
     public string Title { get; init; } = "";
+    // Saved ids: the project folder item and the Sideload surface of its page. Renaming either loses folders in saves.
+    public string FolderItemId { get; init; } = "";
+    public string BoardSurfaceId { get; init; } = "";
     public Type QuestType { get; init; } = null!;
     public string OrderEntry { get; init; } = "";
+    // The notice while the player does not own the property yet.
+    public string BuyFirst { get; init; } = "";
     public Vector3 QuestMarker { get; init; }
     public IReadOnlyDictionary<string, string> PhaseTitles { get; init; } = new Dictionary<string, string>();
     public IReadOnlyList<string> Restrictions { get; init; } = Array.Empty<string>();
@@ -43,6 +61,9 @@ internal sealed class SiteDefinition
     public IReadOnlyList<Vector3> StaffPlaces { get; init; } = Array.Empty<Vector3>();
     public Action RegisterWorld { get; init; } = () => { };
     public ISiteCrew? Crew { get; init; }
+#if DEBUG
+    public SiteRoom? Room { get; init; }
+#endif
     // In order of appearance in the folder; each needs the one before it.
     public IReadOnlyList<SiteFollowUp> FollowUps { get; init; } = Array.Empty<SiteFollowUp>();
 
@@ -61,9 +82,30 @@ internal sealed class SiteDefinition
 
     public SiteFollowUp? FollowUp(string upgradeId) => FollowUps.FirstOrDefault(f => f.UpgradeId == upgradeId);
 
+    // The ids every site needs for itself: S1API rebuilds quests by class name and the game finds items by id.
+    public static void ValidateAll(IReadOnlyList<SiteDefinition> sites)
+    {
+        foreach (var site in sites) site.Validate();
+        void Distinct(string what, Func<SiteDefinition, object> key)
+        {
+            var twice = sites.GroupBy(key).FirstOrDefault(g => g.Count() > 1);
+            if (twice != null) throw new InvalidOperationException(string.Join(", ", twice.Select(s => s.Base.Id)) + " share the " + what + " " + twice.Key + ".");
+        }
+        Distinct("base id", s => s.Base.Id);
+        Distinct("property", s => s.Base.PropertyId);
+        Distinct("folder item", s => s.FolderItemId);
+        Distinct("board surface", s => s.BoardSurfaceId);
+        Distinct("vendor conversation", s => s.VendorContainerId);
+        Distinct("quest class", s => s.QuestType);
+    }
+
     public void Validate()
     {
         if (!Base.Upgrades.Any(u => u.Id == UpgradeId)) throw new InvalidOperationException(Base.Id + " has no upgrade " + UpgradeId);
+        if (string.IsNullOrWhiteSpace(FolderItemId) || string.IsNullOrWhiteSpace(BoardSurfaceId) || QuestType == null)
+            throw new InvalidOperationException(Base.Id + " needs a folder item, a board surface and a quest class.");
+        if (string.IsNullOrWhiteSpace(BuyFirst) || string.IsNullOrWhiteSpace(OrderEntry))
+            throw new InvalidOperationException(Base.Id + " needs the texts BuyFirst and OrderEntry.");
         foreach (var followUp in FollowUps)
         {
             var upgrade = Base.Upgrades.FirstOrDefault(u => u.Id == followUp.UpgradeId)
