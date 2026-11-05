@@ -76,7 +76,7 @@ public sealed class Mod : MelonMod
         Text.Register();
         foreach (var site in Sites) site.Validate();
         Engine = new UpgradeEngine(Sites.Select(s => s.Base), new HostAuthority());
-        MissingMods.Check(LoggerInstance);
+        MissingMods.Check();
         if (MissingMods.Any)
         {
             LoggerInstance.Error("Based stays off: " + MissingMods.Line + " " + Sites[0].VendorNpcId + " names them in the dialogue.");
