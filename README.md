@@ -66,7 +66,7 @@ Wait until no delivery is on its way to the Sweatshop, since the dock goes with 
 - [S1API](https://thunderstore.io/c/schedule-i/p/ifBars/S1API_Forked/) 3.2.1 or newer
 - [Personnel](https://www.nexusmods.com/schedule1/mods/2275) 2.4.6 or newer
 - [Sideload](https://www.nexusmods.com/schedule1/mods/2360) 1.36.1 or newer
-- [MapExpansions](https://www.nexusmods.com/schedule1/mods/3033) 1.0.0 or newer
+- [MapExpansions](https://www.nexusmods.com/schedule1/mods/3033) 1.0.4 or newer
 
 ## Installation
 

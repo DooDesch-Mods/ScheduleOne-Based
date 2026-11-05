@@ -73,7 +73,6 @@ internal static class Text
         ["Another payment for this is still open."] = "Dafür läuft noch eine andere Zahlung.",
         ["This upgrade is not available."] = "Dieser Ausbau ist nicht verfügbar.",
         ["The host declined this purchase."] = "Der Host hat diesen Kauf abgelehnt.",
-        ["Based needs these mods: {0}."] = "Based braucht diese Mods: {0}.",
         ["Loading dock: Sweatshop"] = "Laderampe: Sweatshop",
         ["Ready for deliveries"] = "Bereit für Lieferungen",
         ["Deliveries park in the yard behind the restaurant."] = "Lieferungen parken im Hof hinter dem Restaurant.",
