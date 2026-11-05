@@ -4,6 +4,13 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.1.2] - 2026-11-05
+
+### Changed
+- Based asks for MapExpansions 1.0.4, which fixes employees ignoring storage and drying racks in the new part of the Sweatshop.
+- With an older MapExpansions Based still runs and warns in `MelonLoader/Latest.log`.
+- When a required mod is missing, Mrs. Ming says what is wrong with it: not installed, in the wrong folder or too old.
+
 ## [1.1.1] - 2026-11-05
 
 ### Fixed
