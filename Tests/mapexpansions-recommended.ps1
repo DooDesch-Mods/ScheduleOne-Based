@@ -1,9 +1,9 @@
 <#
-In-game check: Based runs with every MapExpansions from 1.0.0 on and warns below the recommended 1.1.0.
+In-game check: Based runs with every MapExpansions from 1.0.0 on and warns below the recommended 1.2.0.
 
-For each release (1.0.4, 1.1.0) it puts that release's MapExpansions.dll into the slot, starts the game with
+For each release (1.1.0, 1.2.0) it puts that release's MapExpansions.dll into the slot, starts the game with
 -KeepSlot and reads MelonLoader/Latest.log: Based must initialize, and the [Requirements] line must warn for
-1.0.4 and pass for 1.1.0. Build the slot once before, with this worktree's Based (-Build takes the folder name
+1.1.0 and pass for 1.2.0. Build the slot once before, with this worktree's Based (-Build takes the folder name
 under the workspace root, not a path):
 
     pwsh -File Workspace/tools/session/session.ps1 -Slot mptest -Build _wt-Based-<topic> -Profile main -NoApp
@@ -11,7 +11,7 @@ under the workspace root, not a path):
 #>
 param(
     [string]$Slot = 'mptest',
-    [string[]]$Versions = @('1.0.4', '1.1.0'),
+    [string[]]$Versions = @('1.1.0', '1.2.0'),
     # Also start once without Personnel: Based must stay off and name the missing mod.
     [switch]$MissingCase
 )
@@ -69,10 +69,10 @@ foreach ($v in $Versions) {
         $min = [regex]::Escape($Matches[2])
         Check "MapExpansions ${v}: manifest minimum $dep checked" ([bool]($usable | Where-Object { $_ -match "$name $min\+" })) $problems
     }
-    if ([version]$v -lt [version]'1.1.0') {
-        Check "MapExpansions ${v}: warns below 1.1.0" ([bool]($req | Where-Object { $_ -match 'older than the recommended 1\.1\.0' })) ($req -join ' | ')
+    if ([version]$v -lt [version]'1.2.0') {
+        Check "MapExpansions ${v}: warns below 1.2.0" ([bool]($req | Where-Object { $_ -match 'older than the recommended 1\.2\.0' })) ($req -join ' | ')
     } else {
-        Check "MapExpansions ${v}: meets 1.1.0" ([bool]($req | Where-Object { $_ -match 'meets the recommended 1\.1\.0' })) ($req -join ' | ')
+        Check "MapExpansions ${v}: meets 1.2.0" ([bool]($req | Where-Object { $_ -match 'meets the recommended 1\.2\.0' })) ($req -join ' | ')
     }
 }
 if ($MissingCase) {
