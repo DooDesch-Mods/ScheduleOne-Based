@@ -2,6 +2,12 @@
 
 > 🛟 **Need help or found a bug?** Get support at [support.doodesch.de/based](https://support.doodesch.de/based).
 
+> ⚠️ **A required mod is missing on Thunderstore?** Thunderstore sometimes takes one of my library mods off its listing, and then r2modman and Gale can't install it. Get it from Nexus Mods or GitHub instead and put the DLL into the `Mods` folder of your profile. Stuck? Ask in the [Discord](https://mods.doodesch.de).
+>
+> - **Personnel:** [Nexus Mods](https://www.nexusmods.com/schedule1/mods/2275) · [GitHub](https://github.com/DooDesch-Mods/ScheduleOne-Personnel/releases/latest)
+> - **Sideload:** [Nexus Mods](https://www.nexusmods.com/schedule1/mods/2360) · [GitHub](https://github.com/DooDesch-Mods/ScheduleOne-Sideload/releases/latest)
+> - **MapExpansions:** [Nexus Mods](https://www.nexusmods.com/schedule1/mods/3033) · [GitHub](https://github.com/DooDesch-Mods/ScheduleOne-MapExpansions/releases/latest)
+
 ![Version](https://img.shields.io/badge/version-1.1.3-blue)
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
