@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using Based.Runtime;
 using MapExpansions;
 using UnityEngine;
 
@@ -156,7 +158,13 @@ public static class MingWorld
         // This one lies across the old floor's edge and would end there in a straight line.
         Remove(state, "old-floor-grime", "Grime 0", "Interior", BoundsOf(-60.5f, -.3f, 139.4f, -58.5f, -.2f, 141.4f));
         // The sink hangs on a wall the cut removes. It stays usable through the work and moves when the new wall stands.
-        if (morning == 4) state.Moves.Add(new ObjectMoveDefinition { Id = "room-sink", Path = Sink, Offset = SinkOffset });
+        if (morning == 4)
+        {
+            var sink = new ObjectMoveDefinition { Id = "room-sink", Path = Sink, Offset = SinkOffset };
+            // Another mod may take the sink out; with fixtures the state then goes on instead of failing.
+            if (MapExpansionsFeatures.Fixtures) MakeOptional(sink);
+            state.Moves.Add(sink);
+        }
         state.Moves.Add(new ObjectMoveDefinition { Id = "north-ac", Path = NorthAc, Offset = NorthAcOffset });
         state.Moves.Add(new ObjectMoveDefinition { Id = "north-ac-stain", Path = NorthAcStain, Offset = NorthAcOffset });
 
@@ -276,7 +284,9 @@ public static class MingWorld
                     && b.Id.Contains("-finish", StringComparison.Ordinal) && b.Id.EndsWith("-collision", StringComparison.Ordinal)
                     && b.Id != wall.Id + "-finish-collision"))
                     AddSurface(property, wall.Id + "-wall-" + box.Id, box.Id, PropertySurfaceKind.Wall, wall.Face);
-            AddPlacementTiles(property);
+            bool fixtures = MapExpansionsFeatures.Fixtures;
+            AddPlacementTiles(property, fixtures);
+            if (fixtures) AddSinkFixture(property);
             property.Bounds.Add(Wing);
             state.PropertyExtensions.Add(property);
         }
@@ -546,7 +556,25 @@ public static class MingWorld
         copy.Boxes.Add(new BoxDefinition { Id = id, Kind = BoxKind.Block, Box = BoundsOf(x1, RoofEdgeBottom, z1, x2, RoofCollisionTop, z2) });
 
     // Half-metre grid cells of the new floor, from wall to wall like the old room's.
-    private static void AddPlacementTiles(PropertyExtensionDefinition property)
+    // The sink's new place is a fixture: its cells are tiles like the rest, closed for building only while the sink stands
+    // there. Everything that touches the fixture members of MapExpansions 1.2.0 is in these two methods, which run only
+    // when that version is loaded; the JIT would otherwise fail on an older MapExpansions as soon as it compiles the caller.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void MakeOptional(ObjectMoveDefinition move) => move.Optional = true;
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void AddSinkFixture(PropertyExtensionDefinition property)
+    {
+        var fixture = new PropertyFixtureDefinition { Id = "room-sink", Path = Sink };
+        foreach (var (x, y) in SinkCells) fixture.Tiles.Add(new GridCoordinate(x, y));
+        property.Fixtures.Add(fixture);
+    }
+
+    // Grid cells of the sink's new place, a half metre each.
+    private static readonly (int x, int y)[] SinkCells = { (10, 18), (10, 19), (11, 18), (11, 19) };
+
+    // Half-metre grid cells of the new floor, from wall to wall like the old room's. Without fixtures the sink's cells stay out.
+    private static void AddPlacementTiles(PropertyExtensionDefinition property, bool sinkCellsAsTiles)
     {
         const float margin = .01f;
         var rooms = new[]
@@ -562,8 +590,7 @@ public static class MingWorld
             for (int y = 1; y <= 20; y++)
             {
                 float wx = -64.75f + x * .5f, wz = 135.25f + y * .5f;
-                // The sink's new place stays free.
-                if (x is 10 or 11 && y is 18 or 19) continue;
+                if (!sinkCellsAsTiles && x is 10 or 11 && y is 18 or 19) continue;
                 if (Inside(wx - .25f, wz - .25f) && Inside(wx + .25f, wz - .25f) && Inside(wx - .25f, wz + .25f) && Inside(wx + .25f, wz + .25f) && Inside(wx, wz))
                     property.Tiles.Add(new GridCoordinate(x, y));
             }

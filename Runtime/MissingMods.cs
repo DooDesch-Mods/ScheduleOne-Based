@@ -18,6 +18,6 @@ internal static class MissingMods
         Line = Require.Check(new Need("MapExpansions")
         {
             Minimum = "1.0.0",
-            Effect = "employees can ignore storage, drying racks and the loading dock in the new part of the Sweatshop",
+            Effect = "employees can ignore storage, drying racks and the loading dock in the new part of the Sweatshop, and the corner under the moved sink stays blocked when another mod removes the sink",
         }) ?? "";
 }
