@@ -4,7 +4,7 @@
 
 **Download:** [Nexus Mods](https://www.nexusmods.com/schedule1/mods/3034) · [Thunderstore](https://thunderstore.io/c/schedule-i/p/DooDesch/Based/) · [GitHub Releases](https://github.com/DooDesch-Mods/ScheduleOne-Based/releases)
 
-![Version](https://img.shields.io/badge/version-1.1.3-blue)
+![Version](https://img.shields.io/badge/version-1.1.4-blue)
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
 [![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de) [![Polyfill](https://polyfill.doomods.com/badge/based.svg)](https://polyfill.doomods.com/mod/based)
