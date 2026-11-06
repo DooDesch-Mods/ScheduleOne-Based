@@ -4,6 +4,16 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.1.4] - 2026-11-06
+
+### Fixed
+- The corner by the north window of the finished Sweatshop expansion can be built on when another mod removes the
+  sink there.
+
+### Changed
+- Based asks for MapExpansions 1.2.0, which this fix needs. With an older one Based still runs, the corner stays
+  blocked and `MelonLoader/Latest.log` warns.
+
 ## [1.1.3] - 2026-11-05
 
 ### Fixed
