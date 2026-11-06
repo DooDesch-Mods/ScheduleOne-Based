@@ -13,6 +13,7 @@ project adheres to Semantic Versioning.
 ### Changed
 - Based asks for MapExpansions 1.2.0, which this fix needs. With an older one Based still runs, the corner stays
   blocked and `MelonLoader/Latest.log` warns.
+- The Thunderstore page links the required mods on Nexus Mods and GitHub, for when Thunderstore can't install them.
 
 ## [1.1.3] - 2026-11-05
 
