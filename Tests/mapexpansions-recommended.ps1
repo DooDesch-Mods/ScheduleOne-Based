@@ -7,13 +7,15 @@ For each release (1.1.0, 1.2.0) it puts that release's MapExpansions.dll into th
 under the workspace root, not a path):
 
     pwsh -File Workspace/tools/session/session.ps1 -Slot mptest -Build _wt-Based-<topic> -Profile main -NoApp
-    pwsh -File <this worktree>/Tests/mapexpansions-recommended.ps1 [-Slot mptest]
+    pwsh -File <this worktree>/Tests/mapexpansions-recommended.ps1 [-Slot mptest] [-MissingCase] [-S1ApiMissingCase]
 #>
 param(
     [string]$Slot = 'mptest',
     [string[]]$Versions = @('1.1.0', '1.2.0'),
     # Also start once without Personnel: Based must stay off and name the missing mod.
-    [switch]$MissingCase
+    [switch]$MissingCase,
+    # Also start once without the S1API DLL: Based must not crash and Ming must name S1API.
+    [switch]$S1ApiMissingCase
 )
 $ErrorActionPreference = 'Stop'
 $root = 'F:\Projects\Mods\Schedule1'
@@ -92,6 +94,36 @@ if ($MissingCase) {
     finally {
         Stop-Slot
         if (Test-Path $parked) { Move-Item $parked $personnel -Force; Write-Host "Personnel.dll back in $personnel" }
+    }
+}
+if ($S1ApiMissingCase) {
+    # Without the S1API DLL Based must still load, name S1API through Ming and leave the game alone.
+    Stop-Slot
+    $s1api = Join-Path $game 'Mods\S1API.Il2Cpp.MelonLoader.dll'
+    $parked = Join-Path $work 'S1API.Il2Cpp.MelonLoader.dll'
+    if (Test-Path $s1api) { Move-Item $s1api $parked -Force } else { Check "S1API missing: S1API DLL was in the slot" $false $s1api }
+    try {
+        pwsh -File (Join-Path $root 'Workspace\tools\session\session.ps1') -Slot $Slot -KeepSlot -NoApp
+        # The vendor is bound a few seconds after the save is loaded.
+        $deadline = (Get-Date).AddSeconds(60)
+        do {
+            $lines = Get-Content $log
+            $bound = $lines | Where-Object { $_ -match "ming's dialogue names the missing mods\." }
+            if ($bound) { break }
+            Start-Sleep -Seconds 2
+        } while ((Get-Date) -lt $deadline)
+        $off = $lines | Where-Object { $_ -match 'Based stays off: ' }
+        $off | ForEach-Object { Write-Host "  $_" }
+        Check "S1API missing: Based stays off and names S1API" ([bool]($off | Where-Object { $_ -match 'S1API \(Forked by Bars\) (is not installed|ist nicht installiert)' })) ($off -join ' | ')
+        Check "S1API missing: no type initializer failure" (-not ($lines | Where-Object { $_ -match 'TypeInitializationException.*Based|Based\.Mod\.\.cctor' })) 'TypeInitializationException in Based'
+        $missingAssembly = $lines | Where-Object { $_ -match "\[ERROR\] \[Based\].*Could not load file or assembly 'S1API" }
+        Check "S1API missing: Based never reaches for S1API" (-not $missingAssembly) ($missingAssembly -join ' | ')
+        Check "S1API missing: Based patches removed" ([bool]($lines | Where-Object { $_ -match "Removed Based's patches" })) 'no unpatch line'
+        Check "S1API missing: Ming names the missing mods" ([bool]$bound) 'no binding line within 60 s'
+    }
+    finally {
+        Stop-Slot
+        if (Test-Path $parked) { Move-Item $parked $s1api -Force; Write-Host "S1API DLL back in $s1api" }
     }
 }
 Stop-Slot
