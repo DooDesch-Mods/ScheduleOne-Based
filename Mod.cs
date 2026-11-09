@@ -40,7 +40,13 @@ public sealed class Mod : MelonMod
     private const float PlanRequestTimeout = 3f;
     private const float HoldCheckInterval = 1f;
 
-    internal static readonly IReadOnlyList<SiteDefinition> Sites = new[] { MingSite.Create() };
+    // Built on first use, not in the type initializer: the site types need S1API, and the missing-mods check has to
+    // run first so a missing S1API still reaches the player.
+    private static IReadOnlyList<SiteDefinition>? _sites;
+    internal static IReadOnlyList<SiteDefinition> Sites => _sites ??= new[] { MingSite.Create() };
+    // The vendors that name missing mods, without building the sites.
+    private static readonly (string NpcId, string ContainerId, string Choice)[] NoticeVendors =
+        { (MingSite.VendorNpcId, MingSite.VendorContainerId, MingSite.RequestChoice) };
     internal static Mod Instance { get; private set; } = null!;
     internal static UpgradeEngine Engine { get; private set; } = null!;
     // Set when the world and the saved state no longer match; only this blocks saving.
@@ -60,6 +66,7 @@ public sealed class Mod : MelonMod
     private static readonly Dictionary<int, string> PeerSnapshots = new();
     private static readonly List<BuildableItem> Outlined = new();
     private static readonly HashSet<string> ContainedErrors = new();
+    private static readonly HashSet<string> NoticeBound = new(), NoticeMissing = new();
     private static SiteDefinition? _planRequest;
     private static float _planRequestedAt, _nextBind, _nextRequest, _nextHoldCheck, _loadedAt = -1;
     private static bool _main, _snapshotReceived, _worldDirty = true, _initialized, _waitingNetwork, _saveWarningShown;
@@ -74,12 +81,17 @@ public sealed class Mod : MelonMod
     {
         Instance = this;
         Text.Register();
-        SiteDefinition.ValidateAll(Sites);
-        Engine = new UpgradeEngine(Sites.Select(s => s.Base), new HostAuthority());
         MissingMods.Check();
         if (MissingMods.Any)
         {
-            LoggerInstance.Error("Based stays off: " + MissingMods.Line + " " + string.Join(", ", Sites.Select(s => s.VendorNpcId).Distinct()) + " names them in the dialogue.");
+            LoggerInstance.Error("Based stays off: " + MissingMods.Line + " " + string.Join(", ", NoticeVendors.Select(v => v.NpcId).Distinct()) + " names them in the dialogue.");
+            // The patches serve the expansion and its save, and without S1API neither exists; several of them reach
+            // S1API types and would throw on every call.
+            if (!MissingMods.S1ApiLoaded)
+            {
+                HarmonyInstance.UnpatchSelf();
+                LoggerInstance.Msg("Removed Based's patches; the game runs unchanged apart from the notice.");
+            }
             return;
         }
         InitializeWithRequiredMods();
@@ -90,6 +102,8 @@ public sealed class Mod : MelonMod
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void InitializeWithRequiredMods()
     {
+        SiteDefinition.ValidateAll(Sites);
+        Engine = new UpgradeEngine(Sites.Select(s => s.Base), new HostAuthority());
         foreach (var site in Sites) site.RegisterWorld();
 #if DEBUG
         DockProbe.Register();
@@ -107,13 +121,20 @@ public sealed class Mod : MelonMod
 
     public override void OnSceneWasLoaded(int buildIndex, string sceneName)
     {
-        if (sceneName == "Main") RegisterItems();
+        // The folder item is an S1API item; without S1API there is nothing to register it with.
+        if (sceneName == "Main" && MissingMods.S1ApiLoaded) RegisterItems();
         if (MissingMods.Any)
         {
             MissingModsSceneLoaded(sceneName);
             return;
         }
-        if (!_initialized) return;
+        if (_initialized) InitializedSceneLoaded(sceneName);
+    }
+
+    // The runtime compiles a method as a whole, so the S1API types of the normal path stay out of OnSceneWasLoaded.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void InitializedSceneLoaded(string sceneName)
+    {
         if (sceneName == "Menu")
         {
             _main = false;
@@ -153,6 +174,7 @@ public sealed class Mod : MelonMod
 
     // The game drops every runtime item before a scene change, so the folder comes back with each Main scene. A joining
     // client reads items from the host's spawn data before the scene's network objects run Start, so this cannot wait.
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static void RegisterItems()
     {
         try { ProjectFolder.Register(); }
@@ -165,8 +187,8 @@ public sealed class Mod : MelonMod
         if (sceneName == "Menu")
         {
             _main = false;
-            BasedSave.BeginLoad();
-            Vendors.Clear();
+            if (MissingMods.S1ApiLoaded) BeginSaveLoad();
+            NoticeBound.Clear();
             ContainedErrors.Clear();
             Failure = "";
             _saveWarningShown = false;
@@ -177,6 +199,10 @@ public sealed class Mod : MelonMod
             _nextBind = 0;
         }
     }
+
+    // BasedSave is an S1API saveable; this method keeps it out of callers that run without S1API.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void BeginSaveLoad() => BasedSave.BeginLoad();
 
     public override void OnUpdate()
     {
@@ -193,6 +219,7 @@ public sealed class Mod : MelonMod
 #endif
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static void Frame()
     {
         try
@@ -334,14 +361,18 @@ public sealed class Mod : MelonMod
             if (LoadManager.Instance?.IsGameLoaded != true || Time.unscaledTime < _nextBind) return;
             if (_loadedAt < 0) _loadedAt = Time.unscaledTime;
             _nextBind = Time.unscaledTime + 1f;
-            foreach (var site in Sites)
+            foreach (var vendor in NoticeVendors)
             {
-                if (Vendors.ContainsKey(site)) continue;
-                var vendor = AddVendorChoice(site, MissingMods.Line, () => Log("The player asked for the expansion: " + MissingMods.Line));
-                if (vendor == null) continue;
-                vendor.Choice.Enabled = true;
-                vendor.Choice.ChoiceText = Text.T(site.RequestChoice);
-                Log(site.VendorNpcId + "'s dialogue names the missing mods.");
+                if (NoticeBound.Contains(vendor.NpcId)) continue;
+                if (!MissingModsNotice.Bind(vendor.NpcId, vendor.ContainerId, Text.T(vendor.Choice), MissingMods.Line,
+                        line => Log("The player asked for the expansion: " + line)))
+                {
+                    if (Time.unscaledTime - _loadedAt > VendorWarnAfter && NoticeMissing.Add(vendor.NpcId))
+                        Warn(vendor.NpcId + " is missing from this save; nobody names the missing mods.");
+                    continue;
+                }
+                NoticeBound.Add(vendor.NpcId);
+                Log(vendor.NpcId + "'s dialogue names the missing mods.");
             }
         }
         catch (Exception error) { Contain("missing mods notice", error); }

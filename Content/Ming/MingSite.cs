@@ -4,14 +4,19 @@ namespace Based.Content.Ming;
 
 internal static class MingSite
 {
+    // Read by the missing-mods notice, which must not run Create: the site types need S1API.
+    internal const string VendorNpcId = "ming";
+    internal const string VendorContainerId = "based_ming_plan";
+    internal const string RequestChoice = "I want to expand the room.";
+
     public static SiteDefinition Create() => new()
     {
         Base = MingDefinition.Create(),
         UpgradeId = MingDefinition.UpgradeId,
         PropertyName = "Sweatshop",
-        VendorNpcId = "ming",
-        VendorContainerId = "based_ming_plan",
-        RequestChoice = "I want to expand the room.",
+        VendorNpcId = VendorNpcId,
+        VendorContainerId = VendorContainerId,
+        RequestChoice = RequestChoice,
         ProgressChoice = "How is the construction going?",
         VendorLine = "Oh yes, very good! Bigger room, yes? Here is the plan.",
         Title = "Expansion: Sweatshop",
