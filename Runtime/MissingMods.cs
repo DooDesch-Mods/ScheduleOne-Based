@@ -10,7 +10,8 @@ namespace Based.Runtime;
 // when the calling method is compiled, not at the line that uses it.
 //
 // The minimums are the versions in thunderstore/manifest.json; below them Based stays off. MapExpansions is the
-// exception: Based runs from 1.0.0 and only warns below the manifest version.
+// exception: Based runs from 1.1.0, the first release with WorldStateDefinition.NavigationExistingFloor, and only
+// warns below the manifest version.
 internal static class MissingMods
 {
     internal static string Line { get; private set; } = "";
@@ -24,7 +25,7 @@ internal static class MissingMods
         if (!S1ApiLoaded) MelonLoader.MelonLogger.Warning("The S1API assembly is not loaded; only the missing-mods notice runs.");
         Line = Require.Check(new Need("MapExpansions")
         {
-            Minimum = "1.0.0",
+            Minimum = "1.1.0",
             Effect = "employees can ignore storage, drying racks and the loading dock in the new part of the Sweatshop, and the corner under the moved sink stays blocked when another mod removes the sink",
         }) ?? "";
     }
