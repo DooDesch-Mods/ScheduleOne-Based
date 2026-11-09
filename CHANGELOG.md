@@ -4,6 +4,13 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.1.5] - 2026-11-09
+
+### Fixed
+
+- Without S1API installed, Mrs. Ming says which mod is missing instead of Based failing silently.
+- With MapExpansions older than 1.1.0, Based stays off and names the update instead of the Ming expansion failing.
+
 ## [1.1.4] - 2026-11-06
 
 ### Fixed
