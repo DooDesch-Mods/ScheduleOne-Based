@@ -3,7 +3,7 @@ using MelonLoader;
 
 namespace Based.Runtime;
 
-// Based runs from MapExpansions 1.0.0, so a member added later may only be touched by a method that is called once the
+// Based runs from MapExpansions 1.1.0, so a member added later may only be touched by a method that is called once the
 // loaded version has it. The check reads the version from MapExpansions' MelonInfo, like Require does, and compares
 // numbers only: "1.2.0-beta.1" counts as 1.2.0 and a development build (0.0.0) counts as current.
 internal static class MapExpansionsFeatures
