@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -139,7 +139,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     else PackTestDoorway();
                     break;
                 case "phase":
-                    JumpToPhase(args.Count > 1 ? args[1] : "");
+                    JumpToPhase(args.Count > 1 ? args[1] : "", args.Count > 2 ? args[2] : "");
                     break;
                 case "hold":
                     Hold(args.Count > 1 ? int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 0);
@@ -869,16 +869,18 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // Moves the upgrade straight to a stage, so one run can look at every construction state.
-    // "phase <phase>" moves the site's first upgrade; "phase <upgradeId>:<phase>" moves a follow-up. A follow-up finishes
-    // everything it needs first and resets the site's other builds, since the engine allows one construction per base.
-    private static void JumpToPhase(string argument)
+    // "phase <phase>" moves the site's first upgrade; "phase <upgradeId>:<phase>" or "phase <phase> <upgrade>" moves a
+    // follow-up, named in full or by its last part ("carport" for "ray.bungalow-carport"). A follow-up finishes
+    // everything it needs first and resets a build still under construction, since the engine allows one per base.
+    private static void JumpToPhase(string argument, string upgradeArg)
     {
         if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host can change the construction state.");
         int colon = argument.LastIndexOf(':');
-        string upgradeId = colon > 0 ? argument.Substring(0, colon) : _site.UpgradeId;
+        if (colon > 0) upgradeArg = argument.Substring(0, colon);
         string phase = colon > 0 ? argument.Substring(colon + 1) : argument;
-        if (!_site.BuildIds.Contains(upgradeId))
-            throw new ArgumentException("baseddiag phase [upgradeId:]phase; " + _site.Base.Id + " builds " + string.Join(", ", _site.BuildIds));
+        string upgradeId = upgradeArg.Length == 0 ? _site.UpgradeId
+            : _site.BuildIds.FirstOrDefault(id => id == upgradeArg || id.EndsWith("-" + upgradeArg, StringComparison.Ordinal))
+              ?? throw new ArgumentException("baseddiag phase [upgradeId:]phase; " + _site.Base.Id + " builds " + string.Join(", ", _site.BuildIds));
         var state = Mod.Engine.ExportState();
         var upgrade = state.Upgrades.First(u => u.BaseId == _site.Base.Id && u.UpgradeId == upgradeId);
         var definition = _site.UpgradeOf(upgradeId);
@@ -898,7 +900,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     other.Stage = UpgradeStage.Complete;
                     other.CompletedCycles = _site.UpgradeOf(other.UpgradeId).ConstructionCycles;
                 }
-                else
+                else if (other.Stage == UpgradeStage.Constructing)
                 {
                     other.Stage = UpgradeStage.RightsMissing;
                     other.CompletedCycles = 0;
@@ -906,7 +908,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     other.ConstructionPaid = 0;
                 }
             }
-            Mod.Log("baseddiag: phase: " + upgradeId + " needs " + (needed.Count == 0 ? "nothing" : string.Join(", ", needed)) + "; those are complete, the other builds reset.");
+            Mod.Log("baseddiag: phase: " + upgradeId + " needs " + (needed.Count == 0 ? "nothing" : string.Join(", ", needed)) + "; those are complete, builds under construction reset, finished ones stay.");
         }
         // The named stages around the construction, and each phase at the night it starts.
         var stages = new List<(string Id, UpgradeStage Stage, int Cycles)>

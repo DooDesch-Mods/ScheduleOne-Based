@@ -31,6 +31,7 @@ internal abstract class ConstructionCrew : ISiteCrew
     private Action<string> _warn = MelonLoader.MelonLogger.Warning;
     private UpgradeStage _stage;
     private string? _phase;
+    private string _updatedUpgrade = "";
     private string? _audioWarning;
     private AudioClip[]? _clips;
     private bool _initialized;
@@ -52,7 +53,22 @@ internal abstract class ConstructionCrew : ISiteCrew
     protected abstract Vector3 ContactPoint(int index, bool secondary, string? phase);
     protected abstract bool WantsHammer(int index, bool secondary, string? phase);
 
-    protected bool WorkingHours => _stage == UpgradeStage.Constructing && _phase != null && NetworkSingleton<TimeManager>.InstanceExists &&
+    // The build the crew follows: the one under construction, otherwise the site's main upgrade.
+    protected string Upgrade { get; private set; } = "";
+    // The Personnel region the workers are registered in.
+    protected virtual string Region => "Northtown";
+    // Whether the crew is on site while the followed build stands at this stage and phase.
+    protected virtual bool WorksOn(UpgradeStage stage, string? phase) => stage == UpgradeStage.Constructing && phase != null;
+    // Whether this worker takes part in today's job; the others stay out of sight.
+    protected virtual bool OnJob(int index, string? phase) => true;
+    // The worker who carries the plan, takes tips and gives the build's line; -1 for a crew without one.
+    protected virtual int ForemanIndex => 0;
+    // What the worker swings at the contact point.
+    protected virtual string Tool(int index) => "Avatar/Equippables/Hammer";
+    // Whether the worker reaches for material between bursts of work.
+    protected virtual bool GrabsBetweenSwings(int index) => index != ForemanIndex;
+
+    protected bool WorkingHours => WorksOn(_stage, _phase) && NetworkSingleton<TimeManager>.InstanceExists &&
         NetworkSingleton<TimeManager>.Instance.CurrentTime >= 800 && NetworkSingleton<TimeManager>.Instance.CurrentTime < 1800;
 
     protected bool IsVisible(string id) => Workers.TryGetValue(id, out var worker) && worker.Visible;
@@ -67,7 +83,7 @@ internal abstract class ConstructionCrew : ISiteCrew
     public void Diagnostics()
     {
         _info(Tag + " diagnostics: attached=" + Workers.Count + "/" + Ids.Length + ", active=" + ActiveCount +
-            ", phase=" + (_phase ?? "none") + ", stage=" + _stage + ", pending=" + PendingSpawns.Count);
+            ", upgrade=" + Upgrade + ", phase=" + (_phase ?? "none") + ", stage=" + _stage + ", pending=" + PendingSpawns.Count);
         foreach (var worker in Workers.Values.OrderBy(w => w.Npc.ID)) worker.Diagnostics();
     }
 #endif
@@ -83,7 +99,7 @@ internal abstract class ConstructionCrew : ISiteCrew
             var definition = new NpcDef
             {
                 Id = Ids[i], SaveId = Ids[i], Source = "Based", DisplayName = Names[i],
-                Spawn = new NpcSpawn { Physical = true, Auto = false, Region = "Northtown", Position = SpawnPosition },
+                Spawn = new NpcSpawn { Physical = true, Auto = false, Region = Region, Position = SpawnPosition },
                 Contact = new NpcContact { Visible = false, MapMarker = false },
                 Behavior = new NpcBehavior { Aggression = 0, Conversation = "none", MaxHealth = 100, Scale = 1 },
                 Appearance = CreateAppearance(i)
@@ -94,11 +110,15 @@ internal abstract class ConstructionCrew : ISiteCrew
         _info(Tag + ": " + Ids.Length + " stable Personnel definitions registered; S1API owns instantiation and networking");
     }
 
+    // Called before Update when the site knows which build the crew follows.
+    public void Follow(string upgrade) => Upgrade = upgrade;
+
     public void Update(UpgradeStage stage, string? phase)
     {
-        bool changed = stage != _stage || phase != _phase;
+        bool changed = stage != _stage || phase != _phase || Upgrade != _updatedUpgrade;
         _stage = stage;
         _phase = phase;
+        _updatedUpgrade = Upgrade;
         if (!changed) return;
         foreach (var worker in Workers.Values)
         {
@@ -106,7 +126,7 @@ internal abstract class ConstructionCrew : ISiteCrew
             worker.ResetWork();
             worker.RefreshDialogue();
         }
-        _info(Tag + ": state=" + stage + ", phase=" + (phase ?? "none"));
+        _info(Tag + ": state=" + stage + ", phase=" + (phase ?? "none") + (Upgrade.Length > 0 ? ", upgrade=" + Upgrade : ""));
     }
 
     public void Tick()
@@ -118,7 +138,7 @@ internal abstract class ConstructionCrew : ISiteCrew
             ScanForSpawnedWorkers();
         }
         bool working = WorkingHours;
-        foreach (var worker in Workers.Values) worker.Tick(working);
+        foreach (var worker in Workers.Values) worker.Tick(working && OnJob(worker.Index, _phase));
     }
 
     // S1API can hydrate client wrappers without calling a user constructor or OnCreated, so the list is the only signal.
@@ -186,7 +206,7 @@ internal abstract class ConstructionCrew : ISiteCrew
         if (index < 0) throw new InvalidOperationException("Unknown construction worker identity " + npc.ID);
         var worker = new Worker(this, npc, index);
         Workers.Add(npc.ID, worker);
-        if (index == 0)
+        if (index == ForemanIndex)
         {
             // The tip conversation depends on the cash and product the player carries, so it is built as the talk starts.
             Based.Runtime.Tips.Bind(BaseId, npc);
@@ -205,6 +225,8 @@ internal abstract class ConstructionCrew : ISiteCrew
         _audioWarning = null;
         _stage = UpgradeStage.RightsMissing;
         _phase = null;
+        Upgrade = "";
+        _updatedUpgrade = "";
     }
 
     private AudioClip[] Clips()
@@ -233,6 +255,7 @@ internal abstract class ConstructionCrew : ISiteCrew
         internal readonly Personnel.PersonnelNpc Npc;
         private readonly NativeNpc _native;
         private readonly int _index;
+        internal int Index => _index;
         private readonly List<(Collider Collider, bool Enabled)> _colliders = new();
         private readonly AudioSource _audio;
         private readonly Animator? _animator;
@@ -332,7 +355,7 @@ internal abstract class ConstructionCrew : ISiteCrew
                 string line = Based.UI.Text.T(_crew.Line(_index, _crew._phase));
                 Npc.Dialogue.BuildAndRegisterContainer("based_construction", builder =>
                 {
-                    if (_index == 0) Based.Runtime.Tips.Build(_crew.BaseId, builder, line);
+                    if (_index == _crew.ForemanIndex) Based.Runtime.Tips.Build(_crew.BaseId, builder, line);
                     else builder.AddNode("ENTRY", line);
                 });
                 if (!Npc.Dialogue.UseContainerOnInteract("based_construction")) Failure("construction dialogue could not bind to interaction");
@@ -491,7 +514,7 @@ internal abstract class ConstructionCrew : ISiteCrew
             }
             SetVisible(true);
             if (TickBreak()) return;
-            if (_index == 0 && !_planEquipped)
+            if (_index == _crew.ForemanIndex && !_planEquipped)
             {
                 Equip("tools/managementclipboard/ManagementClipboard_AvatarEquippable");
                 _planEquipped = true;
@@ -548,7 +571,7 @@ internal abstract class ConstructionCrew : ISiteCrew
             _swinging = !_swinging;
             _rhythmSwitch = Time.time + (_swinging ? UnityEngine.Random.Range(SwingMin, SwingMax) : UnityEngine.Random.Range(RestMin, RestMax));
             if (_hammering) _native.SetAnimationBool_Networked(null, "UseHammer", _swinging);
-            if (!_swinging && _index != 0) _native.SetAnimationTrigger_Networked(null, "GrabItem");
+            if (!_swinging && _crew.GrabsBetweenSwings(_index)) _native.SetAnimationTrigger_Networked(null, "GrabItem");
         }
 
         private void GrantPropertyAccess()
@@ -682,7 +705,7 @@ internal abstract class ConstructionCrew : ISiteCrew
         {
             if (_hammering == enabled || !InstanceFinder.IsServer) return;
             _hammering = enabled;
-            Equip(enabled ? "Avatar/Equippables/Hammer" : "");
+            Equip(enabled ? _crew.Tool(_index) : "");
             _native.SetAnimationBool_Networked(null, "UseHammer", enabled && _swinging);
             _previousNormalized = -1;
             _hammerLayer = -1;
@@ -775,6 +798,7 @@ internal abstract class ConstructionCrew : ISiteCrew
                 },
                 position = new[] { position.x, position.y, position.z },
                 visible = Visible,
+                upgrade = _crew.Upgrade,
                 phase = _crew._phase,
                 anchor = _targetValid ? new[] { _resolvedAnchor.x, _resolvedAnchor.y, _resolvedAnchor.z } : null,
                 atAnchor = AtAssignedAnchor(),

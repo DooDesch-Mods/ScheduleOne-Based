@@ -347,10 +347,10 @@ public sealed class Mod : MelonMod
         if (site.Crew == null) return;
         try
         {
-            // The crew works the stages of a build; one without stages goes up in a night without it.
-            string? building = Constructing(site);
-            string followed = building != null && site.UpgradeOf(building).Phases.Count > 0 ? building : site.UpgradeId;
+            // The crew follows the build under construction; the crew decides which builds and stages it works on.
+            string followed = Constructing(site) ?? site.UpgradeId;
             var state = Engine.GetUpgrade(site.Base.Id, followed);
+            if (site.Crew is Content.SiteCrews.ConstructionCrew crew) crew.Follow(followed);
             site.Crew.Update(state.Stage, Engine.CurrentPhase(state.BaseId, state.UpgradeId));
             site.Crew.Tick();
         }

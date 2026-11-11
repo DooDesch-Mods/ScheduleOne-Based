@@ -69,6 +69,7 @@ internal static class Text
         ["We're opening the east room today."] = "Heute öffnen wir den Ostraum.",
         ["We're finishing the south room today."] = "Heute machen wir den Südraum fertig.",
         ["Talk to Ray about the expansion."] = "Sprich mit Ray über den Ausbau.",
+        ["These pines have to go before the roof goes up."] = "Die Kiefern müssen weg, bevor das Dach draufkommt.",
         ["The payment journal is unavailable."] = "Das Zahlungsjournal ist nicht verfügbar.",
         ["A payment could not be confirmed."] = "Eine Zahlung konnte nicht bestätigt werden.",
         ["An unconfirmed payment is being retried."] = "Eine unbestätigte Zahlung wird erneut versucht.",
