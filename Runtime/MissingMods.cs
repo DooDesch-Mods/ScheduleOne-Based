@@ -21,7 +21,8 @@ internal static class MissingMods
 
     internal static void Check()
     {
-        S1ApiLoaded = AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "S1API.Il2Cpp.MelonLoader");
+        // The file is S1API.Il2Cpp.MelonLoader.dll, but the assembly inside it is named S1API.
+        S1ApiLoaded = AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name is "S1API" or "S1API.Il2Cpp.MelonLoader");
         if (!S1ApiLoaded) MelonLoader.MelonLogger.Warning("The S1API assembly is not loaded; only the missing-mods notice runs.");
         Line = Require.Check(new Need("MapExpansions")
         {
