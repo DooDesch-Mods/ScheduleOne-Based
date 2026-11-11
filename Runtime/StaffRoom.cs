@@ -17,19 +17,21 @@ internal static class StaffRoom
 
     internal static void Reset() => VanillaLimits.Clear();
 
-    internal static void Apply(SiteDefinition site, UpgradeStage stage)
+    internal static void Apply(SiteDefinition site)
     {
+        UpgradeStage StageOf(string id) => Mod.StageOf(site, id);
         var property = Singleton<PropertyManager>.Instance?.GetProperty(site.Base.PropertyId);
         if (property == null)
         {
-            if (stage == UpgradeStage.Complete) throw new InvalidOperationException("Property " + site.Base.PropertyId + " is not loaded.");
+            // Any limit above the game's 1 means a finished room is waiting for its employees.
+            if (site.StaffLimit(1, StageOf) > 1) throw new InvalidOperationException("Property " + site.Base.PropertyId + " is not loaded.");
             Mod.Log("Employee limit of " + site.Base.PropertyId + " not set: the property is not loaded yet.");
             return;
         }
         int vanilla = VanillaLimit(property);
-        int wanted = stage == UpgradeStage.Complete ? StaffLimit.Expanded(vanilla) : vanilla;
+        int wanted = site.StaffLimit(vanilla, StageOf);
         // Employee.AssignProperty indexes the idle points without a check, so the places come before the limit.
-        if (stage == UpgradeStage.Complete) AddPlaces(site, property, wanted);
+        if (wanted > vanilla) AddPlaces(site, property, wanted);
         if (property.EmployeeCapacity == wanted) return;
         property.EmployeeCapacity = wanted;
         Mod.Log("Employee limit of " + site.Base.PropertyId + " is now " + wanted + " (game value " + vanilla + ").");
@@ -39,7 +41,9 @@ internal static class StaffRoom
     internal static void EnsurePlaces(Property property)
     {
         var site = Mod.Sites.FirstOrDefault(s => s.Base.PropertyId == property.PropertyCode);
-        if (site != null) AddPlaces(site, property, StaffLimit.Expanded(VanillaLimit(property)));
+        if (site == null) return;
+        int vanilla = VanillaLimit(property), most = site.MaxStaffLimit(vanilla);
+        if (most > vanilla) AddPlaces(site, property, most);
     }
 
     private static int VanillaLimit(Property property)

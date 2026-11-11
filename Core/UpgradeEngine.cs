@@ -111,7 +111,7 @@ public sealed class UpgradeEngine
             if (record.Command.Kind == PurchaseKind.Rights)
             {
                 state.RightsPaid = request.Amount;
-                state.Stage = UpgradeStage.RightsOwned;
+                state.Stage = FindDefinition(record.Command.BaseId, record.Command.UpgradeId).IsPermit ? UpgradeStage.Complete : UpgradeStage.RightsOwned;
             }
             else
             {
@@ -256,6 +256,7 @@ public sealed class UpgradeEngine
         bool rightsFree = definition.RightsPrice == 0;
         if (command.Kind == PurchaseKind.Rights && rightsFree) return "rights-not-sold";
         if (command.Kind == PurchaseKind.Rights && state.Stage != UpgradeStage.RightsMissing) return "rights-already-owned";
+        if (command.Kind == PurchaseKind.Construction && definition.IsPermit) return "permit-has-no-construction";
         if (command.Kind == PurchaseKind.Construction && state.Stage != UpgradeStage.RightsOwned &&
             !(rightsFree && state.Stage == UpgradeStage.RightsMissing)) return "construction-unavailable";
         if (command.Kind == PurchaseKind.Construction && _state.Upgrades.Any(s => s.BaseId == command.BaseId && s.Stage == UpgradeStage.Constructing)) return "construction-active";
@@ -312,8 +313,8 @@ public sealed class UpgradeEngine
             if (!Enum.IsDefined(typeof(UpgradeStage), upgrade.Stage) || upgrade.CompletedCycles < 0 ||
                 upgrade.RightsPaid < 0 || upgrade.ConstructionPaid < 0 || upgrade.LastSleepCycle < -1 || upgrade.LastSleepCycle > state.LastSleepCycle)
                 throw new ArgumentException("Invalid saved upgrade values.");
-            // Completion always takes at least one cycle, so zero cannot come from a changed cycle count.
-            if (upgrade.Stage == UpgradeStage.Complete && upgrade.CompletedCycles == 0 ||
+            // Construction takes at least one cycle, so zero cannot come from a changed cycle count; a permit completes on payment.
+            if (upgrade.Stage == UpgradeStage.Complete && upgrade.CompletedCycles == 0 && !definition.IsPermit ||
                 upgrade.Stage < UpgradeStage.Constructing && upgrade.CompletedCycles != 0)
                 throw new ArgumentException("Saved phase and completion disagree.");
             if (upgrade.Stage == UpgradeStage.RightsMissing && upgrade.RightsPaid != 0 ||

@@ -21,7 +21,7 @@ internal static class BuildPlan
     private static GameObject? _root;
     private static SurfaceHandle? _surface;
     private static bool _closeRequested;
-    private static string _notice = "", _lastPushed = "", _noticeUpgrade = "";
+    private static string _notice = "", _lastPushed = "", _noticeUpgrade = "", _selected = "";
     private static UpgradeStage _noticeStage;
     private static float _nextPush;
     private static Il2CppScheduleOne.State.State? _gameState;
@@ -55,8 +55,10 @@ internal static class BuildPlan
         Site = site;
         Standalone = standalone;
         _notice = _lastPushed = "";
+        // A menu opens on the build under construction, or on the list.
+        _selected = site.Menu ? Mod.Constructing(site) ?? "" : "";
         Payments.ClearSettledStatus();
-        Mod.PlanOpened(site);
+        Mod.PlanOpened(site, Shown(site, wall: false));
         if (standalone) PushGameState();
         _surface = Surfaces.Mount(rect, SurfaceId, "Based.Assets.based", designShortSide: 540)
             .OnCall("plan.state", _ => State(site))
@@ -75,9 +77,29 @@ internal static class BuildPlan
                 }
                 Payments.ClearSettledStatus();
                 string upgradeId = RememberNoticeStage(site);
+                if (upgradeId.Length == 0)
+                {
+                    Mod.Warn("Construction plan sent a purchase while it shows the list of builds.");
+                    return "invalid-purchase";
+                }
                 _notice = Mod.Purchase(site, upgradeId, kind == "rights" ? PurchaseKind.Rights : PurchaseKind.Construction);
                 if (kind == "rights" && upgradeId == site.UpgradeId && _notice.Length == 0) ProjectFolder.GiveAfterPayment(site);
                 return _notice;
+            })
+            .OnCall("plan.select", upgradeId =>
+            {
+                upgradeId ??= "";
+                if (!site.Menu || upgradeId.Length > 0 && site.FollowUp(upgradeId) == null)
+                {
+                    Mod.Warn("Construction plan sent an unknown build: '" + upgradeId + "' for " + site.Base.Id + ".");
+                    return "invalid-build";
+                }
+                _selected = upgradeId;
+                _notice = "";
+                Payments.ClearSettledStatus();
+                Mod.PlanShows(site, Shown(site, wall: false));
+                Mod.Log("Construction plan of " + site.Base.Id + " shows " + (upgradeId.Length > 0 ? upgradeId : "the list of builds") + ".");
+                return "ok";
             })
             .OnCall("plan.close", _ => { _closeRequested = true; return "ok"; });
         Mod.Log("Construction plan opened for " + site.Base.Id + ".");
@@ -165,15 +187,76 @@ internal static class BuildPlan
     // A refusal belongs to the stage and upgrade it was given for, so it ends when either moves on.
     private static string RememberNoticeStage(SiteDefinition site)
     {
-        string upgradeId = Mod.ActiveUpgradeId(site);
+        string upgradeId = Shown(site, wall: false);
         _noticeUpgrade = upgradeId;
-        _noticeStage = Mod.Engine.GetUpgrade(site.Base.Id, upgradeId).Stage;
+        _noticeStage = upgradeId.Length > 0 ? Mod.Engine.GetUpgrade(site.Base.Id, upgradeId).Stage : default;
         return upgradeId;
+    }
+
+    // The upgrade the page shows, or empty for a menu's list of builds. A menu shows its permit until it is bought;
+    // the wall page follows the build under construction.
+    private static string Shown(SiteDefinition site, bool wall)
+    {
+        if (!site.Menu) return Mod.ActiveUpgradeId(site);
+        if (Mod.StageOf(site, site.UpgradeId) != UpgradeStage.Complete) return site.UpgradeId;
+        return wall ? Mod.Constructing(site) ?? "" : _selected;
+    }
+
+    // Why a build of a menu cannot be ordered now, or empty. The engine refuses the same purchases.
+    private static string LockReason(SiteDefinition site, string upgradeId)
+    {
+        var stage = Mod.StageOf(site, upgradeId);
+        if (stage is UpgradeStage.Constructing or UpgradeStage.Complete) return "";
+        string? building = Mod.Constructing(site);
+        if (building != null) return Text.T("Locked until {0} is finished.", Text.T(NameOf(site, building)));
+        var missing = site.UpgradeOf(upgradeId).Prerequisites.FirstOrDefault(p => p != site.UpgradeId && Mod.StageOf(site, p) != UpgradeStage.Complete);
+        return missing != null ? Text.T("Needs {0} first.", Text.T(NameOf(site, missing))) : "";
+    }
+
+    private static string NameOf(SiteDefinition site, string upgradeId) => site.FollowUp(upgradeId)?.ListName ?? site.Title;
+
+    private static string Nights(int nights) => nights == 1 ? Text.T("One night") : Text.T("{0} nights", nights);
+
+    // The list of a menu's builds, with the drawing of the property as it stands.
+    private static string MenuState(SiteDefinition site, bool wall)
+    {
+        bool owned = Mod.Owns(site);
+        bool broken = Mod.Failure.Length > 0;
+        return JsonConvert.SerializeObject(new
+        {
+            mode = "menu",
+            title = Text.T(site.Title),
+            wall,
+            hint = Text.T("Pick a build."),
+            builds = site.FollowUps.Select(f =>
+            {
+                var upgrade = site.UpgradeOf(f.UpgradeId);
+                var stage = Mod.StageOf(site, f.UpgradeId);
+                string reason = LockReason(site, f.UpgradeId);
+                return new
+                {
+                    id = f.UpgradeId,
+                    name = Text.T(f.ListName),
+                    price = Price(upgrade.ConstructionPrice),
+                    nights = Nights(upgrade.ConstructionCycles),
+                    staff = f.Staff > 0 ? Text.T("+{0} staff", f.Staff) : "",
+                    state = stage == UpgradeStage.Complete ? "done" : stage == UpgradeStage.Constructing ? "building" : reason.Length > 0 ? "locked" : "open",
+                    status = stage == UpgradeStage.Complete ? Text.T("Finished") : stage == UpgradeStage.Constructing ? Text.T("Under construction") : reason
+                };
+            }).ToArray(),
+            take = !wall && ProjectFolder.Offered(site) ? Text.T("Take the project folder") : "",
+            notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
+                : !owned ? Text.T(site.BuyFirst)
+                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Mod.HeldBy)
+                : _noticeUpgrade.Length == 0 ? _notice : "",
+            drawing = Drawing(site.Plan, UpgradeStage.Complete)
+        });
     }
 
     private static string State(SiteDefinition site, bool readOnly, bool wall)
     {
-        string upgradeId = Mod.ActiveUpgradeId(site);
+        string upgradeId = Shown(site, wall);
+        if (upgradeId.Length == 0) return MenuState(site, wall);
         var followUp = site.FollowUp(upgradeId);
         var state = Mod.Engine.GetUpgrade(site.Base.Id, upgradeId);
         var upgrade = site.UpgradeOf(upgradeId);
@@ -181,15 +264,21 @@ internal static class BuildPlan
         string phase = Mod.Engine.CurrentPhase(state.BaseId, state.UpgradeId) ?? "";
         int nights = Math.Max(0, upgrade.ConstructionCycles - state.CompletedCycles);
         bool ordering = state.Stage is UpgradeStage.RightsMissing or UpgradeStage.RightsOwned;
-        // The vendor sells the first expansion; the folder orders everything after it. The wall page only reports.
+        bool permit = upgrade.IsPermit;
+        string reason = site.Menu && followUp != null ? LockReason(site, upgradeId) : "";
+        // The vendor sells the first upgrade; the folder orders everything after it. The wall page only reports.
         bool locked = wall || readOnly && followUp == null;
         bool rightsSold = upgrade.RightsPrice > 0;
         bool buyRights = rightsSold && state.Stage == UpgradeStage.RightsMissing;
         string done = followUp?.Done ?? "Ready to move in";
         bool owned = Mod.Owns(site);
         bool broken = Mod.Failure.Length > 0;
+        // A build with its own drawing marks its own openings; the others mark the first upgrade's.
+        bool ownPlan = followUp is { Plan.Count: > 0 };
         return JsonConvert.SerializeObject(new
         {
+            mode = "plan",
+            back = site.Menu && followUp != null && !wall ? Text.T("All builds") : "",
             title = Text.T(followUp?.Title ?? site.Title),
             status = state.Stage switch
             {
@@ -203,39 +292,41 @@ internal static class BuildPlan
             ordering,
             wall,
             canOrder = ordering && !locked,
-            canBuy = owned && !broken && ordering && !locked,
-            take = !locked && followUp == null && ProjectFolder.Offered(site, state.Stage) ? Text.T("Take the project folder") : "",
-            buy = buyRights
-                ? Text.T("Buy rights") + " - " + Price(upgrade.RightsPrice)
+            canBuy = owned && !broken && ordering && !locked && reason.Length == 0,
+            take = !locked && (site.Menu || followUp == null) && ProjectFolder.Offered(site) ? Text.T("Take the project folder") : "",
+            buy = permit ? Text.T("Buy permit") + " - " + Price(upgrade.RightsPrice)
+                : buyRights ? Text.T("Buy rights") + " - " + Price(upgrade.RightsPrice)
                 : Text.T("Order construction") + " - " + Price(upgrade.ConstructionPrice),
             rightsShown = rightsSold,
-            rightsLabel = Text.T("Expansion rights"),
+            rightsLabel = Text.T(permit ? "Building permit" : "Expansion rights"),
             rights = Price(upgrade.RightsPrice),
             rightsPaid = state.Stage != UpgradeStage.RightsMissing,
+            constructionShown = !permit,
             constructionLabel = Text.T("Construction"),
             construction = Price(upgrade.ConstructionPrice),
             constructionPaid = state.Stage >= UpgradeStage.Constructing,
-            duration = upgrade.ConstructionCycles == 1 ? Text.T("One night of work") : Text.T("{0} nights of work", upgrade.ConstructionCycles),
+            duration = permit ? "" : upgrade.ConstructionCycles == 1 ? Text.T("One night of work") : Text.T("{0} nights of work", upgrade.ConstructionCycles),
             cash = Text.T("Cash only"),
-            notes = Notes(site, followUp, state.Stage),
+            notes = Notes(site, followUp, upgrade, state.Stage),
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
                 : !owned ? Text.T(site.BuyFirst)
-                : Mod.HeldBy.Length > 0 ? Text.T("On hold: move {0} off the red walls.", Mod.HeldBy)
-                : locked && !wall && ordering ? Text.T(site.OrderEntry)
+                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Mod.HeldBy)
+                : reason.Length > 0 && ordering && !wall ? reason
+                : locked && !wall && ordering && !permit ? Text.T(site.OrderEntry)
                 : state.Stage == _noticeStage && upgradeId == _noticeUpgrade ? _notice : "",
             // The confirmation answers a purchase, so it ends with the ordering. Every other status stays until it clears.
             payment = locked || (!ordering && Payments.StatusText == Text.T("Payment confirmed.")) ? "" : Payments.StatusText,
-            steps = Steps(site, upgrade, state, phase, done),
-            drawing = Drawing(site, expansion.Stage)
+            steps = permit ? Array.Empty<object>() : Steps(site, upgrade, state, phase, done),
+            drawing = Drawing(site.PlanOf(upgradeId), ownPlan ? state.Stage : expansion.Stage)
         });
     }
 
-    private static string[] Notes(SiteDefinition site, SiteFollowUp? followUp, UpgradeStage stage)
+    private static string[] Notes(SiteDefinition site, SiteFollowUp? followUp, UpgradeDefinition upgrade, UpgradeStage stage)
     {
         if (stage == UpgradeStage.Complete) return Array.Empty<string>();
         var notes = (followUp?.Notes ?? site.Restrictions).Select(r => Text.T(r)).ToList();
         if (stage == UpgradeStage.Constructing)
-            notes.Add(Text.T(followUp == null ? "The crew finishes one stage each night you sleep." : "The crew builds it the night you sleep."));
+            notes.Add(Text.T(upgrade.Phases.Count > 0 ? "The crew finishes one stage each night you sleep." : "The crew builds it the night you sleep."));
         return notes.ToArray();
     }
 
@@ -253,9 +344,9 @@ internal static class BuildPlan
     }
 
     // Lays the site's rectangles out in pixels with north at the top. The marks on the walls end with the construction.
-    private static object Drawing(SiteDefinition site, UpgradeStage stage)
+    private static object Drawing(IReadOnlyList<PlanRoom> plan, UpgradeStage stage)
     {
-        var solid = site.Plan.Where(r => r.Kind != PlanRoomKind.Opening).ToArray();
+        var solid = plan.Where(r => r.Kind != PlanRoomKind.Opening).ToArray();
         float minX = solid.Min(r => r.MinX), maxX = solid.Max(r => r.MaxX);
         float minZ = solid.Min(r => r.MinZ), maxZ = solid.Max(r => r.MaxZ);
         Box Place(float x0, float z0, float x1, float z1) => new(
@@ -263,7 +354,7 @@ internal static class BuildPlan
             (maxZ - z1) * PixelsPerMetre,
             (x1 - x0) * PixelsPerMetre,
             (z1 - z0) * PixelsPerMetre);
-        var cuts = stage == UpgradeStage.Complete ? Array.Empty<PlanRoom>() : site.Plan.Where(r => r.Kind == PlanRoomKind.Opening).ToArray();
+        var cuts = stage == UpgradeStage.Complete ? Array.Empty<PlanRoom>() : plan.Where(r => r.Kind == PlanRoomKind.Opening).ToArray();
         return new
         {
             width = Mathf.Ceil((maxX - minX) * PixelsPerMetre),

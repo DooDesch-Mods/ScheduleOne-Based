@@ -9,7 +9,11 @@ public sealed record UpgradeDefinition(
     int ConstructionCycles,
     IReadOnlyList<string> Prerequisites,
     IReadOnlyList<ConstructionPhase> Phases,
-    IReadOnlyList<UpgradeEffect> Effects);
+    IReadOnlyList<UpgradeEffect> Effects)
+{
+    // A permit is rights without construction: buying it completes it.
+    public bool IsPermit => ConstructionCycles == 0;
+}
 
 public sealed record ConstructionPhase(string Id, int AfterSleepCycles, string WorldStateId);
 public sealed record UpgradeEffect(string Kind, string TargetId, string StateId);
@@ -40,8 +44,10 @@ internal static class DefinitionRegistry
                 RequireId(upgrade.Id, "upgrade");
                 string key = source.Id + "/" + upgrade.Id;
                 if (upgrades.ContainsKey(upgrade.Id)) throw new DefinitionException("Duplicate upgrade: " + key);
-                if (upgrade.RightsPrice < 0 || upgrade.ConstructionPrice < 0 || upgrade.ConstructionCycles < 1)
-                    throw new DefinitionException(key + ": prices must be nonnegative and construction needs at least one cycle.");
+                if (upgrade.RightsPrice < 0 || upgrade.ConstructionPrice < 0 || upgrade.ConstructionCycles < 0)
+                    throw new DefinitionException(key + ": prices and cycles must be nonnegative.");
+                if (upgrade.IsPermit && (upgrade.RightsPrice == 0 || upgrade.ConstructionPrice != 0 || upgrade.Phases?.Count > 0 || upgrade.Effects?.Count > 0))
+                    throw new DefinitionException(key + ": an upgrade without construction cycles is a permit: a rights price only, no construction price, phases or effects.");
                 if (upgrade.Prerequisites == null || upgrade.Phases == null || upgrade.Effects == null)
                     throw new DefinitionException(key + ": definition lists must not be null.");
                 var prerequisites = upgrade.Prerequisites.ToArray();

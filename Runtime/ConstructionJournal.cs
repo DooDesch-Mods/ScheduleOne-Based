@@ -25,7 +25,7 @@ internal static class ConstructionJournal
     private readonly record struct Seen(UpgradeStage Stage, int Cycles, string Held);
     private readonly record struct Notice(string Title, string Subtitle, float Due, bool Work);
 
-    private static readonly Dictionary<SiteDefinition, Seen> Last = new();
+    private static readonly Dictionary<(SiteDefinition, string), Seen> Last = new();
     private static readonly Dictionary<(SiteDefinition, string), UpgradeStage> LastFollowUp = new();
     private static readonly List<Notice> Pending = new();
     private static float _next;
@@ -56,9 +56,12 @@ internal static class ConstructionJournal
         _waiting = false;
         foreach (var site in sites)
         {
-            Reconcile(site);
-            Report(site);
-            foreach (var followUp in site.FollowUps) Report(site, followUp);
+            foreach (var page in site.Quests)
+            {
+                Reconcile(site, page);
+                Report(site, page);
+            }
+            foreach (var followUp in site.FollowUps.Where(f => f.QuestType == null)) Report(site, followUp);
         }
         ShowDue();
     }
@@ -66,57 +69,61 @@ internal static class ConstructionJournal
     internal static string NightsLeft(int nights) =>
         nights == 1 ? Text.T("One night left") : Text.T("{0} nights left", nights);
 
-    private static void Reconcile(SiteDefinition site)
+    // A first upgrade sells its rights before the work, so its page opens with them. A follow-up without rights opens
+    // its page with the order, as the construction starts.
+    private static void Reconcile(SiteDefinition site, SiteQuest page)
     {
-        var state = Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId);
-        var quest = QuestManager.GetQuestByName(Text.T(site.Title));
+        var state = Mod.Engine.GetUpgrade(site.Base.Id, page.UpgradeId);
+        var quest = QuestManager.GetQuestByName(Text.T(page.Title));
+        string name = site.Base.Id + "/" + page.UpgradeId;
         switch (state.Stage)
         {
             case UpgradeStage.RightsOwned or UpgradeStage.Constructing:
                 if (quest == null)
                 {
-                    QuestManager.CreateQuest(site.QuestType);
-                    Mod.Log("Construction quest of " + site.Base.Id + " started.");
+                    QuestManager.CreateQuest(page.QuestType);
+                    Mod.Log("Construction quest of " + name + " started.");
                 }
-                else Apply(site, quest, state);
+                else Apply(site, page, quest, state);
                 break;
             case UpgradeStage.Complete:
-                if (quest != null) Finish(site, quest);
+                if (quest != null) Finish(page, quest, name);
                 break;
             default:
                 // Only a save whose two halves disagree or a debug jump gets here.
                 if (quest != null)
                 {
-                    Mod.Warn("Construction quest of " + site.Base.Id + " cancelled: no rights behind it.");
+                    Mod.Warn("Construction quest of " + name + " cancelled: nothing ordered behind it.");
                     quest.Cancel();
                 }
                 break;
         }
     }
 
-    private static void Apply(SiteDefinition site, Quest quest, UpgradeState state)
+    private static void Apply(SiteDefinition site, SiteQuest page, Quest quest, UpgradeState state)
     {
-        var phases = site.Upgrade.Phases;
+        var upgrade = site.UpgradeOf(page.UpgradeId);
+        var phases = upgrade.Phases;
         var entries = quest.QuestEntries;
         // S1API adds the entries a frame or two after the quest was created.
         if (entries.Count != phases.Count + 1) return;
         string phase = Mod.Engine.CurrentPhase(state.BaseId, state.UpgradeId) ?? "";
         int active = state.Stage == UpgradeStage.RightsOwned ? 0 : 1 + Math.Max(0, phases.ToList().FindIndex(p => p.Id == phase));
         // A restored quest comes back with the saved titles, so every title is written each time.
-        SetTitle(entries[0], Text.T(site.OrderEntry));
+        SetTitle(entries[0], Text.T(page.OrderEntry));
         for (int i = 0; i < phases.Count; i++) SetTitle(entries[i + 1], Text.T(site.PhaseTitles[phases[i].Id]));
-        SetTitle(entries[active], ActiveTitle(site, state, active));
+        SetTitle(entries[active], ActiveTitle(site, page, upgrade, state, active));
         // The next step starts before the last one ends, or the game could count all as done.
         SetState(entries[active], QuestState.Active);
         for (int i = 0; i < entries.Count; i++)
             if (i != active) SetState(entries[i], i < active ? QuestState.Completed : QuestState.Inactive);
     }
 
-    private static string ActiveTitle(SiteDefinition site, UpgradeState state, int active)
+    private static string ActiveTitle(SiteDefinition site, SiteQuest page, UpgradeDefinition upgrade, UpgradeState state, int active)
     {
-        if (Mod.HeldBy.Length > 0) return Hold();
-        if (active == 0) return Text.T(site.OrderEntry);
-        return Progress(Text.T(site.PhaseTitles[site.Upgrade.Phases[active - 1].Id]), site.Upgrade.ConstructionCycles - state.CompletedCycles);
+        if (Mod.HeldBy.Length > 0 && state.Stage == UpgradeStage.Constructing) return Hold();
+        if (active == 0) return Text.T(page.OrderEntry);
+        return Progress(Text.T(site.PhaseTitles[upgrade.Phases[active - 1].Id]), upgrade.ConstructionCycles - state.CompletedCycles);
     }
 
     private static string Hold() => Text.T("On hold: move {0} off the red walls.", Mod.HeldBy);
@@ -134,35 +141,39 @@ internal static class ConstructionJournal
         if (entry.State != state) entry.SetState(state);
     }
 
-    private static void Finish(SiteDefinition site, Quest quest)
+    private static void Finish(SiteQuest page, Quest quest, string name)
     {
         foreach (var entry in quest.QuestEntries)
             if (entry.State != QuestState.Completed) entry.Complete();
         // Completing the last entry ends the quest on its own, unless S1API had not added the entries yet.
-        if (QuestManager.GetQuestByName(Text.T(site.Title)) != null) quest.Complete();
-        Mod.Log("Construction quest of " + site.Base.Id + " completed.");
+        if (QuestManager.GetQuestByName(Text.T(page.Title)) != null) quest.Complete();
+        Mod.Log("Construction quest of " + name + " completed.");
     }
 
     // The first look after a load only takes note: a reload changes nothing the player needs to hear about.
-    private static void Report(SiteDefinition site)
+    private static void Report(SiteDefinition site, SiteQuest page)
     {
-        var state = Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId);
-        var now = new Seen(state.Stage, state.CompletedCycles, Mod.HeldBy);
-        if (!Last.TryGetValue(site, out var before))
+        var state = Mod.Engine.GetUpgrade(site.Base.Id, page.UpgradeId);
+        var upgrade = site.UpgradeOf(page.UpgradeId);
+        // A hold belongs to the build under construction.
+        var now = new Seen(state.Stage, state.CompletedCycles, state.Stage == UpgradeStage.Constructing ? Mod.HeldBy : "");
+        var key = (site, page.UpgradeId);
+        if (!Last.TryGetValue(key, out var before))
         {
-            Last[site] = now;
+            Last[key] = now;
             return;
         }
         if (now == before) return;
-        Last[site] = now;
+        Last[key] = now;
+        string done = site.FollowUp(page.UpgradeId)?.Done ?? "Ready to move in";
         // The list shrinks while the player clears the walls, and only the start of a hold is news.
-        if (now.Held.Length > 0 && before.Held.Length == 0) Queue(Text.T(site.Title), Text.T("Construction on hold"));
-        else if (now.Stage == UpgradeStage.Complete && before.Stage != UpgradeStage.Complete) Queue(Text.T(site.Title), Text.T("Ready to move in"), true);
+        if (now.Held.Length > 0 && before.Held.Length == 0) Queue(Text.T(page.Title), Text.T("Construction on hold"));
+        else if (now.Stage == UpgradeStage.Complete && before.Stage != UpgradeStage.Complete) Queue(Text.T(page.Title), Text.T(done), true);
         else if (now.Stage == UpgradeStage.Constructing && now.Cycles > before.Cycles)
         {
             string phase = Mod.Engine.CurrentPhase(state.BaseId, state.UpgradeId) ?? "";
             if (site.PhaseTitles.TryGetValue(phase, out string? title))
-                Queue(Text.T(title), NightsLeft(site.Upgrade.ConstructionCycles - now.Cycles), true);
+                Queue(Text.T(title), NightsLeft(upgrade.ConstructionCycles - now.Cycles), true);
             else Mod.Warn("Morning notice skipped: phase " + phase + " has no title.");
         }
     }

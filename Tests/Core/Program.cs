@@ -36,7 +36,9 @@ var checks = new (string Name, Action Run)[]
     ("restored upgrades keep their state when a prerequisite was added", MigrateNewPrerequisite),
     ("employee limit: one becomes three, every other limit doubles", StaffLimits),
     ("an upgrade without a rights price is ordered directly after its prerequisite", DirectOrder),
-    ("the real Ming definition passes DefinitionRegistry with its saved ids, prices and phases", MingThroughRegistry)
+    ("the real Ming definition passes DefinitionRegistry with its saved ids, prices and phases", MingThroughRegistry),
+    ("a permit completes on its rights payment and unlocks a menu of builds, one at a time", PermitMenu),
+    ("definitions reject a permit with construction, phases or effects", PermitDefinitions)
 };
 int failed = 0;
 foreach (var check in checks)
@@ -96,6 +98,48 @@ static void Sequential()
     Equal(3, engine.CompletedEffects("fixture").Count);
     Equal("loading-dock", engine.CompletedEffects("fixture")[2].Effect.Kind);
     Equal(600, engine.GetUpgrade("fixture", "dock").RightsPaid + engine.GetUpgrade("fixture", "dock").ConstructionPaid);
+}
+static BaseDefinition PermitFixture() => new("fixture", "isolated-property", new[]
+{
+    new UpgradeDefinition("permit", 1500, 0, 0, Array.Empty<string>(), Array.Empty<ConstructionPhase>(), Array.Empty<UpgradeEffect>()),
+    new UpgradeDefinition("storey", 0, 6000, 3, new[] { "permit" }, new[] { new ConstructionPhase("frame", 1, "frame"), new ConstructionPhase("roof", 2, "roof") },
+        new[] { new UpgradeEffect("world-state", "storey", "complete") }),
+    new UpgradeDefinition("carport", 0, 1500, 1, new[] { "permit" }, Array.Empty<ConstructionPhase>(), new[] { new UpgradeEffect("world-state", "carport", "complete") })
+});
+static void PermitMenu()
+{
+    var engine = Engine(PermitFixture());
+    Equal("prerequisite-incomplete", engine.BeginPurchase(Command("early", "storey", PurchaseKind.Construction)).Reason);
+    Equal("permit-has-no-construction", engine.BeginPurchase(Command("permit-build", "permit", PurchaseKind.Construction)).Reason);
+    Equal(PurchaseStatus.Applied, Pay(engine, "permit", "permit", PurchaseKind.Rights).Status);
+    Equal(UpgradeStage.Complete, engine.GetUpgrade("fixture", "permit").Stage);
+    Equal(1500, engine.GetUpgrade("fixture", "permit").RightsPaid);
+    Equal("rights-not-sold", engine.BeginPurchase(Command("storey-rights", "storey", PurchaseKind.Rights)).Reason);
+    Equal(PurchaseStatus.Applied, Pay(engine, "storey", "storey", PurchaseKind.Construction).Status);
+    Equal("construction-active", engine.BeginPurchase(Command("carport-early", "carport", PurchaseKind.Construction)).Reason);
+    engine = RoundTrip(engine, PermitFixture());
+    Equal(UpgradeStage.Complete, engine.GetUpgrade("fixture", "permit").Stage);
+    engine.AdvanceSleep(1); engine.AdvanceSleep(2); engine.AdvanceSleep(3);
+    Equal(UpgradeStage.Complete, engine.GetUpgrade("fixture", "storey").Stage);
+    Equal(PurchaseStatus.Applied, Pay(engine, "carport", "carport", PurchaseKind.Construction).Status);
+    engine.AdvanceSleep(4);
+    engine = RoundTrip(engine, PermitFixture());
+    Equal(2, engine.CompletedEffects("fixture").Count);
+}
+static void PermitDefinitions()
+{
+    UpgradeDefinition Permit(int rights, int construction, ConstructionPhase[] phases, UpgradeEffect[] effects) =>
+        new("permit", rights, construction, 0, Array.Empty<string>(), phases, effects);
+    var none = Array.Empty<ConstructionPhase>();
+    var noEffects = Array.Empty<UpgradeEffect>();
+    foreach (var bad in new[]
+    {
+        Permit(0, 0, none, noEffects),
+        Permit(100, 50, none, noEffects),
+        Permit(100, 0, new[] { new ConstructionPhase("p", 1, "s") }, noEffects),
+        Permit(100, 0, none, new[] { new UpgradeEffect("world-state", "t", "s") })
+    })
+        Throws<DefinitionException>(() => Engine(new BaseDefinition("fixture", "isolated-property", new[] { bad })));
 }
 static void FourMornings()
 {

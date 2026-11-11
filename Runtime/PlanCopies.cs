@@ -219,7 +219,10 @@ internal static class RayPlanCopiesChoice
     // The parameter names must match the target's.
     private static void Postfix(DialogueController __instance, string dialogueLabel, ref Il2CppSystem.Collections.Generic.List<DialogueChoiceData> existingChoices)
     {
-        try { if (existingChoices != null) PlanCopies.AddChoice(__instance, dialogueLabel, existingChoices); }
+        if (existingChoices == null) return;
+        try { RayMenu.AddChoice(__instance, dialogueLabel, existingChoices); }
+        catch (Exception error) { Mod.Warn("Ray's menu could not list the expansion entry: " + error); }
+        try { PlanCopies.AddChoice(__instance, dialogueLabel, existingChoices); }
         catch (Exception error) { Mod.Warn("Ray's menu could not list the plan copies: " + error); }
     }
 }
