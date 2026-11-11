@@ -4,6 +4,12 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.1.6] - 2026-11-11
+
+### Fixed
+- The project folder works again with S1API 3.2.1: you can take it, buy a copy from Ray and hang it on a wall.
+  Ray no longer asks you to make room in your pockets when there is room.
+
 ## [1.1.5] - 2026-11-09
 
 ### Fixed
