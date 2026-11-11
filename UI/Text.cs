@@ -86,5 +86,18 @@ internal static class Text
         ["Lost your plans? I keep a copy of every deed. {0} a set, cash."] = "Pläne verloren? Ich habe von jeder Urkunde eine Kopie. {0} pro Satz, bar.",
         ["Never mind."] = "Schon gut.",
         ["Here you go. Keep them somewhere safe this time."] = "Bitte schön. Pass diesmal besser darauf auf.",
+        ["I want to expand one of my properties."] = "Ich will eine meiner Immobilien ausbauen.",
+        ["Which one?"] = "Welche denn?",
+        ["Building permit"] = "Baugenehmigung",
+        ["Buy permit"] = "Genehmigung kaufen",
+        ["Pick a build."] = "Wähl einen Ausbau.",
+        ["All builds"] = "Alle Ausbauten",
+        ["Locked until {0} is finished."] = "Gesperrt, bis {0} fertig ist.",
+        ["Needs {0} first."] = "Braucht zuerst {0}.",
+        ["One night"] = "Eine Nacht",
+        ["{0} nights"] = "{0} Nächte",
+        ["+{0} staff"] = "+{0} Mitarbeiter",
+        ["Finished"] = "Fertig",
+        ["Under construction"] = "Im Bau",
     });
 }

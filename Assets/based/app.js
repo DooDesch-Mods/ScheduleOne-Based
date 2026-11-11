@@ -51,6 +51,42 @@ function drawPlan(plan) {
   }
 }
 
+function select(id) {
+  const answer = s1.call('plan.select', id);
+  if (answer !== 'ok') console.error('Selecting the build ' + id + ' returned ' + answer + '.');
+  render(s1.call('plan.state'));
+}
+
+function drawBuilds(builds, wall) {
+  const host = $('builds');
+  host.replaceChildren();
+  for (const build of builds) {
+    const node = document.createElement('button');
+    node.className = 'build ' + build.state;
+    const head = div('build-head');
+    head.appendChild(div('build-name', build.name));
+    head.appendChild(div('build-price', build.price));
+    node.appendChild(head);
+    node.appendChild(div('build-info', build.staff ? build.nights + ', ' + build.staff : build.nights));
+    if (build.status) node.appendChild(div('build-status', build.status));
+    // A locked build opens too, so its reason and price can be read in full; only the wall page has nothing to press.
+    if (!wall) node.addEventListener('click', () => select(build.id));
+    host.appendChild(node);
+  }
+}
+
+function renderMenu(data) {
+  $('hint').textContent = data.hint;
+  drawBuilds(data.builds, data.wall);
+  $('notice').textContent = data.notice;
+  $('take').textContent = data.take;
+  show('menu', true);
+  show('back', false);
+  for (const id of ['report', 'costs', 'steps', 'notes', 'payment', 'buy']) show(id, false);
+  show('take', data.take.length > 0);
+  show('notice', data.notice.length > 0);
+}
+
 function render(raw) {
   if (raw === null || raw === undefined) { console.error('The construction plan returned no state.'); return; }
   try {
@@ -58,6 +94,14 @@ function render(raw) {
     current = data;
     $('shade').className = data.wall ? 'shade wall' : 'shade';
     $('title').textContent = data.title;
+    drawPlan(data.drawing);
+    if (data.mode === 'menu') { renderMenu(data); return; }
+    show('menu', false);
+    $('back').textContent = data.back;
+    show('back', data.back.length > 0);
+    $('construction-row').style.display = data.constructionShown ? 'flex' : 'none';
+    show('steps', data.steps.length > 0);
+    show('notes', true);
     $('status').textContent = data.status;
     $('progress').textContent = data.progress;
     $('rights-label').textContent = data.rightsLabel;
@@ -85,7 +129,6 @@ function render(raw) {
     notes.replaceChildren();
     for (const line of data.notes) notes.appendChild(div('note', line));
     drawSteps(data.steps);
-    drawPlan(data.drawing);
   } catch (error) { console.error('Construction plan render failed: ' + error.message); }
 }
 
@@ -99,6 +142,7 @@ $('take').addEventListener('click', () => {
   if (s1.call('plan.take') === null) console.error('Taking the project folder returned no answer.');
   render(s1.call('plan.state'));
 });
+$('back').addEventListener('click', () => select(''));
 $('close').addEventListener('click', () => s1.call('plan.close'));
 s1.on('plan.changed', render);
 render(s1.call('plan.state'));

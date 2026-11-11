@@ -57,7 +57,8 @@ public sealed class Mod : MelonMod
     private sealed class Vendor
     {
         public S1API.Entities.NPC Npc = null!;
-        public DialogueController.DialogueChoice Choice = null!;
+        // Empty for menu sites, whose vendor offers one entry for all of them.
+        public DialogueController.DialogueChoice? Choice;
         public DialogueHandler Handler = null!;
     }
 
@@ -103,6 +104,8 @@ public sealed class Mod : MelonMod
     private void InitializeWithRequiredMods()
     {
         SiteDefinition.ValidateAll(Sites);
+        var foreignMenu = Sites.FirstOrDefault(s => s.Menu && s.VendorNpcId != PlanCopies.RayId);
+        if (foreignMenu != null) throw new InvalidOperationException(foreignMenu.Base.Id + ": only Ray offers a menu of builds.");
         Engine = new UpgradeEngine(Sites.Select(s => s.Base), new HostAuthority());
         foreach (var site in Sites) site.RegisterWorld();
 #if DEBUG
@@ -146,6 +149,7 @@ public sealed class Mod : MelonMod
             ConstructionJournal.Reset();
             ProjectFolder.Reset();
             PlanCopies.Reset();
+            RayMenu.Reset();
             StaffRoom.Reset();
             foreach (var site in Sites) site.Crew?.Cleanup();
             Payments.ResetForMenu();
@@ -247,9 +251,11 @@ public sealed class Mod : MelonMod
             if (Time.unscaledTime >= _nextBind)
             {
                 _nextBind = Time.unscaledTime + 1f;
-                foreach (var site in Sites) BindVendor(site);
+                foreach (var site in Sites.Where(s => !s.Menu)) BindVendor(site);
                 try { PlanCopies.Tick(Time.unscaledTime - _loadedAt); }
                 catch (Exception error) { Contain("plan copies at Ray", error); }
+                try { RayMenu.Tick(Time.unscaledTime - _loadedAt); }
+                catch (Exception error) { Contain("expansion menu at Ray", error); }
             }
             foreach (var site in Sites) TickCrew(site);
             TickHold();
@@ -263,9 +269,13 @@ public sealed class Mod : MelonMod
     {
         if (!NativeBus.IsHost || HeldBy.Length == 0 || Time.unscaledTime < _nextHoldCheck) return;
         _nextHoldCheck = Time.unscaledTime + HoldCheckInterval;
-        var site = Sites.FirstOrDefault(s => Engine.GetUpgrade(s.Base.Id, s.UpgradeId).Stage == UpgradeStage.Constructing);
-        SetHeld(site == null ? "" : BlockerNames(BlockingItems(site)));
+        var site = Sites.FirstOrDefault(s => Constructing(s) != null);
+        SetHeld(site == null ? "" : BlockerNames(BlockingItems(site, Constructing(site)!)));
     }
+
+    internal static UpgradeStage StageOf(SiteDefinition site, string upgradeId) => Engine.GetUpgrade(site.Base.Id, upgradeId).Stage;
+
+    internal static string? Constructing(SiteDefinition site) => site.ConstructingId(id => StageOf(site, id));
 
     private static void TickFolder()
     {
@@ -302,7 +312,10 @@ public sealed class Mod : MelonMod
         if (site.Crew == null) return;
         try
         {
-            var state = Engine.GetUpgrade(site.Base.Id, site.UpgradeId);
+            // The crew works the stages of a build; one without stages goes up in a night without it.
+            string? building = Constructing(site);
+            string followed = building != null && site.UpgradeOf(building).Phases.Count > 0 ? building : site.UpgradeId;
+            var state = Engine.GetUpgrade(site.Base.Id, followed);
             site.Crew.Update(state.Stage, Engine.CurrentPhase(state.BaseId, state.UpgradeId));
             site.Crew.Tick();
         }
@@ -339,6 +352,14 @@ public sealed class Mod : MelonMod
 
     private static bool VendorTalking(SiteDefinition site) =>
         Vendors.TryGetValue(site, out var vendor) && vendor.Npc.Dialogue.IsDialogueInProgress;
+
+    // A menu site has no choice of its own: the vendor's menu entry serves it, and the plan only needs his conversation.
+    internal static void RegisterMenuVendor(SiteDefinition site, S1API.Entities.NPC npc, DialogueHandler handler)
+    {
+        if (Vendors.ContainsKey(site)) return;
+        Vendors[site] = new Vendor { Npc = npc, Handler = handler };
+        Log(site.VendorNpcId + "'s menu entry serves the plan of " + site.Base.Id + ".");
+    }
 
     private static void BindVendor(SiteDefinition site)
     {
@@ -411,6 +432,7 @@ public sealed class Mod : MelonMod
     // The choice offers what is possible right now: nothing before the room is owned or once the work is done.
     private static void RefreshChoice(SiteDefinition site, Vendor vendor)
     {
+        if (vendor.Choice == null) return;
         var stage = Engine.GetUpgrade(site.Base.Id, site.UpgradeId).Stage;
         vendor.Choice.Enabled = Owns(site) && stage != UpgradeStage.Complete;
         vendor.Choice.ChoiceText = Text.T(stage == UpgradeStage.Constructing ? site.ProgressChoice : site.RequestChoice);
@@ -426,7 +448,7 @@ public sealed class Mod : MelonMod
         return site != null && Vendors.TryGetValue(site, out var vendor) && vendor.Handler.Pointer == handler.Pointer;
     }
 
-    private static void RequestPlan(SiteDefinition site)
+    internal static void RequestPlan(SiteDefinition site)
     {
         _planRequest = site;
         _planRequestedAt = Time.unscaledTime;
@@ -452,9 +474,9 @@ public sealed class Mod : MelonMod
         var site = Sites.FirstOrDefault(s => s.Base.Id == command.BaseId);
         if (site == null) return "unknown-base";
         if (!Owns(site)) return Text.T(site.BuyFirst);
-        // Only the expansion builds into the room; a follow-up stands outside it.
-        if (command.Kind != PurchaseKind.Construction || command.UpgradeId != site.UpgradeId) return null;
-        var items = BlockingItems(site);
+        // Only a build with marked walls needs them free; the Sweatshop's dock stands outside the room.
+        if (command.Kind != PurchaseKind.Construction) return null;
+        var items = BlockingItems(site, command.UpgradeId);
         return items.Length > 0 ? BlockedText(items) : null;
     }
 
@@ -466,9 +488,9 @@ public sealed class Mod : MelonMod
         if (Failure.Length > 0) return Text.T("Construction paused because the expansion could not be applied.");
         if (!Owns(site)) return Text.T(site.BuyFirst);
         if (!NativeBus.IsHost && !_snapshotReceived) return Text.T("Waiting for the host's construction plan.");
-        if (kind == PurchaseKind.Construction && upgradeId == site.UpgradeId)
+        if (kind == PurchaseKind.Construction)
         {
-            var items = OutlineBlocking(site);
+            var items = OutlineBlocking(site, upgradeId);
             if (items.Length > 0)
             {
                 Log("Construction order refused, on the marked walls: " + BlockerNames(items) + ".");
@@ -493,10 +515,12 @@ public sealed class Mod : MelonMod
 
     private static string BlockerNames(BuildableItem[] items) => string.Join(", ", items.Select(i => i.GetManagementName()).Distinct());
 
-    internal static BuildableItem[] BlockingItems(SiteDefinition site)
+    internal static BuildableItem[] BlockingItems(SiteDefinition site) => BlockingItems(site, site.UpgradeId);
+
+    internal static BuildableItem[] BlockingItems(SiteDefinition site, string upgradeId)
     {
         var items = new Dictionary<IntPtr, BuildableItem>();
-        foreach (var area in site.KeepClear)
+        foreach (var area in site.KeepClearOf(upgradeId))
         {
             var colliders = Physics.OverlapBox(area.center, area.extents, Quaternion.identity);
             for (int i = 0; i < colliders.Length; i++)
@@ -509,10 +533,10 @@ public sealed class Mod : MelonMod
     }
 
     // Only for the player looking at the plan: the host must not light up items for a request from elsewhere.
-    internal static BuildableItem[] OutlineBlocking(SiteDefinition site)
+    internal static BuildableItem[] OutlineBlocking(SiteDefinition site, string upgradeId)
     {
         ClearOutlines();
-        var items = BlockingItems(site);
+        var items = BlockingItems(site, upgradeId);
         foreach (var item in items)
         {
             item.ShowOutline(Color.yellow);
@@ -528,10 +552,21 @@ public sealed class Mod : MelonMod
         Outlined.Clear();
     }
 
-    internal static void PlanOpened(SiteDefinition site)
+    // Marks what stands in the way of the build the plan shows: once its rights are bought, or right away when it
+    // sells no rights. An empty id is the list of builds, which marks nothing.
+    internal static void PlanShows(SiteDefinition site, string upgradeId)
     {
-        var state = Engine.GetUpgrade(site.Base.Id, site.UpgradeId);
-        if (state.Stage is UpgradeStage.RightsOwned or UpgradeStage.Constructing) OutlineBlocking(site);
+        if (upgradeId.Length == 0) { ClearOutlines(); return; }
+        var state = Engine.GetUpgrade(site.Base.Id, upgradeId);
+        bool orderable = state.Stage is UpgradeStage.RightsOwned or UpgradeStage.Constructing
+            || state.Stage == UpgradeStage.RightsMissing && upgradeId != site.UpgradeId && site.UpgradeOf(upgradeId).RightsPrice == 0;
+        if (orderable) OutlineBlocking(site, upgradeId);
+        else ClearOutlines();
+    }
+
+    internal static void PlanOpened(SiteDefinition site, string upgradeId)
+    {
+        PlanShows(site, upgradeId);
         // The hold only names last night's blocker, so it ends as soon as the player has moved the item.
         if (NativeBus.IsHost && HeldBy.Length > 0 && Outlined.Count == 0) SetHeld("");
     }
@@ -610,9 +645,9 @@ public sealed class Mod : MelonMod
 
     private static void AdvanceCycle(long cycle)
     {
-        foreach (var site in Sites.Where(s => Engine.GetUpgrade(s.Base.Id, s.UpgradeId).Stage == UpgradeStage.Constructing))
+        foreach (var site in Sites.Where(s => Constructing(s) != null))
         {
-            var items = BlockingItems(site);
+            var items = BlockingItems(site, Constructing(site)!);
             if (items.Length == 0) continue;
             string name = BlockerNames(items);
             Warn("Construction of " + site.Base.Id + " held in sleep cycle " + cycle + ": " + name + " stands on a marked wall.");
@@ -691,7 +726,7 @@ public sealed class Mod : MelonMod
         // Employees above the game's limit would be dropped on load, and the next save would lose them for good.
         try
         {
-            foreach (var site in Sites) StaffRoom.Apply(site, Engine.GetUpgrade(site.Base.Id, site.UpgradeId).Stage);
+            foreach (var site in Sites) StaffRoom.Apply(site);
         }
         catch (Exception error)
         {

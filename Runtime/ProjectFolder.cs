@@ -83,8 +83,15 @@ internal static class ProjectFolder
     }
 
     // Offered only while nothing else tells the player how the work is going. Doubles would do no harm.
-    internal static bool Offered(SiteDefinition site, UpgradeStage stage) =>
-        stage is UpgradeStage.RightsOwned or UpgradeStage.Constructing && Hung(site).Count == 0 && !Carried(site);
+    // A bought permit keeps it on offer, since the folder is where its builds are ordered.
+    internal static bool Offered(SiteDefinition site)
+    {
+        var first = Mod.StageOf(site, site.UpgradeId);
+        bool started = first is UpgradeStage.RightsOwned or UpgradeStage.Constructing
+            || first == UpgradeStage.Complete && site.Upgrade.IsPermit
+            || Mod.Constructing(site) != null;
+        return started && Hung(site).Count == 0 && !Carried(site);
+    }
 
     // A folder in the pocket or on a wall: the player still has the plans.
     internal static bool Present(SiteDefinition site) => Hung(site).Count > 0 || Carried(site);

@@ -66,3 +66,22 @@ body { height:100%; font-family:game-hand, "Segoe Print", cursive; color:#2b2b2b
 .buy { height:42px; flex-shrink:0; background:#232323; color:#efefef; font-family:game-hand, "Segoe Print", cursive; font-size:18px; text-align:center; justify-content:center; align-items:center; border-radius:3px; white-space:nowrap; }
 .buy:hover { background:#3a3a3a; }
 .buy:disabled { background:#8a8a8a; color:#d8d8d8; }
+
+/* The list of builds of a menu site: one ruled line per build, a locked one greyed with its reason. */
+.back { height:24px; flex-shrink:0; background:transparent; color:#2b2b2b; font-family:game-hand, "Segoe Print", cursive; font-size:15px; align-items:flex-start; justify-content:center; white-space:nowrap; }
+.back:hover { color:#7a2d22; }
+.menu { gap:4px; }
+.hint { font-size:16px; line-height:21px; color:#4c4c4c; }
+.builds { gap:0; border-top:2px solid #333; }
+.build { flex-shrink:0; background:transparent; border-bottom:1px solid #6d6d6d; padding:5px 4px; gap:1px; color:#2b2b2b; font-family:game-hand, "Segoe Print", cursive; align-items:stretch; }
+.build:hover { background:#d8d8c8; }
+.build-head { flex-direction:row; justify-content:space-between; font-size:18px; line-height:23px; white-space:nowrap; }
+.build-info { font-size:13px; line-height:17px; color:#4c4c4c; white-space:nowrap; }
+.build-status { font-size:13px; line-height:17px; color:#7a2d22; }
+.build.locked .build-head, .build.locked .build-info { color:#8a8a8a; }
+.build.done .build-head { text-decoration:line-through; color:#6b6b6b; }
+.build.building .build-status { color:#2b2b2b; }
+.shade.wall .build:hover { background:transparent; }
+.shade.wall .back, .shade.wall .hint { display:none; }
+.shade.wall .build-head { font-size:23px; line-height:29px; }
+.shade.wall .build-info, .shade.wall .build-status { font-size:17px; line-height:21px; }

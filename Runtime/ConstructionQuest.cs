@@ -17,10 +17,13 @@ public abstract class ConstructionQuest : Quest
     private static bool _iconAbsent;
 
     protected abstract string BaseId { get; }
+    // The upgrade this page follows; the site's first upgrade unless a follow-up has a page of its own.
+    protected virtual string? UpgradeId => null;
 
     private SiteDefinition Site => Mod.Sites.First(s => s.Base.Id == BaseId);
+    private SiteQuest Page => Site.Quest(UpgradeId ?? Site.UpgradeId);
 
-    protected override string Title => Text.T(Site.Title);
+    protected override string Title => Text.T(Page.Title);
     protected override string Description => Text.T("The crew finishes one stage each night you sleep.");
     protected override bool AutoBegin => true;
 
@@ -44,8 +47,9 @@ public abstract class ConstructionQuest : Quest
     {
         base.OnCreated();
         var site = Site;
-        AddEntry(Text.T(site.OrderEntry), site.QuestMarker);
-        foreach (var phase in site.Upgrade.Phases) AddEntry(Text.T(site.PhaseTitles[phase.Id]), site.QuestMarker);
+        var page = Page;
+        AddEntry(Text.T(page.OrderEntry), site.QuestMarker);
+        foreach (var phase in site.UpgradeOf(page.UpgradeId).Phases) AddEntry(Text.T(site.PhaseTitles[phase.Id]), site.QuestMarker);
     }
 
     private static Sprite? LoadIcon()
