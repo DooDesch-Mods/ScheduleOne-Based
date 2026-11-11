@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -98,7 +98,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     else PackTestDoorway();
                     break;
                 case "phase":
-                    JumpToPhase(args.Count > 1 ? args[1] : "");
+                    JumpToPhase(args.Count > 1 ? args[1] : "", args.Count > 2 ? args[2] : "");
                     break;
                 case "hold":
                     Hold(args.Count > 1 ? int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 0);
@@ -581,12 +581,16 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // Moves the upgrade straight to a stage, so one run can look at every construction state.
-    private static void JumpToPhase(string phase)
+    // Without an upgrade argument the site's own upgrade moves; "carport" names "ray.bungalow-carport" by its last part.
+    private static void JumpToPhase(string phase, string upgradeArg)
     {
         if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host can change the construction state.");
+        var definition = upgradeArg.Length == 0 ? _site.Upgrade
+            : _site.Base.Upgrades.FirstOrDefault(u => u.Id == upgradeArg || u.Id.EndsWith("-" + upgradeArg, StringComparison.Ordinal))
+              ?? throw new ArgumentException("baseddiag phase: no upgrade '" + upgradeArg + "' at " + _site.Base.Id + "; known: " +
+                  string.Join(", ", _site.Base.Upgrades.Select(u => u.Id)));
         var state = Mod.Engine.ExportState();
-        var upgrade = state.Upgrades.First(u => u.BaseId == _site.Base.Id && u.UpgradeId == _site.UpgradeId);
-        var definition = _site.Upgrade;
+        var upgrade = state.Upgrades.First(u => u.BaseId == _site.Base.Id && u.UpgradeId == definition.Id);
         // The named stages around the construction, and each phase at the night it starts.
         var stages = new List<(string Id, UpgradeStage Stage, int Cycles)>
         {
@@ -607,7 +611,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         Mod.DebugClearFailure();
         Mod.Engine.RestoreState(state);
         Mod.Changed();
-        Mod.Log("baseddiag: construction moved to " + phase + " at " + _site.Base.Id + "; revision " + state.Revision + ".");
+        Mod.Log("baseddiag: construction of " + definition.Id + " moved to " + phase + " at " + _site.Base.Id + "; revision " + state.Revision + ".");
     }
 
     // Clears the walls item by item, as a player does, so the hold's list can be seen shrinking.

@@ -58,7 +58,7 @@ internal static class MingSite
             MingWorld.Register();
             MingDock.Register();
         },
-        Crew = new Crew(),
+        Crew = new SiteWorkers(new MingCrewPlan()),
 #if DEBUG
         // A lambda, so MapExpansions types load only when the probe runs.
         Room = new SiteRoom(MingDefinition.ExpansionId, "complete", "ming-wing-floor", MingWorld.Wing,
@@ -72,23 +72,6 @@ internal static class MingSite
         }
     };
 
-    private sealed class Crew : ISiteCrew
-    {
-        public void Initialize(Action<string> info, Action<string> warn) => MingWorkers.Initialize(info, warn);
-        public void Update(UpgradeStage stage, string? phase) => MingWorkers.Update(stage, phase);
-        public void Tick() => MingWorkers.Tick();
-        public void Cleanup() => MingWorkers.Cleanup();
-        public int ActiveCount => MingWorkers.ActiveCount;
-#if DEBUG
-        public void Diagnostics() => MingWorkers.Diagnostics();
-        public float HammerContactNormalizedTime
-        {
-            get => MingWorkers.HammerContactNormalizedTime;
-            set => MingWorkers.HammerContactNormalizedTime = value;
-        }
-        public void ProbeSwing(float seconds) => MingWorkers.ProbeSwing(seconds);
-#endif
-    }
 }
 
 public sealed class MingConstructionQuest : Based.Runtime.ConstructionQuest

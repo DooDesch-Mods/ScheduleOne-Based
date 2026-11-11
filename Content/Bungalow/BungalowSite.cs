@@ -10,6 +10,7 @@ public static class BungalowDefinition
     public const string SunroomId = "ray.bungalow-sunroom";
     public const string CarportId = "ray.bungalow-carport";
     public const string DeckId = "ray.bungalow-deck";
+    public const string CarportExpansionId = "based_bungalow_carport";
     public const int PermitPrice = 1500;
     public const int StoreyPrice = 6000;
     public const int SunroomPrice = 4000;
@@ -33,7 +34,7 @@ public static class BungalowDefinition
                 new ConstructionPhase("sunroom-glass", 2, "glass")
             }, Array.Empty<UpgradeEffect>()),
             new UpgradeDefinition(CarportId, 0, CarportPrice, 1, new[] { PermitId },
-                Array.Empty<ConstructionPhase>(), Array.Empty<UpgradeEffect>()),
+                Array.Empty<ConstructionPhase>(), new[] { new UpgradeEffect("world-state", CarportExpansionId, "complete") }),
             new UpgradeDefinition(DeckId, 0, DeckPrice, 2, new[] { PermitId },
                 Array.Empty<ConstructionPhase>(), Array.Empty<UpgradeEffect>())
         });
@@ -72,14 +73,17 @@ internal static class BungalowSite
             new(PlanRoomKind.Existing, -176f, 115.5f, -170f, 121.5f),
             new(PlanRoomKind.Existing, -170f, 115.5f, -163.85f, 121.5f, "Bungalow")
         },
+        // In the west room, clear of the carport bays south of the house.
         StaffPlaces = new UnityEngine.Vector3[]
         {
-            new(-168.2f, -3.7f, 106.6f),
-            new(-167.2f, -3.7f, 106.6f),
-            new(-168.2f, -3.7f, 105.6f),
-            new(-167.2f, -3.7f, 105.6f),
-            new(-166.2f, -3.7f, 105.6f)
+            new(-174.5f, -3.7f, 110.5f),
+            new(-173.5f, -3.7f, 110.5f),
+            new(-172.5f, -3.7f, 110.5f),
+            new(-174.5f, -3.7f, 111.5f),
+            new(-173.5f, -3.7f, 111.5f)
         },
+        RegisterWorld = BungalowCarport.Register,
+        Crew = new SiteWorkers(new BungalowCrewPlan()),
         FollowUps = new[]
         {
             new SiteFollowUp(BungalowDefinition.StoreyId, "Second storey: Bungalow", "Ready to move in",

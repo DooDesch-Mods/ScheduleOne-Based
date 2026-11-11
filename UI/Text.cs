@@ -51,6 +51,7 @@ internal static class Text
         ["Talk to Mrs. Ming about the expansion."] = "Sprich mit Mrs. Ming über den Ausbau.",
         ["Just the last few fittings. Mind the tools."] = "Nur noch die letzten Handgriffe. Pass auf das Werkzeug auf.",
         ["Keep the site clear, please."] = "Halt die Baustelle bitte frei.",
+        ["These pines have to go before the roof goes up."] = "Die Kiefern müssen weg, bevor das Dach draufkommt.",
         ["The payment journal is unavailable."] = "Das Zahlungsjournal ist nicht verfügbar.",
         ["A payment could not be confirmed."] = "Eine Zahlung konnte nicht bestätigt werden.",
         ["An unconfirmed payment is being retried."] = "Eine unbestätigte Zahlung wird erneut versucht.",

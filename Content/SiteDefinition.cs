@@ -37,7 +37,8 @@ internal sealed record SiteRoom(string ExpansionId, string CompleteState, string
 internal interface ISiteCrew
 {
     void Initialize(Action<string> info, Action<string> warn);
-    void Update(UpgradeStage stage, string? phase);
+    // The build the crew follows: the one under construction, otherwise the site's main upgrade.
+    void Update(string upgrade, UpgradeStage stage, string? phase);
     void Tick();
     void Cleanup();
     int ActiveCount { get; }
