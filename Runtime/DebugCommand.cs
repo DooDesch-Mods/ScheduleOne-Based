@@ -581,12 +581,45 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // Moves the upgrade straight to a stage, so one run can look at every construction state.
-    private static void JumpToPhase(string phase)
+    // "phase <phase>" moves the site's first upgrade; "phase <upgradeId>:<phase>" moves a follow-up. A follow-up finishes
+    // everything it needs first and resets the site's other builds, since the engine allows one construction per base.
+    private static void JumpToPhase(string argument)
     {
         if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host can change the construction state.");
+        int colon = argument.LastIndexOf(':');
+        string upgradeId = colon > 0 ? argument.Substring(0, colon) : _site.UpgradeId;
+        string phase = colon > 0 ? argument.Substring(colon + 1) : argument;
+        if (!_site.BuildIds.Contains(upgradeId))
+            throw new ArgumentException("baseddiag phase [upgradeId:]phase; " + _site.Base.Id + " builds " + string.Join(", ", _site.BuildIds));
         var state = Mod.Engine.ExportState();
-        var upgrade = state.Upgrades.First(u => u.BaseId == _site.Base.Id && u.UpgradeId == _site.UpgradeId);
-        var definition = _site.Upgrade;
+        var upgrade = state.Upgrades.First(u => u.BaseId == _site.Base.Id && u.UpgradeId == upgradeId);
+        var definition = _site.UpgradeOf(upgradeId);
+        if (upgradeId != _site.UpgradeId)
+        {
+            var needed = new HashSet<string>();
+            void Need(string id)
+            {
+                foreach (var p in _site.UpgradeOf(id).Prerequisites)
+                    if (needed.Add(p)) Need(p);
+            }
+            Need(upgradeId);
+            foreach (var other in state.Upgrades.Where(u => u.BaseId == _site.Base.Id && u.UpgradeId != upgradeId))
+            {
+                if (needed.Contains(other.UpgradeId))
+                {
+                    other.Stage = UpgradeStage.Complete;
+                    other.CompletedCycles = _site.UpgradeOf(other.UpgradeId).ConstructionCycles;
+                }
+                else
+                {
+                    other.Stage = UpgradeStage.RightsMissing;
+                    other.CompletedCycles = 0;
+                    other.RightsPaid = 0;
+                    other.ConstructionPaid = 0;
+                }
+            }
+            Mod.Log("baseddiag: phase: " + upgradeId + " needs " + (needed.Count == 0 ? "nothing" : string.Join(", ", needed)) + "; those are complete, the other builds reset.");
+        }
         // The named stages around the construction, and each phase at the night it starts.
         var stages = new List<(string Id, UpgradeStage Stage, int Cycles)>
         {
@@ -607,7 +640,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         Mod.DebugClearFailure();
         Mod.Engine.RestoreState(state);
         Mod.Changed();
-        Mod.Log("baseddiag: construction moved to " + phase + " at " + _site.Base.Id + "; revision " + state.Revision + ".");
+        Mod.Log("baseddiag: construction moved to " + phase + " at " + _site.Base.Id + "/" + upgradeId + "; revision " + state.Revision + ".");
     }
 
     // Clears the walls item by item, as a player does, so the hold's list can be seen shrinking.

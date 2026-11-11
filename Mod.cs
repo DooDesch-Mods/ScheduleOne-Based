@@ -43,7 +43,7 @@ public sealed class Mod : MelonMod
     // Built on first use, not in the type initializer: the site types need S1API, and the missing-mods check has to
     // run first so a missing S1API still reaches the player.
     private static IReadOnlyList<SiteDefinition>? _sites;
-    internal static IReadOnlyList<SiteDefinition> Sites => _sites ??= new[] { MingSite.Create() };
+    internal static IReadOnlyList<SiteDefinition> Sites => _sites ??= new[] { MingSite.Create(), Content.StorageUnit.StorageSite.Create() };
     // The vendors that name missing mods, without building the sites.
     private static readonly (string NpcId, string ContainerId, string Choice)[] NoticeVendors =
         { (MingSite.VendorNpcId, MingSite.VendorContainerId, MingSite.RequestChoice) };

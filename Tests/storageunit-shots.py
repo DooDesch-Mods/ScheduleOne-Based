@@ -29,6 +29,10 @@ VIEWS = {
     "upper-walkway-north": ((-1.1, 4.9, 94.6), (-1.1, 4.5, 113)),
     "upper-walkway-south": ((-1.1, 4.9, 113.3), (-1.1, 4.5, 95)),
     "upper-over-hall": ((-1.4, 5.2, 102), (-8, 2, 97)),
+    # The outside stair on the west wall: from the side, from its foot, and down from the landing.
+    "stair-side": ((-17, 2.2, 100.5), (-9.8, 2, 100.5)),
+    "stair-foot": ((-11.5, 1.7, 93.5), (-9.8, 3, 104)),
+    "stair-landing": ((-10.2, 5, 105), (-9.8, 1, 97)),
 }
 
 
