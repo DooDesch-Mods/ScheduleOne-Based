@@ -305,6 +305,10 @@ def main():
     p.add_argument("--where", default="both", choices=["office", "street", "both"])
     a = p.parse_args()
     r = Run(a.slot)
+    # A fresh save 5 has the rights still missing; Ray keeps copies only once they are bought.
+    moved = r.cmd("baseddiag phase frame", wait=1.5)
+    r.check("the Sweatshop expansion is past the rights", any("construction moved to frame" in l or "already" in l for l in moved),
+            [l for l in moved if "baseddiag" in l][-1:])
     for where in (["street", "office"] if a.where == "both" else [a.where]):
         suite(r, where)
     r.prefix = ""
