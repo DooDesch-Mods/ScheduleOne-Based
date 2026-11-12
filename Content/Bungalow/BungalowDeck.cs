@@ -72,6 +72,13 @@ public static class BungalowDeck
             Area = BoundsOf(RockX - 1.3f, -7f, RockZ - 1.3f, RockX + 1.3f, -3f, RockZ + 1.3f)
         });
         MapTrees.Remove(state, "pine", Tree.x, Tree.y);
+        // North of the step the slope rises to the boards, and its terrain grass would grow through them.
+        if (finished)
+            state.Rules.Add(new ObjectRule
+            {
+                Id = "grass", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,
+                Area = BoundsOf(West - .3f, -20f, South - .3f, East + StepOut + .3f, 20f, North + .3f)
+            });
 
         var geometry = new CopyDefinition
         {
