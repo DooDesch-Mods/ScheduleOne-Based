@@ -76,6 +76,10 @@ public static class BungalowCarport
 
         for (int i = 0; i < Pines.Length; i++) MapTrees.Remove(complete, "pine-" + i, Pines[i].x, Pines[i].z);
 
+        // Under the roof the rain stops; the game's rain mask was baked without it.
+        float roofHalfX = 3.5f * RoofScale;
+        complete.WeatherCover.Add(BoundsOf(RoofCentreX - roofHalfX, PostBottom, SouthEave, RoofCentreX + roofHalfX, PostTop + .5f, NorthEave));
+
         float half = RoofDepth * RoofScale * .5f - RidgeOverlap * .5f;
         complete.Copies.Add(Copy("roof-south", Roof, RoofPivot, new Vector3(RoofCentreX, RoofCentreY, RidgeZ - half), 0, RoofScale));
         complete.Copies.Add(Copy("roof-north", Roof, RoofPivot, new Vector3(RoofCentreX, RoofCentreY, RidgeZ + half), 180, RoofScale));
@@ -95,6 +99,9 @@ public static class BungalowCarport
             blocks.Boxes.Add(new BoxDefinition { Id = "post-south-" + i, Kind = BoxKind.Block, Box = BoundsOf(x - .1f, PostBottom, SouthEave - .1f, x + .1f, PostTop, SouthEave + .1f) });
             blocks.Boxes.Add(new BoxDefinition { Id = "post-north-" + i, Kind = BoxKind.Block, Box = BoundsOf(x - .1f, PostBottom, NorthEave - .1f, x + .1f, PostTop, NorthEave + .1f) });
         }
+        // The roof sheets are copies without a collider; this slab under them is what the rain cover's raycast hits.
+        float slabHalfX = 3.5f * RoofScale;
+        blocks.Boxes.Add(new BoxDefinition { Id = "roof", Kind = BoxKind.Block, Box = BoundsOf(RoofCentreX - slabHalfX, PostTop, SouthEave, RoofCentreX + slabHalfX, PostTop + .1f, NorthEave) });
         complete.Copies.Add(blocks);
 
         var definition = new ExpansionDefinition
