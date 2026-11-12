@@ -12,6 +12,7 @@ public static class BungalowDefinition
     public const string DeckId = "ray.bungalow-deck";
     public const string CarportExpansionId = "based_bungalow_carport";
     public const string DeckExpansionId = "based_bungalow_deck";
+    public const string SunroomExpansionId = "based_bungalow_sunroom";
     public const int PermitPrice = 1500;
     public const int StoreyPrice = 6000;
     public const int SunroomPrice = 4000;
@@ -31,9 +32,9 @@ public static class BungalowDefinition
             }, Array.Empty<UpgradeEffect>()),
             new UpgradeDefinition(SunroomId, 0, SunroomPrice, 3, new[] { PermitId }, new[]
             {
-                new ConstructionPhase("sunroom-base", 1, "base"),
-                new ConstructionPhase("sunroom-glass", 2, "glass")
-            }, Array.Empty<UpgradeEffect>()),
+                new ConstructionPhase("sunroom-base", 1, BungalowSunroom.BaseState),
+                new ConstructionPhase("sunroom-glass", 2, BungalowSunroom.FrameState)
+            }, new[] { new UpgradeEffect("world-state", SunroomExpansionId, "complete") }),
             new UpgradeDefinition(CarportId, 0, CarportPrice, 1, new[] { PermitId },
                 Array.Empty<ConstructionPhase>(), new[] { new UpgradeEffect("world-state", CarportExpansionId, "complete") }),
             new UpgradeDefinition(DeckId, 0, DeckPrice, 2, new[] { PermitId },
@@ -67,7 +68,7 @@ internal static class BungalowSite
             ["storey-walls"] = "Walls",
             ["storey-roof"] = "Roof and interior",
             ["sunroom-base"] = "Foundation",
-            ["sunroom-glass"] = "Glazing",
+            ["sunroom-glass"] = "Frames",
             ["deck-stilts"] = "Stilts"
         },
         Plan = new PlanRoom[]
@@ -89,6 +90,7 @@ internal static class BungalowSite
         {
             BungalowCarport.Register();
             BungalowDeck.Register();
+            BungalowSunroom.Register();
         },
         Crew = new SiteWorkers(new BungalowCrewPlan()),
         FollowUps = new[]

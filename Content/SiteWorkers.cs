@@ -28,7 +28,7 @@ internal abstract class CrewPlan
     // Whether the crew is on site while this upgrade stands at this stage and phase.
     public abstract bool WorksOn(string upgrade, UpgradeStage stage, string? phase);
     // Whether this worker takes part in the job; the others stay out of sight.
-    public virtual bool OnJob(int index, string upgrade) => true;
+    public virtual bool OnJob(int index, string upgrade, string? phase) => true;
     public abstract Vector3 WorkPoint(int index, bool secondary, string upgrade, string? phase);
     // Where the tool lands, seen from the work point; the worker faces it.
     public abstract Vector3 ContactPoint(int index, bool secondary, string upgrade, string? phase);
@@ -133,7 +133,7 @@ internal sealed class SiteWorkers : ISiteCrew
         }
         bool working = _plan.WorksOn(_upgrade, _stage, _phase) && NetworkSingleton<TimeManager>.InstanceExists &&
             NetworkSingleton<TimeManager>.Instance.CurrentTime >= 800 && NetworkSingleton<TimeManager>.Instance.CurrentTime < 1800;
-        foreach (var worker in _workers.Values) worker.Tick(working && _plan.OnJob(worker.Index, _upgrade));
+        foreach (var worker in _workers.Values) worker.Tick(working && _plan.OnJob(worker.Index, _upgrade, _phase));
     }
 
     // S1API can hydrate client wrappers without calling a user constructor or OnCreated, so the list is the only signal.

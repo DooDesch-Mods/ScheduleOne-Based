@@ -5,6 +5,7 @@ Copies each shot to _drafts/based-bungalow/<build>/<label>-<time>-<view>.png and
 """
 import argparse
 import json
+import math
 import pathlib
 import shutil
 import subprocess
@@ -40,12 +41,44 @@ VIEWS = {
         # East of the outer beam, where the carpenter works on the stilts day.
         "carpenter": ["--eye", "-186.2", "-3.0", "109.6", "--target", "-188.2", "-3.6", "112.2"],
     },
+    "sunroom": {
+        # From the gravel west of the room, the whole west front with the house behind.
+        # No diagonal views: the pine belt around the west corners hides the room from every corner eye.
+        "west": ["--eye", "-186.9", "-1.7", "114.2", "--target", "-178", "-2.6", "115.4"],
+        # The roof meeting the house under its eave, seen from the south.
+        "seam": ["--eye", "-179.6", "-1.3", "107.4", "--target", "-176.4", "-1.0", "110.6"],
+        # Inside: from the sliding door across the room, and back toward the house.
+        "inside": ["--eye", "-176.8", "-2.1", "110.2", "--target", "-182.8", "-2.7", "119.5"],
+        "back": ["--eye", "-182.5", "-2.1", "120.8", "--target", "-176.2", "-2.6", "111"],
+        "top": ["--topdown", "-188", "104", "-172", "125"],
+        # North of the pines, where the woodcutter works on the day the room is ordered, and the west front on frames day.
+        "woodcutter": ["--eye", "-180.5", "-2.6", "120.5", "--target", "-180.5", "-3.2", "117.5"],
+        "carpenter": ["--eye", "-186.5", "-2.8", "115.2", "--target", "-183.3", "-3.3", "112.5"],
+    },
 }
 
 
 def s1(slot, *args):
     proc = subprocess.run([sys.executable, str(S1), "--slot", slot, *args], capture_output=True, text=True)
     return proc.returncode, proc.stdout + proc.stderr
+
+
+def is_night(time):
+    hhmm = int(time)
+    return hhmm >= 2000 or hhmm < 600
+
+
+def brighten(source, target):
+    """Night shots are near black; a gamma lift brings the build out of the dark, the original stays beside it."""
+    from PIL import Image, ImageStat
+    image = Image.open(source).convert("RGB")
+    mean = sum(ImageStat.Stat(image).mean) / 3
+    # Lift the mean toward 110 of 255; gamma keeps lamps from clipping more than a plain gain would.
+    gamma = 1.0 if mean <= 0 else max(.25, min(1.0, math.log(110 / 255) / math.log(max(mean, 1) / 255)))
+    lut = [round(255 * (i / 255) ** gamma) for i in range(256)]
+    lifted = image.point(lut * 3)
+    lifted.save(target)
+    return sum(ImageStat.Stat(lifted).mean) / 3
 
 
 def main():
@@ -78,6 +111,9 @@ def main():
         target = out_dir / f"{a.label}-{a.time}-{name}.png"
         shutil.copyfile(path, target)
         print(f"PASS {name}: {target}")
+        if is_night(a.time):
+            lit = target.with_name(target.stem + "-lit.png")
+            print(f"PASS {name} lit: {lit} (mean {brighten(target, lit):.0f} of 255)")
     sys.exit(1 if failed else 0)
 
 

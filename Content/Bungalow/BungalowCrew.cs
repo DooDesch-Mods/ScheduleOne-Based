@@ -13,7 +13,8 @@ public static class BungalowWorkers
 
 // The day the carport is ordered, a worker clears the pines on the spot; the night after, they are gone. The game has
 // no axe or saw, so he swings the machete. On the day the deck's stilts stand, a carpenter hammers at its beams from the
-// gravel.
+// gravel. The sunroom takes both: the day it is ordered, the woodcutter fells the pines in its footprint and before its door; on the day
+// its frames stand, the carpenter works at the west front.
 internal sealed class BungalowCrewPlan : CrewPlan
 {
     private const int Lumberjack = 0, Carpenter = 1;
@@ -32,6 +33,18 @@ internal sealed class BungalowCrewPlan : CrewPlan
     private static readonly Vector3 EastStand = new(-161.5f, -3.91f, 105.05f);
     private static readonly Vector3 EastBark = new(-161.5f, -3.01f, 104.45f);
 
+    // North of the two pines in the sunroom's footprint, on the flat gravel at -4.0.
+    private static readonly Vector3 SunroomEastStand = new(-178.56f, -4f, 118.36f);
+    private static readonly Vector3 SunroomEastBark = new(-178.56f, -3.1f, 117.76f);
+    private static readonly Vector3 SunroomWestStand = new(-182.53f, -4f, 118.85f);
+    private static readonly Vector3 SunroomWestBark = new(-182.53f, -3.1f, 118.25f);
+
+    // Outside the sunroom's west front, facing its frames.
+    private static readonly Vector3 FrameSouthStand = new(-183.75f, -4f, 112.5f);
+    private static readonly Vector3 FrameSouthPost = new(-183.05f, -3f, 112.5f);
+    private static readonly Vector3 FrameNorthStand = new(-183.75f, -4f, 117.8f);
+    private static readonly Vector3 FrameNorthPost = new(-183.05f, -3f, 117.8f);
+
     public override string LogName => "bungalow workers";
     public override string[] Ids => IdList;
     public override string[] Names => NameList;
@@ -39,9 +52,14 @@ internal sealed class BungalowCrewPlan : CrewPlan
     public override Vector3 SpawnPosition => WestStand;
     public override bool Owns(NPC npc) => npc is BungalowWorkerNpc;
     public override bool WorksOn(string upgrade, UpgradeStage stage, string? phase) =>
-        stage == UpgradeStage.Constructing && (upgrade == BungalowDefinition.CarportId || upgrade == BungalowDefinition.DeckId && phase == "deck-stilts");
+        stage == UpgradeStage.Constructing && (upgrade == BungalowDefinition.CarportId
+            || upgrade == BungalowDefinition.DeckId && phase == "deck-stilts"
+            || upgrade == BungalowDefinition.SunroomId && (phase == null || phase == "sunroom-glass"));
 
-    public override bool OnJob(int index, string upgrade) => index == (upgrade == BungalowDefinition.DeckId ? Carpenter : Lumberjack);
+    public override bool OnJob(int index, string upgrade, string? phase) => index == (IsCarpentry(upgrade, phase) ? Carpenter : Lumberjack);
+
+    private static bool IsCarpentry(string upgrade, string? phase) =>
+        upgrade == BungalowDefinition.DeckId || upgrade == BungalowDefinition.SunroomId && phase != null;
 
     public override NpcAppearance Appearance(int index)
     {
@@ -80,18 +98,28 @@ internal sealed class BungalowCrewPlan : CrewPlan
         };
     }
 
-    public override Vector3 WorkPoint(int index, bool secondary, string upgrade, string? phase) => index == Carpenter
-        ? secondary ? DeckNorthStand : DeckSouthStand
-        : secondary ? EastStand : WestStand;
-    public override Vector3 ContactPoint(int index, bool secondary, string upgrade, string? phase) => index == Carpenter
-        ? secondary ? DeckNorthBeam : DeckSouthBeam
-        : secondary ? EastBark : WestBark;
+    public override Vector3 WorkPoint(int index, bool secondary, string upgrade, string? phase)
+    {
+        bool sunroom = upgrade == BungalowDefinition.SunroomId;
+        if (index == Carpenter)
+            return sunroom ? secondary ? FrameNorthStand : FrameSouthStand : secondary ? DeckNorthStand : DeckSouthStand;
+        return sunroom ? secondary ? SunroomWestStand : SunroomEastStand : secondary ? EastStand : WestStand;
+    }
+
+    public override Vector3 ContactPoint(int index, bool secondary, string upgrade, string? phase)
+    {
+        bool sunroom = upgrade == BungalowDefinition.SunroomId;
+        if (index == Carpenter)
+            return sunroom ? secondary ? FrameNorthPost : FrameSouthPost : secondary ? DeckNorthBeam : DeckSouthBeam;
+        return sunroom ? secondary ? SunroomWestBark : SunroomEastBark : secondary ? EastBark : WestBark;
+    }
+
     public override bool UsesTool(int index, bool secondary, string upgrade, string? phase) => true;
     public override string Tool(int index) => index == Carpenter ? base.Tool(index) : "weapons/machete/Machete_AvatarEquippable";
     public override bool GrabsBetweenSwings(int index) => index == Carpenter;
-    public override string Line(int index, string upgrade, string? phase) => index == Carpenter
-        ? "Stilts are in. The boards go on tonight."
-        : "These pines have to go before the roof goes up.";
+    public override string Line(int index, string upgrade, string? phase) => upgrade == BungalowDefinition.SunroomId
+        ? index == Carpenter ? "Frames are up. The glass goes in tonight." : "Three pines in the way of the sunroom. Not for long."
+        : index == Carpenter ? "Stilts are in. The boards go on tonight." : "These pines have to go before the roof goes up.";
 }
 
 public abstract class BungalowWorkerNpc : Personnel.PersonnelNpc { }

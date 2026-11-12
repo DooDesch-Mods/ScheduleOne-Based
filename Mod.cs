@@ -260,6 +260,8 @@ public sealed class Mod : MelonMod
             foreach (var site in Sites) TickCrew(site);
             TickHold();
             TickJournal();
+            try { Content.Bungalow.BungalowSunroomDoor.Tick(); }
+            catch (Exception error) { Contain("sunroom door", error); }
         }
         catch (Exception error) { Contain("runtime update", error); }
     }
