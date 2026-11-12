@@ -11,6 +11,7 @@ public static class BungalowDefinition
     public const string CarportId = "ray.bungalow-carport";
     public const string DeckId = "ray.bungalow-deck";
     public const string CarportExpansionId = "based_bungalow_carport";
+    public const string DeckExpansionId = "based_bungalow_deck";
     public const int PermitPrice = 1500;
     public const int StoreyPrice = 6000;
     public const int SunroomPrice = 4000;
@@ -36,7 +37,8 @@ public static class BungalowDefinition
             new UpgradeDefinition(CarportId, 0, CarportPrice, 1, new[] { PermitId },
                 Array.Empty<ConstructionPhase>(), new[] { new UpgradeEffect("world-state", CarportExpansionId, "complete") }),
             new UpgradeDefinition(DeckId, 0, DeckPrice, 2, new[] { PermitId },
-                Array.Empty<ConstructionPhase>(), Array.Empty<UpgradeEffect>())
+                new[] { new ConstructionPhase("deck-stilts", 1, BungalowDeck.StiltsState) },
+                new[] { new UpgradeEffect("world-state", DeckExpansionId, "complete") })
         });
 }
 
@@ -65,7 +67,8 @@ internal static class BungalowSite
             ["storey-walls"] = "Walls",
             ["storey-roof"] = "Roof and interior",
             ["sunroom-base"] = "Foundation",
-            ["sunroom-glass"] = "Glazing"
+            ["sunroom-glass"] = "Glazing",
+            ["deck-stilts"] = "Stilts"
         },
         Plan = new PlanRoom[]
         {
@@ -82,7 +85,11 @@ internal static class BungalowSite
             new(-174.5f, -3.7f, 111.5f),
             new(-173.5f, -3.7f, 111.5f)
         },
-        RegisterWorld = BungalowCarport.Register,
+        RegisterWorld = () =>
+        {
+            BungalowCarport.Register();
+            BungalowDeck.Register();
+        },
         Crew = new SiteWorkers(new BungalowCrewPlan()),
         FollowUps = new[]
         {
@@ -110,7 +117,9 @@ internal static class BungalowSite
             new SiteFollowUp(BungalowDefinition.DeckId, "Slope deck: Bungalow", "Finished",
                 new[] { "A deck over the slope behind the house." })
             {
-                Name = "Slope deck"
+                Name = "Slope deck",
+                QuestType = typeof(BungalowDeckQuest),
+                OrderEntry = "Order the slope deck from Ray"
             }
         }
     };
@@ -126,4 +135,10 @@ public sealed class BungalowSunroomQuest : Based.Runtime.ConstructionQuest
 {
     protected override string BaseId => BungalowDefinition.BaseId;
     protected override string? UpgradeId => BungalowDefinition.SunroomId;
+}
+
+public sealed class BungalowDeckQuest : Based.Runtime.ConstructionQuest
+{
+    protected override string BaseId => BungalowDefinition.BaseId;
+    protected override string? UpgradeId => BungalowDefinition.DeckId;
 }
