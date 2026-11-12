@@ -74,22 +74,7 @@ public static class BungalowCarport
         });
         complete.PropertyExtensions.Add(extension);
 
-        for (int i = 0; i < Pines.Length; i++)
-        {
-            var p = Pines[i];
-            var area = BoundsOf(p.x - .8f, -20f, p.z - .8f, p.x + .8f, 40f, p.z + .8f);
-            complete.Rules.Add(new ObjectRule
-            {
-                Id = "pine-" + i, Name = "InstanceWorldObject", Parent = "InstancedMapTrees",
-                Side = WorldSide.Main, Effect = ObjectEffect.Remove, Area = area
-            });
-            // Each map tree has a mesh the NavMesh bake cut around; it goes with the tree.
-            complete.Rules.Add(new ObjectRule
-            {
-                Id = "pine-navcut-" + i, Name = "Nav mesh cut", Parent = "Tree rustle sound",
-                Side = WorldSide.Main, Effect = ObjectEffect.Remove, Area = area
-            });
-        }
+        for (int i = 0; i < Pines.Length; i++) MapTrees.Remove(complete, "pine-" + i, Pines[i].x, Pines[i].z);
 
         float half = RoofDepth * RoofScale * .5f - RidgeOverlap * .5f;
         complete.Copies.Add(Copy("roof-south", Roof, RoofPivot, new Vector3(RoofCentreX, RoofCentreY, RidgeZ - half), 0, RoofScale));
