@@ -81,7 +81,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     RoomProbe.Execute(_site, args.Skip(1).ToArray());
                     break;
                 case "dockroute":
-                    if (args.Count > 3 && args[1] == "deliver") DockDeliver(int.Parse(args[2]), args[3]);
+                    if (args.Count > 3 && args[1] == "deliver") DockDeliver(int.Parse(args[2]), args[3], args.Count > 4 ? int.Parse(args[4]) : 0);
                     else if (args.Count > 1 && args[1] == "route") SetDockRoute();
                     else if (args.Count > 1 && args[1] == "routes") DockRoutes();
                     else if (args.Count > 1 && args[1] == "work") DockWork();
@@ -156,6 +156,8 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             if (dock == null) { Mod.Warn($"baseddiag: dockroute dock {d} is null"); continue; }
             var van = dock.DynamicOccupant;
             Mod.Log($"baseddiag: dockroute dock {d} guid {dock.GUID} at {dock.transform.position}, van {(van != null ? van.name : "none")}, output slots {dock.OutputSlots?.Count ?? 0}");
+            if (van != null)
+                Mod.Log($"baseddiag: dockroute dock {d} van at {van.transform.position} forward {van.transform.forward} size {van.BoundingBoxDimensions}");
             var points = dock.accessPoints;
             for (int i = 0; points != null && i < points.Length; i++)
                 if (points[i] != null) Reach($"access point {i}", points[i].position);
@@ -447,21 +449,24 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         }
     }
 
-    // Gives every handler at the site one route from its loading dock, the setup a player makes in the clipboard.
+    // Gives every handler at the site one route from each loading dock, the setup a player makes in the clipboard.
     private static void SetDockRoute()
     {
         var property = SiteProperty();
         if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The " + _site.PropertyName + " has no loading dock.");
-        var dock = property.LoadingDocks[0];
         var shelf = FirstShelf(property);
         if (shelf == null) Mod.Warn("baseddiag: dockroute route: no storage shelf on the property; the route ends at the dock and moves nothing");
         int set = 0;
         foreach (var (packager, config) in Packagers())
         {
-            var source = new Il2CppScheduleOne.Management.ITransitEntity(dock.Pointer);
-            var destination = new Il2CppScheduleOne.Management.ITransitEntity(shelf != null ? shelf.Pointer : dock.Pointer);
-            config.Routes.AddItem(new Il2CppScheduleOne.Management.AdvancedTransitRoute(source, destination));
-            Mod.Log($"baseddiag: dockroute route: {packager.FirstName} gets a route from dock {dock.GUID} to {(shelf != null ? "shelf " + shelf.GUID + " at " + shelf.transform.position : "the dock")}");
+            for (int d = 0; d < property.LoadingDocks.Length; d++)
+            {
+                var dock = property.LoadingDocks[d];
+                var source = new Il2CppScheduleOne.Management.ITransitEntity(dock.Pointer);
+                var destination = new Il2CppScheduleOne.Management.ITransitEntity(shelf != null ? shelf.Pointer : dock.Pointer);
+                config.Routes.AddItem(new Il2CppScheduleOne.Management.AdvancedTransitRoute(source, destination));
+                Mod.Log($"baseddiag: dockroute route: {packager.FirstName} gets a route from dock {d} {dock.GUID} to {(shelf != null ? "shelf " + shelf.GUID + " at " + shelf.transform.position : "the dock")}");
+            }
             set++;
         }
         if (set == 0) Mod.Warn("baseddiag: dockroute route: no handler works at the " + _site.PropertyName + "; add one with 'addemployee handler " + _site.Base.PropertyId + "'");
@@ -544,36 +549,42 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // Sends one item from a shop to the site's dock through the game's own delivery, arriving in a minute.
-    private static void DockDeliver(int shopIndex, string itemId)
+    private static void DockDeliver(int shopIndex, string itemId, int dockIndex)
     {
         var property = SiteProperty();
-        if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The " + _site.PropertyName + " has no loading dock.");
+        int docks = property.LoadingDocks?.Length ?? 0;
+        if (dockIndex < 0 || dockIndex >= docks) throw new InvalidOperationException($"The {_site.PropertyName} has {docks} loading docks; dock {dockIndex} does not exist.");
         var shop = Il2CppScheduleOne.UI.Shop.ShopInterface.AllShops[shopIndex];
         if (shop?.DeliveryVehicle?.Vehicle == null) throw new InvalidOperationException("That shop has no delivery vehicle.");
         if (Il2CppScheduleOne.Registry.GetItem(itemId) == null) throw new ArgumentException("Unknown item: " + itemId);
         var items = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.DevUtilities.StringIntPair>(
             new[] { new Il2CppScheduleOne.DevUtilities.StringIntPair(itemId, 5) });
-        var delivery = new Il2CppScheduleOne.Delivery.DeliveryInstance(Guid.NewGuid().ToString(), shop.ShopName, property.PropertyCode, 0, items,
+        var delivery = new Il2CppScheduleOne.Delivery.DeliveryInstance(Guid.NewGuid().ToString(), shop.ShopName, property.PropertyCode, dockIndex, items,
             Il2CppScheduleOne.Delivery.EDeliveryStatus.InTransit, 1);
         Il2CppScheduleOne.Delivery.DeliveryManager.Instance.SendDelivery(delivery);
-        Mod.Log($"baseddiag: dockroute deliver: 5 {itemId} from '{shop.ShopName}' to {property.PropertyCode} dock 0 in 1 minute");
+        Mod.Log($"baseddiag: dockroute deliver: 5 {itemId} from '{shop.ShopName}' to {property.PropertyCode} dock {dockIndex} in 1 minute");
     }
 
     private static void DockRoutes()
     {
         var property = SiteProperty();
-        var dock = property.LoadingDocks != null && property.LoadingDocks.Length > 0 ? property.LoadingDocks[0] : null;
+        var docks = property.LoadingDocks?.ToArray() ?? Array.Empty<Il2CppScheduleOne.Delivery.LoadingDock>();
         int handlers = 0;
         foreach (var (packager, config) in Packagers())
         {
             handlers++;
             var routes = config.Routes.Routes;
-            Mod.Log($"baseddiag: dockroute routes: {packager.FirstName} has {routes.Count} routes; dock {(dock == null ? "missing" : dock.GUID.ToString())}");
+            Mod.Log($"baseddiag: dockroute routes: {packager.FirstName} has {routes.Count} routes; docks {(docks.Length == 0 ? "missing" : string.Join(", ", docks.Select(d => d.GUID.ToString())))}");
             for (int i = 0; i < routes.Count; i++)
             {
                 var route = routes[i];
-                string Side(Il2CppScheduleOne.Management.ITransitEntity? e) =>
-                    e == null ? "none" : e.Pointer == dock?.Pointer ? "the loading dock" : e.Name;
+                // Dock 0 keeps the name the Sweatshop test looks for; a further dock carries its index.
+                string Side(Il2CppScheduleOne.Management.ITransitEntity? e)
+                {
+                    if (e == null) return "none";
+                    int d = Array.FindIndex(docks, k => k.Pointer == e.Pointer);
+                    return d < 0 ? e.Name : d == 0 ? "the loading dock" : "the loading dock " + d;
+                }
                 Mod.Log($"baseddiag: dockroute routes:   {i}: from {Side(route.Source)} to {Side(route.Destination)}");
             }
         }

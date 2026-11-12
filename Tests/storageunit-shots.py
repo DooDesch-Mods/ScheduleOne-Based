@@ -33,6 +33,19 @@ VIEWS = {
     "stair-side": ((-17, 2.2, 100.5), (-9.8, 2, 100.5)),
     "stair-foot": ((-11.5, 1.7, 93.5), (-9.8, 3, 104)),
     "stair-landing": ((-10.2, 5, 105), (-9.8, 1, 97)),
+    # The upper door from the landing, and the loft above Unit 1 from inside.
+    "door-outside": ((-10.4, 4.9, 104.5), (-7.5, 4.3, 104.5)),
+    "loft-door": ((-4, 4.9, 107), (-8.75, 4.2, 104.5)),
+    "loft-north": ((-7.2, 4.9, 104.4), (-3, 4, 113.5)),
+    "loft-south": ((-3, 4.9, 113.3), (-8.2, 4, 104.2)),
+    # B: from the loft through its east wall, the walkway's south end with the site wall, the east room from its corner.
+    "loft-east": ((-7.5, 4.9, 109), (3, 4.3, 109)),
+    "walkway-site-wall": ((-0.9, 4.9, 113.3), (-0.9, 4.2, 103.8)),
+    "east-room": ((2.9, 4.9, 113.4), (-2, 4, 104.5)),
+    "south-room": ((2.9, 4.9, 94.4), (-1.5, 4, 101.5)),
+    "elevator-corner": ((-1.7, 4.9, 95.5), (0.8, 4.3, 102.8)),
+    # D: both loading bays from the hall's south entrance.
+    "hall-bays": ((-5.3, 2.2, 93.9), (-5.3, 0.3, 101.5)),
 }
 
 
