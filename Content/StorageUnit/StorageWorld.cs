@@ -24,7 +24,8 @@ public static class StorageWorld
 
     // The upper floor lies at 3.25; the ledge along the west wall and the landing in front of it end at 3.30.
     private const float UpperY = 3.25f, LandingTop = 3.30f, LandingBottom = 3.20f;
-    private const float LandingWest = -10.65f, LandingEast = -9.01f, LandingSouth = 103.6f, LandingNorth = 105.3f;
+    // The landing is centred on the door.
+    private const float LandingWest = -10.65f, LandingEast = -9.01f, LandingSouth = 104.6f, LandingNorth = 106.3f;
     private const float RailTop = LandingTop + 1.05f, GuardTop = LandingTop + 2.1f;
 
     // The four small units above Unit 1 (Unit6) and the upper west wall in front of them.
@@ -32,8 +33,9 @@ public static class StorageWorld
     private const string UnitSheet = "alum sheet med grey", FloorSheet = "metal_mediumgrey_mat";
     // The back of the walkway's unit faces inside the block, and the loft's ceiling under the roof's eave.
     private const float FacesBack = -2.25f, LoftCeiling = 6.0f;
-    // The door through the west wall, over the landing.
-    private const float DoorSouth = 103.9f, DoorNorth = 105.1f, DoorSill = 3.31f, DoorHead = 5.35f;
+    // The door through the west wall, over the landing. It takes the place of the third window from the south: the
+    // window's width and head, down to the floor, so no part of the window's recess is left beside it.
+    private const float DoorSouth = 104.85f, DoorNorth = 106.10f, DoorSill = 3.31f, DoorHead = 5.65f;
     private static readonly Bounds DoorCut = BoundsOf(-9.3f, DoorSill, DoorSouth, -8.7f, DoorHead, DoorNorth);
     private const string DoorModel = "@Properties/StorageUnit/Industrial Metal Door (2)/Container/IndustrialMetalDoor/industrialmetaldoor/";
     private const string DoorLeaf = DoorModel + "Door", DoorHandle = DoorModel + "Handle";
@@ -151,9 +153,9 @@ public static class StorageWorld
                 state.Copies.Add(Copy("loft-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(-3.2f, UpperY, 104.8f)));
                 SiteTable(state, geometry, "loft-table", -5.5f, UpperY, 108.8f, 0);
                 // Brick from the cut through the west wall, inside and out.
-                RubblePile(state, "door-rubble", -8.2f, UpperY, 106f, .35f, 11);
-                RubblePile(state, "door-rubble-stray", -7.55f, UpperY, 104.25f, .14f, 23);
-                RubblePile(state, "landing-rubble", -9.85f, LandingTop, 105f, .14f, 37);
+                RubblePile(state, "door-rubble", -8.2f, UpperY, 107f, .35f, 11);
+                RubblePile(state, "door-rubble-stray", -7.55f, UpperY, 105.25f, .14f, 23);
+                RubblePile(state, "landing-rubble", -9.85f, LandingTop, 106f, .14f, 37);
                 WorkLight(state, "loft-work-light", -5.5f, 108.8f, LampRange);
                 break;
             case 4:
@@ -404,10 +406,10 @@ public static class StorageWorld
         // The first two straddle the seam at the stair's foot: the world's ground, then the lowest point of the stair's
         // own walking map (the agent's radius takes off the steps below it). Then the landing, the loft behind its
         // door, the far corner of the loft and its middle.
-        state.NavigationProbes.Add(new Vector3(-9.84f, 0f, 97.4f));
-        state.NavigationProbes.Add(new Vector3(-9.84f, .92f, 99.35f));
-        state.NavigationProbes.Add(new Vector3(-9.6f, LandingTop, 104.5f));
-        state.NavigationProbes.Add(new Vector3(-8.1f, UpperY, 104.4f));
+        state.NavigationProbes.Add(new Vector3(-9.84f, 0f, 98.4f));
+        state.NavigationProbes.Add(new Vector3(-9.84f, .92f, 100.35f));
+        state.NavigationProbes.Add(new Vector3(-9.6f, LandingTop, 105.5f));
+        state.NavigationProbes.Add(new Vector3(-8.1f, UpperY, 105.45f));
         state.NavigationProbes.Add(new Vector3(-3f, UpperY, 112.8f));
         state.NavigationProbes.Add(new Vector3(-5.5f, UpperY, 109f));
         // The walkway through the old wall, then the middle of the east room.
@@ -435,7 +437,7 @@ public static class StorageWorld
         };
         for (int x = 0; x <= 11; x++)
             for (int y = 0; y <= 18; y++)
-                if (!(x >= 10 && y >= 16)) property.Tiles.Add(new GridCoordinate(x, y));
+                if (!(x >= 10 && y >= 15 && y <= 17)) property.Tiles.Add(new GridCoordinate(x, y));
         property.Bounds.Add(BoundsOf(UnitWest, UpperY - .1f, UnitSouth - .2f, FacesBack, LoftCeiling, UnitNorth));
         state.PropertyExtensions.Add(property);
     }
@@ -548,9 +550,9 @@ public static class StorageWorld
         state.Copies.Add(Copy("west-stair", Stair, StairTop, target, StairYaw, StairScale));
         StairRail(state, geometry);
         Solid(geometry, "landing", Metal, LandingWest, LandingBottom, LandingSouth, LandingEast, LandingTop, LandingNorth);
-        // The stair's top tread ends a few centimetres short of the landing. The open slit would split the walking
-        // map there, so an unseen strip closes it under the tread's edge.
-        Block(geometry, "landing-lip", LandingWest, LandingBottom, LandingSouth - .3f, LandingEast, LandingTop - .02f, LandingSouth);
+        // The stair's top tread ends a few centimetres short of the landing. A steel strip under the tread's edge closes
+        // the slit, for the eye and for the walking map, which the slit would split.
+        Solid(geometry, "landing-lip", Metal, LandingWest, LandingBottom, LandingSouth - .3f, LandingEast, LandingTop - .02f, LandingSouth);
         // Two posts carry the landing's open corners; the shipping container stands under its north half.
         Post(geometry, "landing-post-sw", LandingWest + .04f, LandingSouth + .04f, 0f, LandingBottom);
         Post(geometry, "landing-post-se", LandingEast - .06f, LandingSouth + .04f, 0f, LandingBottom);
@@ -587,6 +589,16 @@ public static class StorageWorld
                 });
             state.Copies.Add(rail);
         }
+        // The treads have open risers and stop a few centimetres short of the wall. A steel sheet under them, from
+        // stringer to wall, closes the view through to the grass. It lies below the treads' back edges and inside the
+        // stringers, and has no collider, so the walking map follows the treads.
+        var soffit = new CopyDefinition
+        {
+            Id = "stair-soffit", Template = Anchor, Frame = Anchor, OwnMesh = false, Obstacle = false,
+            At = new LocalPoint(new Vector3(-9.82f, Nosing(foot) - .27f, foot), 0), Tilt = new Vector3(-slope, 0, 0)
+        };
+        Face(soffit, "sheet", Metal, AnchorPoint.x - .75f, AnchorPoint.y - .03f, AnchorPoint.z, AnchorPoint.x + .75f, AnchorPoint.y, AnchorPoint.z + length);
+        state.Copies.Add(soffit);
     }
 
     private static void Railing(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end)

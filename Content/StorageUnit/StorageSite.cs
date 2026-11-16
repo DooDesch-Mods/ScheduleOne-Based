@@ -18,7 +18,7 @@ internal static class StorageSite
         FolderItemId = "based_storage_folder",
         BoardSurfaceId = "based-storage-plan-board",
         BuyFirst = "Buy the Storage Unit first.",
-        QuestMarker = new UnityEngine.Vector3(-9.84f, 0f, 97.5f),
+        QuestMarker = new UnityEngine.Vector3(-9.84f, 0f, 98.5f),
         PhaseTitles = new Dictionary<string, string>
         {
             ["loft-stair"] = "Steel stairs",
@@ -53,7 +53,7 @@ internal static class StorageSite
                 {
                     new(PlanRoomKind.Existing, -8.8f, 103.8f, -3.8f, 114f),
                     new(PlanRoomKind.New, -8.75f, 103.8f, -2.2f, 113.8f, "Loft"),
-                    new(PlanRoomKind.New, -10.65f, 97.7f, -9.01f, 105.3f)
+                    new(PlanRoomKind.New, -10.65f, 98.7f, -9.01f, 106.3f)
                 }
             },
             new SiteFollowUp(StorageDefinition.EastId, "East units: Storage Unit", "Ready to move in",

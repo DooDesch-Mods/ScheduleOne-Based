@@ -30,14 +30,22 @@ VIEWS = {
     "upper-walkway-south": ((-1.1, 4.9, 113.3), (-1.1, 4.5, 95)),
     "upper-over-hall": ((-1.4, 5.2, 102), (-8, 2, 97)),
     # The outside stair on the west wall: from the side, from its foot, and down from the landing.
-    "stair-side": ((-17, 2.2, 100.5), (-9.8, 2, 100.5)),
-    "stair-foot": ((-11.5, 1.7, 93.5), (-9.8, 3, 104)),
-    "stair-landing": ((-10.2, 5, 105), (-9.8, 1, 97)),
-    # The upper door from the landing, and the loft above Unit 1 from inside.
-    "door-outside": ((-10.4, 4.9, 104.5), (-7.5, 4.3, 104.5)),
-    "loft-door": ((-4, 4.9, 107), (-8.75, 4.2, 104.5)),
-    "loft-north": ((-7.2, 4.9, 104.4), (-3, 4, 113.5)),
-    "loft-south": ((-3, 4.9, 113.3), (-8.2, 4, 104.2)),
+    "stair-side": ((-17, 2.2, 101.5), (-9.8, 2, 101.5)),
+    "stair-foot": ((-11.5, 1.7, 94.5), (-9.8, 3, 105)),
+    "stair-landing": ((-10.2, 5, 106), (-9.8, 1, 98)),
+    # Close-ups of the stair's joints: the top tread at the landing, the treads along the wall from above, the foot
+    # on the grass from the side and from the front, and the landing against the wall.
+    "stair-top-join": ((-12.5, 3.0, 103.6), (-9.8, 3.1, 104.6)),
+    "stair-wall-gap": ((-11, 4.6, 99.6), (-9.1, 1.4, 102.5)),
+    "stair-foot-side": ((-12.8, 0.7, 99.2), (-9.8, 0.2, 99.2)),
+    "stair-foot-front": ((-9.8, 1.3, 96.2), (-9.8, 0.2, 99.3)),
+    "landing-wall": ((-12, 3.0, 104.2), (-9.0, 3.25, 105.4)),
+    # The upper door: straight on from outside, from the landing, and the loft above Unit 1 from inside.
+    "door-front": ((-14, 4.5, 105.5), (-9, 4.4, 105.5)),
+    "door-outside": ((-10.4, 4.9, 105.5), (-7.5, 4.3, 105.5)),
+    "loft-door": ((-4, 4.9, 108), (-8.75, 4.2, 105.5)),
+    "loft-north": ((-7.2, 4.9, 105.4), (-3, 4, 113.5)),
+    "loft-south": ((-3, 4.9, 113.3), (-8.2, 4, 105.2)),
     # B: from the loft through its east wall, the walkway's south end with the site wall, the east room from its corner.
     "loft-east": ((-7.5, 4.9, 109), (3, 4.3, 109)),
     "walkway-site-wall": ((-0.9, 4.9, 113.3), (-0.9, 4.2, 103.8)),
