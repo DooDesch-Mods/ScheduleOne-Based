@@ -29,11 +29,17 @@ check "path from the west room into the far corner" "$line" "ok=True status=Path
 line=$($S run "mxnav path -188 -4 112 -179 -3.7 118" 2>&1 | grep "mxnav path" | tail -1); echo "$line"
 check "path from the garden through the west door" "$line" "ok=True status=PathComplete"
 
-line=$($S run "mxreach place bungalow dryingrack wing" 2>&1 | grep -i "mxreach place" | tail -1); echo "$line"
-pos=$(echo "$line" | grep -oE "\(-?[0-9.]+, -?[0-9.]+, -?[0-9.]+\)" | tail -1)
-python -c "
+# The sunroom's grid index depends on which other builds added grids first, so each grid is tried until one has
+# expansion tiles inside the room.
+placed=1
+for grid in 0 1 2 3 4 5 6; do
+  line=$($S run "mxreach place bungalow dryingrack wing 0 $grid" 2>&1 | grep -i "mxreach place" | tail -1); echo "grid $grid: $line"
+  pos=$(echo "$line" | grep -i "built" | grep -oE "\(-?[0-9.]+, -?[0-9.]+, -?[0-9.]+\)" | tail -1)
+  [ -z "$pos" ] && continue
+  python -c "
 import sys
 x,y,z=[float(v) for v in '$pos'.strip('()').split(',')]
-sys.exit(0 if -183.05<x<-176.17 and 109.23<z<121.63 and abs(y+3.7)<.15 else 1)" 2>/dev/null \
-  && pass "item on a sunroom tile stands inside the room at floor height $pos" || bad "item on a sunroom tile" "$line"
+sys.exit(0 if -183.05<x<-176.17 and 109.23<z<121.63 and abs(y+3.7)<.15 else 1)" 2>/dev/null && { placed=0; break; }
+done
+[ $placed -eq 0 ] && pass "item on a sunroom tile stands inside the room at floor height $pos (grid $grid)" || bad "item on a sunroom tile" "$line"
 exit $fail

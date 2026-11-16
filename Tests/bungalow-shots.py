@@ -55,6 +55,27 @@ VIEWS = {
         "woodcutter": ["--eye", "-180.5", "-2.6", "120.5", "--target", "-180.5", "-3.2", "117.5"],
         "carpenter": ["--eye", "-186.5", "-2.8", "115.2", "--target", "-183.3", "-3.3", "112.5"],
     },
+    "storey": {
+        # The whole house from the south-east gravel, stair and balcony in front.
+        "southeast": ["--eye", "-152", "1.5", "99", "--target", "-169", "0", "115"],
+        # The south front with the upper sliding door and its railing at the west end.
+        "south": ["--eye", "-171", "0.5", "96", "--target", "-171", "0", "115"],
+        "north": ["--eye", "-166", "1.5", "136", "--target", "-170", "0", "115"],
+        # Along the stair from its foot, and down it from the landing.
+        "stair-foot": ["--eye", "-160.5", "-2.4", "107.6", "--target", "-166.5", "-2.2", "112"],
+        "landing": ["--eye", "-169.2", "1.0", "111.9", "--target", "-161", "-3.6", "111.9"],
+        # The balcony on the porch, toward the copied porch door into the west room.
+        "balcony": ["--eye", "-165.2", "1.0", "113.2", "--target", "-170", "0.3", "113.8"],
+        # Upstairs: the west rooms from the south, the north-east room, and the upper door from inside.
+        "upper-west": ["--eye", "-173", "1.0", "110.2", "--target", "-173", "0.2", "121"],
+        "upper-ne": ["--eye", "-164.6", "1.0", "116.1", "--target", "-169.4", "0.2", "121"],
+        "upper-door": ["--eye", "-172.5", "1.0", "113.5", "--target", "-176.2", "0.4", "111.4"],
+        # Downstairs under the new floor: the ceiling must stay shut and shaded.
+        "lower": ["--eye", "-171", "-2.0", "110", "--target", "-174", "-2.0", "120"],
+        "top": ["--topdown", "-180", "105", "-158", "125"],
+        # Where the carpenter works on floor and walls days.
+        "carpenter": ["--eye", "-161.5", "-2.6", "114.5", "--target", "-165.6", "-3.2", "111"],
+    },
 }
 
 

@@ -107,6 +107,25 @@ def sunroom(slot):
     run(slot, "baseddiag site=bungalow phase complete sunroom")
 
 
+def storey(slot):
+    """On the floor and walls days of the second storey the carpenter works at the stair and the porch posts."""
+    run(slot, "baseddiag site=bungalow phase complete")
+    for phase in ("storey-floor", "storey-walls"):
+        out = run(slot, "baseddiag site=bungalow phase " + phase + " storey")
+        check(f"storey {phase}", "ray.bungalow-storey" in out, out.strip()[-300:])
+        code, out = s1(slot, "time", "1000")
+        check("time 1000", code == 0, out.strip()[-200:])
+        workers = [w for w in wait_for_work(slot, "bungalow", 1, 1) if w.get("visible")]
+        check(f"one worker on the storey {phase}", len(workers) == 1, f"{len(workers)} visible")
+        for w in workers:
+            check(f"storey {phase} worker is the carpenter", "carpenter" in str(w.get("id", "")).lower(), str(w.get("id")))
+            check(f"storey {phase} worker follows the storey", w.get("upgrade") == "ray.bungalow-storey", str(w.get("upgrade")))
+            check(f"storey {phase} worker at its anchor", w.get("atAnchor") is True, str(w.get("anchor")))
+            check(f"storey {phase} worker swings", w.get("hammering") is True)
+            check(f"storey {phase} worker without failure", not w.get("failure"), str(w.get("failure")))
+    run(slot, "baseddiag site=bungalow phase complete storey")
+
+
 def ming(slot):
     run(slot, "baseddiag site=sweatshop phase frame")
     code, out = s1(slot, "time", "1000")
@@ -128,6 +147,7 @@ def main():
     if a.only != "ming":
         bungalow(a.slot)
         sunroom(a.slot)
+        storey(a.slot)
     if a.only != "bungalow":
         ming(a.slot)
     print(f"{'FAIL' if FAILED else 'PASS'} crew-check: {len(FAILED)} failed")
