@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds]";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -151,6 +151,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     break;
                 case "climb":
                     MelonLoader.MelonCoroutines.Start(Climb(args.Count > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 3f));
+                    break;
+                case "fixtures":
+                    Fixtures();
                     break;
                 default:
                     throw new ArgumentException(ExampleUsage);
@@ -319,6 +322,51 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             Bounds bounds = part.bounds;
             Mod.Log($"baseddiag lights: {Path(part.transform)} at ({at.x:F2},{at.y:F2},{at.z:F2}) bounds min ({bounds.min.x:F2},{bounds.min.y:F2},{bounds.min.z:F2}) max ({bounds.max.x:F2},{bounds.max.y:F2},{bounds.max.z:F2})");
         }
+    }
+
+    // Every tube lamp in and around the Storage Unit's hall against the ceiling above it: a ray up from both ends and
+    // the middle of the lamp's back. The gap is the distance from the back to the ceiling; a negative gap means that end
+    // lies inside the ceiling. PASS when every gap lies between -0.5 and 2 cm.
+    private static void Fixtures()
+    {
+        int pass = 0, fail = 0;
+        foreach (var part in UnityEngine.Object.FindObjectsOfType<MeshRenderer>())
+        {
+            Vector3 at = part.transform.position;
+            if (at.x < -12f || at.x > 4f || at.z < 92f || at.z > 115f || at.y < 1f) continue;
+            string path = Path(part.transform);
+            if (!path.Contains("FluroBar")) continue;
+            var filter = part.GetComponent<MeshFilter>();
+            if (filter == null || filter.sharedMesh == null)
+            {
+                Mod.Warn("baseddiag fixtures: " + path + " has no mesh, skipped.");
+                continue;
+            }
+            Bounds local = filter.sharedMesh.bounds;
+            bool alongX = local.extents.x >= local.extents.z;
+            Vector3 half = alongX ? new Vector3(local.extents.x - .02f, 0, 0) : new Vector3(0, 0, local.extents.z - .02f);
+            Vector3 top = new(local.center.x, local.max.y, local.center.z);
+            var gaps = new List<string>();
+            bool ok = true;
+            foreach (var (name, offset) in new[] { ("end-a", -half), ("middle", Vector3.zero), ("end-b", half) })
+            {
+                Vector3 back = part.transform.TransformPoint(top + offset);
+                // From well below the back, so a ceiling the end reaches into is still hit from its open side.
+                Vector3 from = back + Vector3.down * .3f;
+                if (!Physics.Raycast(from, Vector3.up, out RaycastHit hit, 3.5f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    gaps.Add($"{name} ({back.x:F2},{back.y:F2},{back.z:F2}) no ceiling");
+                    ok = false;
+                    continue;
+                }
+                float gap = hit.point.y - back.y;
+                ok &= gap >= -.005f && gap < .02f;
+                gaps.Add($"{name} ({back.x:F2},{back.y:F2},{back.z:F2}) gap {gap * 100f:F1} cm to {hit.collider.name}");
+            }
+            if (ok) pass++; else fail++;
+            Mod.Log($"baseddiag fixtures: {(ok ? "PASS" : "FAIL")} {path} " + string.Join("; ", gaps));
+        }
+        Mod.Log($"baseddiag fixtures: {pass} pass, {fail} fail.");
     }
 
     // Changes the two ceiling lights added by the upgrade live, so one run can compare reach and shadow settings.
