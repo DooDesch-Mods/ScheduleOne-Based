@@ -268,8 +268,8 @@ public sealed class Mod : MelonMod
             TickStorageEffects();
             TickHold();
             TickJournal();
-            try { Content.Bungalow.BungalowSunroomDoor.Tick(); }
-            catch (Exception error) { Contain("sunroom door", error); }
+            try { Content.Bungalow.BungalowDoors.Tick(); }
+            catch (Exception error) { Contain("bungalow doors", error); }
         }
         catch (Exception error) { Contain("runtime update", error); }
     }

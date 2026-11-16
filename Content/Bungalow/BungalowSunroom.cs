@@ -63,7 +63,7 @@ public static class BungalowSunroom
         if (_registered) return;
         if (!MapExpansionsApi.Register(Create()))
             throw new InvalidOperationException("Based could not register the Bungalow sunroom; inspect the MapExpansions validation errors.");
-        BungalowSunroomDoor.Init();
+        BungalowDoors.Init();
         _registered = true;
     }
 
@@ -132,7 +132,7 @@ public static class BungalowSunroom
             state.Copies.Add(frame);
             if (glazed)
             {
-                // A visual copy; BungalowSunroomDoor slides its leaf and keeps it in step between peers.
+                // A visual copy; BungalowDoors.Sunroom slides its leaf and keeps it in step between peers.
                 state.Copies.Add(Tilted("west-door", HouseDoor, new Vector3(HouseDoorPlane, Floor, DoorSouth), new Vector3(HouseDoorPlane, Floor, DoorSouth) + shift, Quaternion.identity, 1f));
                 // The fixed half of the door, which the open leaf slides over.
                 Block(geometry, "west-door-fixed", West - .05f, Floor, DoorSouth, West + .05f, DoorTop, HouseDoorLeafSouth);
@@ -249,7 +249,7 @@ public static class BungalowSunroom
         {
             Id = id, Template = template, Frame = Property,
             At = new LocalPoint(target - turn * (source - PropertyPivot) * scale, 0f),
-            OntoRotation = frameTurn.eulerAngles, Scale = scale,
+            Tilt = frameTurn.eulerAngles, Scale = scale,
             IndependentMesh = true, VisualOnly = true, Obstacle = false
         };
     }

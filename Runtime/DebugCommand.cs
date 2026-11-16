@@ -39,7 +39,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     Sites();
                     break;
                 case "door":
-                    Mod.Log("baseddiag: sunroom door " + Content.Bungalow.BungalowSunroomDoor.Debug(args.Count > 1 ? args[1] : "state"));
+                    Mod.Log("baseddiag: " + Content.Bungalow.BungalowDoors.Debug(args));
                     break;
                 case "status":
                     Mod.Log("baseddiag: " + BuildPlan.State(_site));
