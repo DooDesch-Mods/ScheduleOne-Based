@@ -58,6 +58,17 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "folder":
                     Folder(args.Count > 1 ? args[1] : "state");
                     break;
+                case "heldby":
+                    // heldby Small Storage Rack|Wall Clock = the hold names these items (host), heldby off clears it,
+                    // heldby alone only reports. Logs the hold line and the order line in this peer's language.
+                    if (args.Count > 1) Mod.DebugHeld(args[1] == "off" ? "" : string.Join(" ", args.Skip(1)));
+                    Mod.Log("baseddiag held: language " + DooDesch.Localization.L10n.Language + "; names '" + Mod.HeldBy
+                        + "'; hold line '" + Text.T("On hold: move {0} off the red walls.", Text.Items(Mod.HeldBy))
+                        + "'; order line '" + Text.T("Move {0} off the red walls.", Text.Items(Mod.HeldBy)) + "'.");
+                    break;
+                case "lang":
+                    SetLanguage(args.Count > 1 ? args[1] : throw new ArgumentException("baseddiag lang <en|de>"));
+                    break;
                 case "vfx":
                     // on = by stage and hour, off = none, force = the yard fire and the current stage's sparks at any hour.
                     if (args.Count > 1)
@@ -332,18 +343,39 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         }
     }
 
-    // Every tube lamp in and around the Storage Unit's hall against the ceiling above it: a ray up from both ends and
-    // the middle of the lamp's back. The gap is the distance from the back to the ceiling; a negative gap means that end
-    // lies inside the ceiling. PASS when every gap lies between -0.5 and 2 cm.
+    // Every visible tube lamp the expansion adds against the ceiling above it: a ray up from both ends and the middle of
+    // the lamp's back. The ceiling is the lower of the first collider above and the lowest flat panel drawn over that
+    // point, since the expansion's ceiling panels have no collider. The gap is the distance from the back to the ceiling;
+    // a negative gap means that end lies inside it. PASS when every gap lies between -0.5 and 2 cm.
     private static void Fixtures()
     {
-        int pass = 0, fail = 0;
-        foreach (var part in UnityEngine.Object.FindObjectsOfType<MeshRenderer>())
+        int pass = 0, fail = 0, vanilla = 0, hidden = 0;
+        var all = UnityEngine.Object.FindObjectsOfType<MeshRenderer>();
+        var panels = new List<MeshRenderer>();
+        foreach (var part in all)
+        {
+            Bounds b = part.bounds;
+            if (b.max.x < -12f || b.min.x > 4f || b.max.z < 92f || b.min.z > 115f || b.max.y < 1f) continue;
+            if (!part.enabled || !part.gameObject.activeInHierarchy) continue;
+            if (b.size.y > .2f || Mathf.Max(b.size.x, b.size.z) < 1f || Path(part.transform).Contains("FluroBar")) continue;
+            panels.Add(part);
+        }
+        foreach (var part in all)
         {
             Vector3 at = part.transform.position;
             if (at.x < -12f || at.x > 4f || at.z < 92f || at.z > 115f || at.y < 1f) continue;
             string path = Path(part.transform);
-            if (!path.Contains("FluroBar")) continue;
+            if (!path.Contains("FluroBar") || !path.Contains("/Body")) continue;
+            if (!path.Contains("based_storage"))
+            {
+                vanilla++;
+                continue;
+            }
+            if (!part.enabled || !part.gameObject.activeInHierarchy)
+            {
+                hidden++;
+                continue;
+            }
             var filter = part.GetComponent<MeshFilter>();
             if (filter == null || filter.sharedMesh == null)
             {
@@ -361,20 +393,35 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 Vector3 back = part.transform.TransformPoint(top + offset);
                 // From well below the back, so a ceiling the end reaches into is still hit from its open side.
                 Vector3 from = back + Vector3.down * .3f;
-                if (!Physics.Raycast(from, Vector3.up, out RaycastHit hit, 3.5f, ~0, QueryTriggerInteraction.Ignore))
+                float ceiling = float.MaxValue;
+                string by = null;
+                if (Physics.Raycast(from, Vector3.up, out RaycastHit hit, 3.5f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    ceiling = hit.point.y;
+                    by = "collider " + hit.collider.name;
+                }
+                foreach (var panel in panels)
+                {
+                    Bounds b = panel.bounds;
+                    if (back.x < b.min.x || back.x > b.max.x || back.z < b.min.z || back.z > b.max.z) continue;
+                    if (b.min.y < from.y || b.min.y >= ceiling) continue;
+                    ceiling = b.min.y;
+                    by = "panel " + Path(panel.transform);
+                }
+                if (by == null)
                 {
                     gaps.Add($"{name} ({back.x:F2},{back.y:F2},{back.z:F2}) no ceiling");
                     ok = false;
                     continue;
                 }
-                float gap = hit.point.y - back.y;
+                float gap = ceiling - back.y;
                 ok &= gap >= -.005f && gap < .02f;
-                gaps.Add($"{name} ({back.x:F2},{back.y:F2},{back.z:F2}) gap {gap * 100f:F1} cm to {hit.collider.name}");
+                gaps.Add($"{name} ({back.x:F2},{back.y:F2},{back.z:F2}) gap {gap * 100f:F1} cm to {by}");
             }
             if (ok) pass++; else fail++;
             Mod.Log($"baseddiag fixtures: {(ok ? "PASS" : "FAIL")} {path} " + string.Join("; ", gaps));
         }
-        Mod.Log($"baseddiag fixtures: {pass} pass, {fail} fail.");
+        Mod.Log($"baseddiag fixtures: {pass} pass, {fail} fail; {panels.Count} drawn panels checked; {vanilla} vanilla and {hidden} hidden lamp bodies not counted.");
     }
 
     // Changes the two ceiling lights added by the upgrade live, so one run can compare reach and shadow settings.
@@ -411,6 +458,18 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // Selects a hotbar slot like its number key, for checks of hand-held interactions.
+    // L10n resolves the language once per session; a test resets its cached choice to read both languages in one game.
+    private static void SetLanguage(string code)
+    {
+        const System.Reflection.BindingFlags Flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+        var type = typeof(DooDesch.Localization.L10n);
+        var lang = type.GetField("_lang", Flags) ?? throw new MissingFieldException(type.FullName, "_lang");
+        var active = type.GetField("_active", Flags) ?? throw new MissingFieldException(type.FullName, "_active");
+        lang.SetValue(null, code);
+        active.SetValue(null, null);
+        Mod.Log("baseddiag: language set to " + DooDesch.Localization.L10n.Language + "; reopen the plan to see it.");
+    }
+
     private static void Hold(int slot)
     {
         var inventory = Il2CppScheduleOne.PlayerScripts.PlayerInventory.Instance;
