@@ -45,6 +45,12 @@ internal sealed class BungalowCrew : ConstructionCrew
     private static readonly Vector3 FrameNorthStand = new(-183.75f, -4f, 117.8f);
     private static readonly Vector3 FrameNorthPost = new(-183.05f, -3f, 117.8f);
 
+    // On the gravel south of the new stair, facing its stringer, and on the porch under the balcony, facing a post.
+    private static readonly Vector3 StairStand = new(-165.6f, -4f, 110.5f);
+    private static readonly Vector3 StairStringer = new(-165.6f, -3f, 111.1f);
+    private static readonly Vector3 PorchStand = new(-166.4f, -3.85f, 113.6f);
+    private static readonly Vector3 PorchPost = new(-167.2f, -2.6f, 112.85f);
+
     protected override string Tag => "bungalow workers";
     protected override string BaseId => BungalowDefinition.BaseId;
     // No foreman: nobody carries the plan or takes tips.
@@ -57,12 +63,14 @@ internal sealed class BungalowCrew : ConstructionCrew
     protected override bool WorksOn(UpgradeStage stage, string? phase) =>
         stage == UpgradeStage.Constructing && (Upgrade == BungalowDefinition.CarportId
             || Upgrade == BungalowDefinition.DeckId && phase == "deck-stilts"
-            || Upgrade == BungalowDefinition.SunroomId && (phase == null || phase == "sunroom-glass"));
+            || Upgrade == BungalowDefinition.SunroomId && (phase == null || phase == "sunroom-glass")
+            || Upgrade == BungalowDefinition.StoreyId && phase is "storey-floor" or "storey-walls");
 
     protected override bool OnJob(int index, string? phase) => index == (IsCarpentry(phase) ? Carpenter : Lumberjack);
 
     private bool IsCarpentry(string? phase) =>
-        Upgrade == BungalowDefinition.DeckId || Upgrade == BungalowDefinition.SunroomId && phase != null;
+        Upgrade == BungalowDefinition.DeckId || Upgrade == BungalowDefinition.StoreyId
+        || Upgrade == BungalowDefinition.SunroomId && phase != null;
 
     protected override NpcAppearance CreateAppearance(int index)
     {
@@ -104,6 +112,7 @@ internal sealed class BungalowCrew : ConstructionCrew
     protected override Vector3 WorkPoint(int index, bool secondary, string? phase)
     {
         bool sunroom = Upgrade == BungalowDefinition.SunroomId;
+        if (Upgrade == BungalowDefinition.StoreyId) return secondary ? PorchStand : StairStand;
         if (index == Carpenter)
             return sunroom ? secondary ? FrameNorthStand : FrameSouthStand : secondary ? DeckNorthStand : DeckSouthStand;
         return sunroom ? secondary ? SunroomWestStand : SunroomEastStand : secondary ? EastStand : WestStand;
@@ -112,6 +121,7 @@ internal sealed class BungalowCrew : ConstructionCrew
     protected override Vector3 ContactPoint(int index, bool secondary, string? phase)
     {
         bool sunroom = Upgrade == BungalowDefinition.SunroomId;
+        if (Upgrade == BungalowDefinition.StoreyId) return secondary ? PorchPost : StairStringer;
         if (index == Carpenter)
             return sunroom ? secondary ? FrameNorthPost : FrameSouthPost : secondary ? DeckNorthBeam : DeckSouthBeam;
         return sunroom ? secondary ? SunroomWestBark : SunroomEastBark : secondary ? EastBark : WestBark;
@@ -120,7 +130,9 @@ internal sealed class BungalowCrew : ConstructionCrew
     protected override bool WantsHammer(int index, bool secondary, string? phase) => true;
     protected override string Tool(int index) => index == Carpenter ? base.Tool(index) : "weapons/machete/Machete_AvatarEquippable";
     protected override bool GrabsBetweenSwings(int index) => index == Carpenter;
-    protected override string Line(int index, string? phase) => Upgrade == BungalowDefinition.SunroomId
+    protected override string Line(int index, string? phase) => Upgrade == BungalowDefinition.StoreyId
+        ? phase == "storey-floor" ? "Floor and stair are in. The walls go up tonight." : "Walls stand. The roof goes on next."
+        : Upgrade == BungalowDefinition.SunroomId
         ? index == Carpenter ? "Frames are up. The glass goes in tonight." : "Three pines in the way of the sunroom. Not for long."
         : index == Carpenter ? "Stilts are in. The boards go on tonight." : "These pines have to go before the roof goes up.";
 }
