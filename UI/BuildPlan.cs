@@ -247,7 +247,7 @@ internal static class BuildPlan
             take = !wall && ProjectFolder.Offered(site) ? Text.T("Take the project folder") : "",
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
                 : !owned ? Text.T(site.BuyFirst)
-                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Mod.HeldBy)
+                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Text.Items(Mod.HeldBy))
                 : _noticeUpgrade.Length == 0 ? _notice : "",
             drawing = Drawing(BuiltPlan(site), UpgradeStage.Complete)
         });
@@ -345,7 +345,7 @@ internal static class BuildPlan
             notes = Notes(site, followUp, upgrade, state.Stage),
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
                 : !owned ? Text.T(site.BuyFirst)
-                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Mod.HeldBy)
+                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Text.Items(Mod.HeldBy))
                 : reason.Length > 0 && ordering && !wall ? reason
                 : locked && !wall && ordering && !permit ? Text.T(site.OrderEntry)
                 : state.Stage == _noticeStage && upgradeId == _noticeUpgrade ? _notice : "",

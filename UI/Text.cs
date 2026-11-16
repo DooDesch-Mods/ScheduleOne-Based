@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using DooDesch.Localization;
 
 namespace Based.UI;
@@ -6,6 +7,17 @@ namespace Based.UI;
 internal static class Text
 {
     internal static string T(string value, params object[] arguments) => L10n.T(value, arguments);
+
+    internal const string ItemSeparator = "|";
+
+    // Item names stay as the game spells them, in quotes, joined the way the language lists things: "A" and "B",
+    // "A", "B" and "C".
+    internal static string Items(string names)
+    {
+        var quoted = names.Split(new[] { ItemSeparator }, System.StringSplitOptions.RemoveEmptyEntries).Select(n => "\"" + n + "\"").ToArray();
+        if (quoted.Length <= 1) return quoted.Length == 0 ? "" : quoted[0];
+        return T("{0} and {1}", string.Join(", ", quoted.Take(quoted.Length - 1)), quoted[quoted.Length - 1]);
+    }
     internal static void Register() => L10n.Register("de", new Dictionary<string, string>
     {
         ["Expansion: Sweatshop"] = "Ausbau: Sweatshop",
@@ -14,6 +26,7 @@ internal static class Text
         ["How is the construction going?"] = "Wie läuft der Ausbau?",
         ["Buy the Sweatshop first."] = "Kauf zuerst den Sweatshop.",
         ["Waiting for the host's construction plan."] = "Warte auf den Bauplan des Hosts.",
+        ["{0} and {1}"] = "{0} und {1}",
         ["Move {0} off the red walls."] = "Räum {0} von den roten Wänden weg.",
         ["On hold: move {0} off the red walls."] = "Baustopp: Räum {0} von den roten Wänden weg.",
         ["Keep the red walls clear."] = "Halte die roten Wände frei.",

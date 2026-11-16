@@ -126,7 +126,7 @@ internal static class ConstructionJournal
         return Progress(Text.T(site.PhaseTitles[upgrade.Phases[active - 1].Id]), upgrade.ConstructionCycles - state.CompletedCycles);
     }
 
-    private static string Hold() => Text.T("On hold: move {0} off the red walls.", Mod.HeldBy);
+    private static string Hold() => Text.T("On hold: move {0} off the red walls.", Text.Items(Mod.HeldBy));
 
     private static string Progress(string title, int nights) =>
         nights == 1 ? Text.T("{0}, one night left", title) : Text.T("{0}, {1} nights left", title, nights);

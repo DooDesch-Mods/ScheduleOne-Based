@@ -281,6 +281,9 @@ public sealed class Mod : MelonMod
     private static void TickHold()
     {
         if (!NativeBus.IsHost || HeldBy.Length == 0 || Time.unscaledTime < _nextHoldCheck) return;
+#if DEBUG
+        if (DebugHoldPinned) return;
+#endif
         _nextHoldCheck = Time.unscaledTime + HoldCheckInterval;
         var site = Sites.FirstOrDefault(s => Constructing(s) != null);
         SetHeld(site == null ? "" : BlockerNames(BlockingItems(site, Constructing(site)!)));
@@ -528,9 +531,11 @@ public sealed class Mod : MelonMod
     }
 
     // The outlines end with the plan, so the text names every blocker at once.
-    private static string BlockedText(BuildableItem[] items) => Text.T("Move {0} off the red walls.", BlockerNames(items));
+    private static string BlockedText(BuildableItem[] items) => Text.T("Move {0} off the red walls.", Text.Items(BlockerNames(items)));
 
-    private static string BlockerNames(BuildableItem[] items) => string.Join(", ", items.Select(i => i.GetManagementName()).Distinct());
+    // The game's own item names, unchanged, joined with Text.ItemSeparator. HeldBy carries this raw list to the clients,
+    // so each peer quotes and joins it in its own language.
+    private static string BlockerNames(BuildableItem[] items) => string.Join(Text.ItemSeparator, items.Select(i => i.GetManagementName()).Distinct());
 
     internal static BuildableItem[] BlockingItems(SiteDefinition site) => BlockingItems(site, site.UpgradeId);
 
@@ -585,6 +590,9 @@ public sealed class Mod : MelonMod
     {
         PlanShows(site, upgradeId);
         // The hold only names last night's blocker, so it ends as soon as the player has moved the item.
+#if DEBUG
+        if (DebugHoldPinned) return;
+#endif
         if (NativeBus.IsHost && HeldBy.Length > 0 && Outlined.Count == 0) SetHeld("");
     }
 
@@ -607,6 +615,16 @@ public sealed class Mod : MelonMod
 #if DEBUG
     // Lets a test see the conversation end the plan, as it does without the hold.
     internal static bool DebugFreeConversation;
+
+    // A test names the hold itself, so the hold check and the plan leave the names alone until it is cleared.
+    internal static bool DebugHoldPinned;
+
+    internal static void DebugHeld(string names)
+    {
+        if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host names the construction hold.");
+        DebugHoldPinned = names.Length > 0;
+        SetHeld(names);
+    }
 
     internal static void DebugBlockers(SiteDefinition site)
     {
