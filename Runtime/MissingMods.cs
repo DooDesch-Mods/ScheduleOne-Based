@@ -10,9 +10,9 @@ namespace Based.Runtime;
 // when the calling method is compiled, not at the line that uses it.
 //
 // The minimums are the versions in thunderstore/manifest.json; below them Based stays off. That includes
-// MapExpansions: the Storage Unit sets CopyDefinition.Tilt and the 1.3.0 cuts and grids while the sites register, so
-// an older MapExpansions would stop the Sweatshop as well. Its lamps need the copied room switches of 1.4.0; on 1.3.0
-// they would hang without a switch.
+// MapExpansions: the Storage Unit sets CopyDefinition.Tilt and the 1.3.0 cuts and grids, the Bungalow the 1.4.0 weather
+// cover, grass clearing and tree removal, all while the sites register, so an older MapExpansions would stop the
+// Sweatshop as well. The lamps of both need the copied room switches of 1.4.0; on 1.3.0 they would hang without a switch.
 internal static class MissingMods
 {
     internal static string Line { get; private set; } = "";
