@@ -12,6 +12,7 @@ Prints PASS or FAIL per check.
     python _wt-Based-folderjoin/Tests/folder-join.py --host mptest --client mptest2 [--join browser] [--no-hang]
 """
 import argparse
+import hashlib
 import os
 import re
 import subprocess
@@ -92,6 +93,32 @@ class Run:
         for name, verdict, detail in failed:
             print("%s  %s  - %s" % (verdict, name, detail))
         return 1 if failed else 0
+
+    # Different Personnel packs give the peers different NPC prefab lists; the host's spawn packet then fails on the
+    # client, the join hangs, and the folder looks missing although the folder has nothing to do with it.
+    def same_packs(self):
+        def packs(game):
+            root = os.path.join(game.root, "UserData", "Personnel", "Packs")
+            if not os.path.isdir(root):
+                return {}
+            found = {}
+            for name in sorted(os.listdir(root)):
+                folder = os.path.join(root, name)
+                if not os.path.isdir(folder):
+                    continue
+                digest = hashlib.md5()
+                for base, _, files in sorted(os.walk(folder)):
+                    for file in sorted(files):
+                        path = os.path.join(base, file)
+                        digest.update(os.path.relpath(path, folder).encode("utf-8"))
+                        with open(path, "rb") as handle:
+                            digest.update(handle.read())
+                found[name] = digest.hexdigest()
+            return found
+        host, client = packs(self.host), packs(self.client)
+        differ = sorted(n for n in set(host) | set(client) if host.get(n) != client.get(n))
+        return self.check("host and client load the same NPC packs", not differ,
+                          "differ: " + ", ".join(differ) if differ else "%d packs" % len(host))
 
     def hang_on_host(self):
         log = Log(self.host)
@@ -194,6 +221,8 @@ def main():
     parser.add_argument("--no-hang", action="store_true", help="the host already has a folder on a wall")
     args = parser.parse_args()
     run = Run(args.host, args.client)
+    if not run.same_packs():
+        sys.exit(run.summary())
     if not args.no_hang:
         run.hang_on_host()
     log = Log(run.client)
