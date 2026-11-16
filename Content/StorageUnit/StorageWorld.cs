@@ -18,8 +18,9 @@ public static class StorageWorld
     private const string Stair = "@Properties/DocksWarehouse/IndustrialShed/dockshed/Stairs (1)";
     private static readonly Vector3 StairTop = new(-90.87f, .83f, -54.3f);
     // Turned to climb north along the west wall. At its own size it reaches from the ground to the 3.30 m of the ledge
-    // on top of the lower wall; its nosings rise 3.05 m from the first step at 0.25.
-    private const float StairYaw = 30f, StairScale = 1f, StairRise = 3.05f, StairRun = 5.43f;
+    // on top of the lower wall; its nosings rise 3.05 m from the first step at 0.25. The model's own lowest tread lies at
+    // 0.40; the added first tread at 0.20 halves that step from the grass.
+    private const float StairYaw = 30f, StairScale = 1f, StairRise = 3.05f, StairRun = 5.43f, FirstTread = .20f;
     // The stringers end in a wedge: 0.15 m short of the stair's top edge they reach its full height, then fall away by
     // 0.25 m. The top tread lies 0.24 m below that height. The stair reaches this far into the landing and sits 1 cm
     // lower, so the wedge's peak meets the landing's south edge inside the deck plate and its end tucks under the frame.
@@ -55,10 +56,11 @@ public static class StorageWorld
     private const string Fence = "Map/Hyland Point/Region_Northtown/Storage warehouse/Storage warehouse/OutdoorFence";
     private static readonly Vector3 FencePost = new(-2.1f, 3.25f, 101.79f);
     private static readonly Vector3 RailEnd = new(-2.1f, 3.25f, 103.69f);
-    // Unit 1's ceiling light, hung the same distance under the loft's ceiling, on Unit 1's switch.
+    // Unit 1's ceiling light, on Unit 1's switch. The lamp's back lies level with its pivot, so a pivot 2 mm under the
+    // loft's ceiling panel mounts it flat against the panel, with no gap and without reaching into it.
     private const string LampModel = "Map/Hyland Point/Region_Northtown/Storage warehouse/Storage Unit/FluroBar (1)";
     private static readonly Vector3 LampPivot = new(-6.52f, 2.87f, 107.23f);
-    private const float UnitCeiling = 3.1f, LampRange = 3.6f;
+    private const float LampRange = 3.6f, LampY = LoftCeiling - .002f;
     private const string RoomSwitch = "Map/Hyland Point/Region_Northtown/Storage warehouse/Storage Unit/ModularSwitch";
     // Saved id of the loft's property extension; renaming it loses what stands in the loft.
     public const string LoftExtensionId = "storage-loft-floor";
@@ -307,7 +309,7 @@ public static class StorageWorld
     // The crew's lamp burns all night, on no switch, until the room gets its own.
     private static void WorkLight(WorldStateDefinition state, string id, float x, float z, float range)
     {
-        var light = Copy(id, LampModel, LampPivot, new Vector3(x, LoftCeiling - (UnitCeiling - LampPivot.y), z));
+        var light = Copy(id, LampModel, LampPivot, new Vector3(x, LampY, z));
         light.LightsOn = true;
         light.LightRange = range;
         state.Copies.Add(light);
@@ -370,7 +372,7 @@ public static class StorageWorld
         Face(geometry, "elevator-cladding", UnitSheet, ElevatorWest - .012f, UpperY, SouthUnitNorth, ElevatorWest - .004f, UnitTop, UnitSouth);
         foreach (var (id, z) in new[] { ("south-light-south", 96.0f), ("south-light-north", 99.4f) })
         {
-            var light = Copy(id, LampModel, LampPivot, new Vector3(SouthLampX, LoftCeiling - (UnitCeiling - LampPivot.y), z));
+            var light = Copy(id, LampModel, LampPivot, new Vector3(SouthLampX, LampY, z));
             light.LightsOn = true;
             light.LightSwitch = RoomSwitch;
             light.LightRange = SouthLampRange;
@@ -442,7 +444,7 @@ public static class StorageWorld
 
         foreach (var (id, z) in new[] { ("east-light-south", 106.0f), ("east-light-middle", 108.8f), ("east-light-north", 111.6f) })
         {
-            var light = Copy(id, LampModel, LampPivot, new Vector3(EastLampX, LoftCeiling - (UnitCeiling - LampPivot.y), z));
+            var light = Copy(id, LampModel, LampPivot, new Vector3(EastLampX, LampY, z));
             light.LightsOn = true;
             light.LightSwitch = RoomSwitch;
             // Within this reach the light ends before the outside of the east wall.
@@ -484,7 +486,7 @@ public static class StorageWorld
 
         foreach (var (id, z) in new[] { ("loft-light-south", 106.0f), ("loft-light-middle", 108.8f), ("loft-light-north", 111.6f) })
         {
-            var light = Copy(id, LampModel, LampPivot, new Vector3(-5.5f, LoftCeiling - (UnitCeiling - LampPivot.y), z));
+            var light = Copy(id, LampModel, LampPivot, new Vector3(-5.5f, LampY, z));
             light.LightsOn = true;
             light.LightSwitch = RoomSwitch;
             // Walls do not stop this light; within this reach it ends before the outside of the west and north walls.
@@ -684,6 +686,10 @@ public static class StorageWorld
         // slit would split.
         float tread = LandingTop - StairDrop - .242f;
         Solid(geometry, "landing-riser", Metal, -10.49f, tread - .01f, LandingSouth - .03f, -9.19f, LandingBottom, LandingSouth);
+        // The docks stair stands on a raised floor: its lowest tread lies 0.40 above the grass, two of its 0.20 m rises.
+        // One more tread of the same size, a going of 0.29 in front of it, makes the step up from the ground even. It
+        // sits between the stringers' feet, which reach the grass at z 99.35.
+        Solid(geometry, "stair-first-tread", FloorSheet, -10.395f, FirstTread - .05f, 99.377f, -9.285f, FirstTread, 99.677f);
         // Two posts carry the landing's open corners; the shipping container stands under its north half.
         Post(geometry, "landing-post-sw", LandingWest + .04f, LandingSouth + .04f, 0f, LandingBottom);
         Post(geometry, "landing-post-se", LandingEast - .06f, LandingSouth + .04f, 0f, LandingBottom);
