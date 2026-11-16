@@ -257,9 +257,17 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             var street = new UnityEngine.AI.NavMeshPath();
             bool found = UnityEngine.AI.NavMesh.CalculatePath(agent.transform.position, property.NPCSpawnPoint.position, filter, street);
             bool reaches = found && street.status == UnityEngine.AI.NavMeshPathStatus.PathComplete;
+            // A worker that is there to the game but not to the player: hidden avatar, inside a building, or no behaviour.
+            var behaviour = employee.Behaviour != null ? employee.Behaviour.activeBehaviour : null;
             string line = "baseddiag: employee " + employee.name + " index " + employee.EmployeeIndex + " at " + agent.transform.position
                 + ", waits at " + places[employee.EmployeeIndex].position + ", agent type " + agent.agentTypeID + ", on mesh " + agent.isOnNavMesh
-                + ", route to the street " + (found ? street.status.ToString() : "none") + ", reaches the street " + reaches;
+                + ", route to the street " + (found ? street.status.ToString() : "none") + ", reaches the street " + reaches
+                + ", visible " + employee.isVisible + ", active " + employee.gameObject.activeInHierarchy + ", agent enabled " + agent.enabled
+                + ", building " + (employee.CurrentBuilding != null ? employee.CurrentBuilding.name : "none")
+                + ", behaviour " + (behaviour != null ? behaviour.Name : "none")
+                // The game's own reasons for "Wait outside": no locker, not paid for today, or the end of the day.
+                + ", home " + (employee.GetHome() != null) + ", paid " + employee.PaidForToday
+                + ", end of day " + Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.GameTime.TimeManager>.Instance.IsEndOfDay;
             if (reaches) Mod.Log(line); else Mod.Warn(line);
         }
     }
