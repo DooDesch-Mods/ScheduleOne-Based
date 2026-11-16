@@ -20,10 +20,15 @@ public static class StorageWorld
     // Turned to climb north along the west wall. At its own size it reaches from the ground to the 3.30 m of the ledge
     // on top of the lower wall; its nosings rise 3.05 m from the first step at 0.25.
     private const float StairYaw = 30f, StairScale = 1f, StairRise = 3.05f, StairRun = 5.43f;
+    // The stringers end in a wedge: 0.15 m short of the stair's top edge they reach its full height, then fall away by
+    // 0.25 m. The top tread lies 0.24 m below that height. The stair reaches this far into the landing and sits 1 cm
+    // lower, so the wedge's peak meets the landing's south edge inside the deck plate and its end tucks under the frame.
+    private const float StairInto = .15f, StairDrop = .01f;
     private const string Metal = "metal_darkgrey_mat";
 
     // The upper floor lies at 3.25; the ledge along the west wall and the landing in front of it end at 3.30.
     private const float UpperY = 3.25f, LandingTop = 3.30f, LandingBottom = 3.20f;
+    internal const float UpperFloor = UpperY;
     // The landing is centred on the door.
     private const float LandingWest = -10.65f, LandingEast = -9.01f, LandingSouth = 104.6f, LandingNorth = 106.3f;
     private const float RailTop = LandingTop + 1.05f, GuardTop = LandingTop + 2.1f;
@@ -33,10 +38,13 @@ public static class StorageWorld
     private const string UnitSheet = "alum sheet med grey", FloorSheet = "metal_mediumgrey_mat";
     // The back of the walkway's unit faces inside the block, and the loft's ceiling under the roof's eave.
     private const float FacesBack = -2.25f, LoftCeiling = 6.0f;
-    // The door through the west wall, over the landing. It takes the place of the third window from the south: the
-    // window's width and head, down to the floor, so no part of the window's recess is left beside it.
-    private const float DoorSouth = 104.85f, DoorNorth = 106.10f, DoorSill = 3.31f, DoorHead = 5.65f;
-    private static readonly Bounds DoorCut = BoundsOf(-9.3f, DoorSill, DoorSouth, -8.7f, DoorHead, DoorNorth);
+    // The door through the west wall, over the landing. It takes the place of the third window from the south: the cut
+    // has the window's width and head, down to the floor, so no part of the window's recess is left beside it. The
+    // leaf is narrower than the window; steel jambs of equal width on both sides centre its opening in the cut.
+    private const float WindowSouth = 104.85f, WindowNorth = 106.10f, DoorSill = 3.31f, DoorHead = 5.65f;
+    private const float DoorLeafWidth = 1.06f, DoorClear = DoorLeafWidth + .04f;
+    private const float DoorSouth = (WindowSouth + WindowNorth - DoorClear) / 2f, DoorNorth = DoorSouth + DoorClear;
+    private static readonly Bounds DoorCut = BoundsOf(-9.3f, DoorSill, WindowSouth, -8.7f, DoorHead, WindowNorth);
     private const string DoorModel = "@Properties/StorageUnit/Industrial Metal Door (2)/Container/IndustrialMetalDoor/industrialmetaldoor/";
     private const string DoorLeaf = DoorModel + "Door", DoorHandle = DoorModel + "Handle";
     // The leaf's hinge edge at the floor; the handle sits at its east edge.
@@ -81,6 +89,20 @@ public static class StorageWorld
     private const string FoldingTable = "Map/SpecialCustomerCamps/BikerCamp/Container/Props/Table_Foldout/Table_Foldout_LOD0";
     private static readonly Vector3 FoldingTablePivot = new(-142.02f, -3.9f, 50.01f);
     private const float TableScale = .9f;
+    // Trash and tools from the camp in Westville. Each pivot is the bottom centre of the prop's main mesh.
+    private const string Camp = "Map/Hyland Point/Region_Westville/Encampment/";
+    private static readonly Vector3 FireDrumPivot = new(-96.49f, -4.06f, 59.52f);
+    private static readonly Vector3 TrashCanPivot = new(-94.74f, -4.03f, 59.14f);
+    private static readonly Vector3 TrashDrumPivot = new(-91.39f, -3.89f, 62.26f);
+    private static readonly Vector3 CratePivot = new(-91.51f, -4.00f, 57.01f);
+    private static readonly Vector3 JerryCanPivot = new(-95.21f, -4.05f, 58.92f);
+    private static readonly Vector3 BucketPivot = new(-95.43f, -3.28f, 58.37f);
+    private static readonly Vector3 GasBottlePivot = new(-95.93f, -4.33f, 54.70f);
+    private static readonly Vector3 CinderblockPivot = new(-96.74f, -4.08f, 59.92f);
+    // The fire barrel stands in the yard west of the stair, south of the bush (x -13.11 .. -10.63, z 103.08 .. 105.48) and
+    // clear of the stair (x from -10.49) and the street lamp's base (x -12.5 .. -11.5, z 100.5 .. 101.5).
+    private static readonly Vector3 FireDrumAt = new(-12.35f, 0f, 102.35f);
+    internal static readonly Vector3 FireSpot = FireDrumAt + new Vector3(0, .85f, 0);
     // One row of lamps over the middle; within this reach the light ends before the outside of the east wall (3.51).
     private const float EastLampX = .6f, EastLampRange = 2.9f;
 
@@ -96,6 +118,22 @@ public static class StorageWorld
     private static readonly string[] States = { "a-stair", "a-door", "a-complete", "b-open", "b-complete", "c-open", "c-complete" };
 
     private static bool _registered;
+
+    // 1 for the first state, 0 for none or an unknown one.
+    internal static int LevelOf(string? state) => state == null ? 0 : Array.IndexOf(States, state) + 1;
+
+    // Where the crew cuts or welds on the night that builds the stage after this one, and which way the sparks fly.
+    internal static (Vector3 At, float Yaw)? SparkSpot(int level) => level switch
+    {
+        0 => (new Vector3(-9.4f, 2.2f, 102f), 0f),
+        1 => (new Vector3(-9.4f, LandingTop + 1.1f, (WindowSouth + WindowNorth) / 2f), 0f),
+        2 => (new Vector3(-6.5f, LoftCeiling - .45f, UnitSouth + .2f), 0f),
+        3 => (new Vector3(UnitEast - .1f, UpperY + 1.5f, 108.8f), 0f),
+        4 => (new Vector3(EastFront + .1f, UpperY + 1.5f, 108.8f), 0f),
+        5 => (new Vector3(-1f, UpperY + 1.4f, UnitSouth + .25f), 0f),
+        6 => (new Vector3(ElevatorWest - .15f, UpperY + 1.4f, 102.6f), 0f),
+        _ => null
+    };
 
     public static void Register()
     {
@@ -136,22 +174,53 @@ public static class StorageWorld
         return state;
     }
 
+    // A tipped bucket rests on its rim, a jerry can on its broad side; the lift keeps either out of the floor.
+    private static readonly Vector3 BucketTipped = new(88f, 0f, 0f), JerryCanFlat = new(0f, 0f, 90f);
+    private const float BucketTippedLift = .17f, JerryCanFlatLift = .08f;
+
     // What the crew leaves on site for one night of work. The timber stock shrinks from build to build; each night's site
-    // stands where that night's work is and is gone once the work is done.
+    // stands where that night's work is and is gone once the work is done. Props sit in small groups with one stray,
+    // a hand's width to half a metre off the wall, turned off the grid; every offset is a fixed number, the same on
+    // every machine.
     private static void SiteProps(WorldStateDefinition state, CopyDefinition geometry, int level)
     {
+        // The fire barrel stays in the yard with two blocks beside it; the effects burn in it at night.
+        state.Copies.Add(Copy("yard-fire-drum", Camp + "DrumFirepit", FireDrumPivot, FireDrumAt, 17));
+        Cinderblock(state, "yard-cinderblock-a", -12.95f, 0f, 102.85f, 23);
+        Cinderblock(state, "yard-cinderblock-b", -11.7f, 0f, 102.05f, -38);
+        // Once a stage is done the crew's site goes, and its trash ends up in the yard: two bins together by the stair
+        // foot's north end, the empty crate on its own further south with a block tipped beside it.
+        if (level >= 3)
+        {
+            state.Copies.Add(Copy("yard-trash-can", Camp + "Trash Can Prop", TrashCanPivot, new Vector3(-10.92f, 0f, 102.6f), 33));
+            state.Copies.Add(Copy("yard-trash-drum", Camp + "Liquid Drum Hollow with trash", TrashDrumPivot, new Vector3(-11.05f, 0f, 101.85f), -61));
+            state.Copies.Add(Copy("yard-crate", Camp + "Wood Crate Prop (1)", CratePivot, new Vector3(-12.6f, 0f, 99.6f), 52));
+            state.Copies.Add(Copy("yard-cinderblock-tilted", Camp + "Cinderblock (1)", CinderblockPivot, new Vector3(-12.05f, .04f, 99.35f), 141,
+                tilt: new Vector3(0f, 0f, 14f)));
+        }
         switch (level)
         {
             case 1:
                 Outside(state);
-                state.Copies.Add(Copy("outside-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-11.2f, 0f, 101.8f)));
+                state.Copies.Add(Copy("outside-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-11.0f, 0f, 100.95f), 27));
                 break;
             case 2:
                 Outside(state);
                 Stock(state, geometry, "loft", -3.3f, UpperY, 112.7f, 12);
-                state.Copies.Add(Copy("loft-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-7.9f, UpperY, 113f)));
-                state.Copies.Add(Copy("loft-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(-3.2f, UpperY, 104.8f)));
-                SiteTable(state, geometry, "loft-table", -5.5f, UpperY, 108.8f, 0);
+                state.Copies.Add(Copy("loft-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-7.85f, UpperY, 112.95f), 13));
+                state.Copies.Add(Copy("loft-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(-3.25f, UpperY, 104.85f), -7));
+                SiteTable(state, geometry, "loft-table", -5.5f, UpperY, 108.8f, 4);
+                Clutter(state, geometry, "loft-trash-can", Camp + "Trash Can Prop", TrashCanPivot, -6.55f, UpperY, 113.25f, 37, .32f, .77f);
+                Clutter(state, geometry, "loft-crate", Camp + "Wood Crate Prop (1)", CratePivot, -8.2f, UpperY, 111.45f, 14, .45f, .8f);
+                Clutter(state, geometry, "loft-gas-bottle", Camp + "Gas Bottle Prop (1)", GasBottlePivot, -2.48f, UpperY, 106.14f, 21, .32f, .72f);
+                // The jerry can lies on its side by the generator, the bucket is tipped over beside the table.
+                state.Copies.Add(Copy("loft-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(-3.9f, UpperY + JerryCanFlatLift, 104.3f), 68,
+                    tilt: JerryCanFlat));
+                state.Copies.Add(Copy("loft-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(-4.1f, UpperY + BucketTippedLift, 108.3f), 133,
+                    tilt: BucketTipped));
+                Cinderblock(state, "loft-cinderblock-a", -6.05f, UpperY, 113.4f, 11);
+                Cinderblock(state, "loft-cinderblock-b", -8.35f, UpperY, 110.25f, 71);
+                Cinderblock(state, "loft-cinderblock-c", -2.45f, UpperY, 110.95f, -26);
                 // Brick from the cut through the west wall, inside and out.
                 RubblePile(state, "door-rubble", -8.2f, UpperY, 107f, .35f, 11);
                 RubblePile(state, "door-rubble-stray", -7.55f, UpperY, 105.25f, .14f, 23);
@@ -160,18 +229,43 @@ public static class StorageWorld
                 break;
             case 4:
                 Stock(state, geometry, "walkway", -1f, UpperY, 112.9f, 8);
-                state.Copies.Add(Copy("walkway-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-.45f, UpperY, 104.55f)));
-                state.Copies.Add(Copy("walkway-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(-1.65f, UpperY, 104.45f)));
-                SiteTable(state, geometry, "walkway-table", -.35f, UpperY, 108.8f, 90);
+                state.Copies.Add(Copy("walkway-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-.42f, UpperY, 104.6f), -11));
+                state.Copies.Add(Copy("walkway-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(-1.62f, UpperY, 104.42f), 8));
+                SiteTable(state, geometry, "walkway-table", -.35f, UpperY, 108.8f, 86);
+                state.Copies.Add(Copy("walkway-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(-.08f, UpperY, 105.45f), 152));
+                Clutter(state, geometry, "walkway-gas-bottle", Camp + "Gas Bottle Prop (1)", GasBottlePivot, -1.93f, UpperY, 111.8f, -29, .32f, .72f);
+                Clutter(state, geometry, "walkway-trash-can", Camp + "Trash Can Prop", TrashCanPivot, -1.88f, UpperY, 109.95f, -19, .32f, .77f);
+                state.Copies.Add(Copy("walkway-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(-1.86f, UpperY, 110.7f), 47));
+                Cinderblock(state, "walkway-cinderblock", .08f, UpperY, 106.25f, 41);
                 break;
             case 6:
                 Stock(state, geometry, "south", 2.4f, UpperY, 95f, 4);
-                state.Copies.Add(Copy("south-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(2.7f, UpperY, 100.9f)));
-                state.Copies.Add(Copy("south-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(.9f, UpperY, 94.9f)));
-                SiteTable(state, geometry, "south-table", 2.7f, UpperY, 98.6f, 90);
+                state.Copies.Add(Copy("south-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(2.68f, UpperY, 100.85f), 19));
+                state.Copies.Add(Copy("south-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(.93f, UpperY, 94.93f), -14));
+                SiteTable(state, geometry, "south-table", 2.7f, UpperY, 98.6f, 93);
                 WorkLight(state, "south-work-light", SouthLampX, 97.7f, SouthLampRange);
+                // The jerry can lies on its side by the generator, the bucket is tipped over by the table.
+                state.Copies.Add(Copy("south-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(1.6f, UpperY + JerryCanFlatLift, 94.5f), 107,
+                    tilt: JerryCanFlat));
+                Clutter(state, geometry, "south-gas-bottle", Camp + "Gas Bottle Prop (1)", GasBottlePivot, .73f, UpperY, 96.13f, 24, .32f, .72f);
+                state.Copies.Add(Copy("south-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(3.0f, UpperY + BucketTippedLift, 96.55f), -58,
+                    tilt: BucketTipped));
+                Cinderblock(state, "south-cinderblock-a", 1.63f, UpperY, 97.42f, 17);
+                Cinderblock(state, "south-cinderblock-b", 2.95f, UpperY, 97.25f, 63);
                 break;
         }
+    }
+
+    // A loose cinderblock; low enough that the walking map steps over it, so it needs no block.
+    private static void Cinderblock(WorldStateDefinition state, string id, float x, float floor, float z, float yaw) =>
+        state.Copies.Add(Copy(id, Camp + "Cinderblock (1)", CinderblockPivot, new Vector3(x, floor, z), yaw));
+
+    // A larger prop of the crew's; like the pallet, it gets a block so the walking map goes round it, not over it.
+    private static void Clutter(WorldStateDefinition state, CopyDefinition geometry, string id, string template, Vector3 pivot,
+        float x, float floor, float z, float yaw, float half, float height)
+    {
+        state.Copies.Add(Copy(id, template, pivot, new Vector3(x, floor, z), yaw));
+        Block(geometry, id + "-block", x - half, floor, z - half, x + half, floor + height, z + half);
     }
 
     // Cones and the site sign on the grass strip in front of the stair, and the bricks for the door against the wall.
@@ -201,7 +295,8 @@ public static class StorageWorld
     {
         state.Copies.Add(Copy(id, FoldingTable, FoldingTablePivot, new Vector3(x, floor, z), yaw, TableScale));
         float across = 1.26f * TableScale, along = .61f * TableScale, top = floor + .75f * TableScale;
-        bool turned = yaw != 0;
+        // The block follows the nearer of the two axes; a few degrees off it stay inside the table's footprint.
+        bool turned = Mathf.Abs(Mathf.DeltaAngle(yaw, 90f)) < 45f;
         float halfX = turned ? along : across, halfZ = turned ? across : along;
         Block(geometry, id + "-block", x - halfX, floor, z - halfZ, x + halfX, top, z + halfZ);
         float paperX = turned ? .16f : .25f, paperZ = turned ? .25f : .16f;
@@ -384,7 +479,7 @@ public static class StorageWorld
             BoundsOf(-8.85f, 3.15f, 103.7f, -4.5f, 6.25f, 103.85f)));
         // A steel beam closes the opening under the block's top and hides the edge of the loft's ceiling.
         Face(geometry, "gallery-beam", Metal, UnitWest, LoftCeiling - .15f, UnitSouth - .07f, UnitEast, UnitTop, UnitSouth + .07f);
-        GalleryRail(state, geometry);
+        GalleryRail(state, geometry, level);
 
         foreach (var (id, z) in new[] { ("loft-light-south", 106.0f), ("loft-light-middle", 108.8f), ("loft-light-north", 111.6f) })
         {
@@ -407,7 +502,7 @@ public static class StorageWorld
         // own walking map (the agent's radius takes off the steps below it). Then the landing, the loft behind its
         // door, the far corner of the loft and its middle.
         state.NavigationProbes.Add(new Vector3(-9.84f, 0f, 98.4f));
-        state.NavigationProbes.Add(new Vector3(-9.84f, .92f, 100.35f));
+        state.NavigationProbes.Add(new Vector3(-9.84f, .91f, 100.5f));
         state.NavigationProbes.Add(new Vector3(-9.6f, LandingTop, 105.5f));
         state.NavigationProbes.Add(new Vector3(-8.1f, UpperY, 105.45f));
         state.NavigationProbes.Add(new Vector3(-3f, UpperY, 112.8f));
@@ -443,11 +538,13 @@ public static class StorageWorld
     }
 
     // The walkway's railing continues along the opening and meets it at its last post. The vanilla piece is 1.9 m long
-    // with a post at each end; the run's last piece lies over the one before it, a few millimetres aside.
-    private static void GalleryRail(WorldStateDefinition state, CopyDefinition geometry)
+    // with a post at each end; the run's last piece lies over the one before it, a few millimetres aside. From the south
+    // stage on the run stops short of the walkway's post and leaves the opening above the ladder from the hall.
+    private static void GalleryRail(WorldStateDefinition state, CopyDefinition geometry, int level)
     {
         const float piece = 1.9f, start = UnitWest + .05f;
-        float end = RailEnd.x, cross = RailEnd.z;
+        bool ladder = level >= StorageLadder.FromLevel;
+        float end = ladder ? StorageLadder.OpeningWest : RailEnd.x, cross = RailEnd.z;
         int full = (int)((end - start + .001f) / piece);
         float rest = end - start - full * piece;
         bool overlaps = rest > .05f;
@@ -459,8 +556,8 @@ public static class StorageWorld
             float side = cross - (last && overlaps ? .004f : 0f);
             var rail = Copy("gallery-rail-" + i, Fence, FencePost, new Vector3(from, UpperY, side), 90);
             if (last && overlaps) rail.Exclude.Add("outdoorfence/Post");
-            // The walkway's railing already stands at the run's end.
-            if (last) rail.Exclude.Add("outdoorfence/Post.001");
+            // The walkway's railing already stands at the run's end; at the opening the run's own post ends it.
+            if (last && !ladder) rail.Exclude.Add("outdoorfence/Post.001");
             state.Copies.Add(rail);
         }
         geometry.Boxes.Add(new BoxDefinition
@@ -522,10 +619,10 @@ public static class StorageWorld
 
         // Steel reveals line the cut through the brick, the inner leaf and the units' skin.
         const float outside = -9.26f, inside = UnitWest + .01f;
-        Face(geometry, "door-jamb-south", Metal, outside, DoorSill, DoorSouth - .02f, inside, DoorHead, DoorSouth);
-        Face(geometry, "door-jamb-north", Metal, outside, DoorSill, DoorNorth, inside, DoorHead, DoorNorth + .02f);
-        Face(geometry, "door-head", Metal, outside, DoorHead, DoorSouth - .02f, inside, DoorHead + .02f, DoorNorth + .02f);
-        Face(geometry, "door-sill", Metal, outside, DoorSill - .02f, DoorSouth, inside, DoorSill, DoorNorth);
+        Solid(geometry, "door-jamb-south", Metal, outside, DoorSill, WindowSouth - .02f, inside, DoorHead, DoorSouth);
+        Solid(geometry, "door-jamb-north", Metal, outside, DoorSill, DoorNorth, inside, DoorHead, WindowNorth + .02f);
+        Face(geometry, "door-head", Metal, outside, DoorHead, WindowSouth - .02f, inside, DoorHead + .02f, WindowNorth + .02f);
+        Face(geometry, "door-sill", Metal, outside, DoorSill - .02f, WindowSouth, inside, DoorSill, WindowNorth);
 
         // The Storage Unit's own green door leaf stands open into the room, hinged on the north jamb.
         var hinge = new Vector3(UnitWest + .01f, UpperY + .01f, DoorNorth - .05f);
@@ -546,13 +643,15 @@ public static class StorageWorld
     private static void StairAndLanding(WorldStateDefinition state, CopyDefinition geometry)
     {
         // The stair is 1.5 m wide and runs from x -10.59 to -9.09, clear of the bus stop's pillar.
-        var target = new Vector3(-9.84f, LandingTop, LandingSouth);
+        var target = new Vector3(-9.84f, LandingTop - StairDrop, LandingSouth + StairInto);
         state.Copies.Add(Copy("west-stair", Stair, StairTop, target, StairYaw, StairScale));
         StairRail(state, geometry);
         Solid(geometry, "landing", Metal, LandingWest, LandingBottom, LandingSouth, LandingEast, LandingTop, LandingNorth);
-        // The stair's top tread ends a few centimetres short of the landing. A steel strip under the tread's edge closes
-        // the slit, for the eye and for the walking map, which the slit would split.
-        Solid(geometry, "landing-lip", Metal, LandingWest, LandingBottom, LandingSouth - .3f, LandingEast, LandingTop - .02f, LandingSouth);
+        // The top tread ends 2.5 cm short of the landing, a riser's height below the deck. A kick plate between the
+        // stringers closes that slit and the open riser up to the deck, for the eye and for the walking map, which the
+        // slit would split.
+        float tread = LandingTop - StairDrop - .242f;
+        Solid(geometry, "landing-riser", Metal, -10.49f, tread - .01f, LandingSouth - .03f, -9.19f, LandingBottom, LandingSouth);
         // Two posts carry the landing's open corners; the shipping container stands under its north half.
         Post(geometry, "landing-post-sw", LandingWest + .04f, LandingSouth + .04f, 0f, LandingBottom);
         Post(geometry, "landing-post-se", LandingEast - .06f, LandingSouth + .04f, 0f, LandingBottom);
@@ -565,8 +664,8 @@ public static class StorageWorld
     // upright posts, and rails in copies tilted to the slope of the nosings. They meet the landing's railing at its corner.
     private static void StairRail(WorldStateDefinition state, CopyDefinition geometry)
     {
-        const float half = .025f, cross = LandingWest + .03f, foot = LandingSouth - StairRun;
-        float Nosing(float z) => LandingTop - (LandingSouth - z) * StairRise / StairRun;
+        const float half = .025f, cross = LandingWest + .03f, top = LandingSouth + StairInto, foot = top - StairRun;
+        float Nosing(float z) => LandingTop - StairDrop - (top - z) * StairRise / StairRun;
         foreach (float z in new[] { foot + .05f, foot + 1.85f, foot + 3.65f })
             Face(geometry, "stair-rail-post-" + Mathf.RoundToInt(z * 10), Metal, cross - half, Nosing(z) - .3f, z - half, cross + half, Nosing(z) + 1.05f, z + half);
         float slope = Mathf.Atan2(StairRise, StairRun) * Mathf.Rad2Deg;
@@ -623,10 +722,13 @@ public static class StorageWorld
         });
     }
 
-    private static CopyDefinition Copy(string id, string template, Vector3 sourcePivot, Vector3 targetPivot, float yaw = 0, float scale = 1f) => new()
+    // The template's pivot lands on the target. A tilt turns the copy about its own pivot after the yaw, so a prop can
+    // lie on its side or lean with the pivot still on the floor.
+    private static CopyDefinition Copy(string id, string template, Vector3 sourcePivot, Vector3 targetPivot, float yaw = 0, float scale = 1f,
+        Vector3 tilt = default) => new()
     {
-        Id = id, Template = template, Frame = Frame, Scale = scale,
-        At = new LocalPoint(targetPivot - Quaternion.Euler(0, yaw, 0) * (scale * (sourcePivot - FramePivot)), yaw),
+        Id = id, Template = template, Frame = Frame, Scale = scale, Tilt = tilt,
+        At = new LocalPoint(targetPivot - Quaternion.Euler(0, yaw, 0) * Quaternion.Euler(tilt) * (scale * (sourcePivot - FramePivot)), yaw),
         IndependentMesh = true, VisualOnly = true, Obstacle = false
     };
 

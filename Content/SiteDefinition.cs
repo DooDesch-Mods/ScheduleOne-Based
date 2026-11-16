@@ -21,6 +21,8 @@ internal sealed record SiteFollowUp(string UpgradeId, string Title, string Done,
     public int Staff { get; init; }
     // The plan drawing of this build; the site's plan when empty.
     public IReadOnlyList<PlanRoom> Plan { get; init; } = Array.Empty<PlanRoom>();
+    // Height of the new rooms' floor, where the crew's trash lands; NaN takes the site's first staff place.
+    public float Floor { get; init; } = float.NaN;
     public string ListName => Name.Length > 0 ? Name : Title;
 }
 

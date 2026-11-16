@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds]";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -57,6 +57,21 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     break;
                 case "folder":
                     Folder(args.Count > 1 ? args[1] : "state");
+                    break;
+                case "vfx":
+                    // on = by stage and hour, off = none, force = the yard fire and the current stage's sparks at any hour.
+                    if (args.Count > 1)
+                    {
+                        Content.StorageUnit.StorageVfx.Current = args[1] switch
+                        {
+                            "on" => Content.StorageUnit.StorageVfx.Mode.Normal,
+                            "off" => Content.StorageUnit.StorageVfx.Mode.Off,
+                            "force" => Content.StorageUnit.StorageVfx.Mode.Force,
+                            _ => throw new ArgumentException("baseddiag vfx [on|off|force]")
+                        };
+                        Content.StorageUnit.StorageVfx.Refresh();
+                    }
+                    Mod.Log("baseddiag: storage effects " + Content.StorageUnit.StorageVfx.Describe());
                     break;
                 case "creator":
                     // A joining test client without saved looks starts in the character creator; finish it with the defaults.
@@ -123,6 +138,19 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     break;
                 case "journal":
                     JournalDetails(args.Count < 2 || args[1] != "off");
+                    break;
+                case "litter":
+                    // litter [<upgrade>] = trash in the build's rooms; litter drop <upgrade> = the drop of a finished
+                    // build again; litter pickup [n] = the equipped trash grabber takes the n nearest pieces.
+                    if (args.Count > 2 && args[1] == "drop") ConstructionLitter.Drop(_site, args[2]);
+                    else if (args.Count > 1 && args[1] == "pickup") Pickup(args.Count > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 1);
+                    else LitterCounts(args.Count > 1 ? args[1] : null);
+                    break;
+                case "ladder":
+                    Mod.Log("baseddiag: storage " + Content.StorageUnit.StorageLadder.Describe());
+                    break;
+                case "climb":
+                    MelonLoader.MelonCoroutines.Start(Climb(args.Count > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 3f));
                     break;
                 default:
                     throw new ArgumentException(ExampleUsage);
@@ -243,7 +271,13 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             case "hang": ProjectFolder.DebugHang(); break;
             case "wall": Mod.Log("baseddiag: folder hung on the " + ProjectFolder.DebugWall(_site) + "."); break;
             case "state": Mod.Log("baseddiag: folder " + ProjectFolder.DebugState(_site)); break;
-            default: throw new ArgumentException("baseddiag folder give|open|hang|wall|state");
+            case "hold": Mod.Log("baseddiag: folder in hand from hotbar " + ProjectFolder.DebugHold(_site) + "."); break;
+            case "drop": Mod.Log("baseddiag: hands free on hotbar " + ProjectFolder.DebugHold(_site, empty: true) + "."); break;
+            case "close":
+                Based.UI.BuildPlan.Close("console");
+                Mod.Log("baseddiag: folder plan closed.");
+                break;
+            default: throw new ArgumentException("baseddiag folder give|open|close|hang|wall|state|hold|drop");
         }
     }
 
@@ -324,7 +358,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     private static void Hold(int slot)
     {
         var inventory = Il2CppScheduleOne.PlayerScripts.PlayerInventory.Instance;
-        inventory.Equip(inventory.IndexAllSlots(slot));
+        ProjectFolder.EquipOnly(inventory, inventory.IndexAllSlots(slot));
         Mod.Log("baseddiag: hotbar slot " + slot + " selected, holding " + (inventory.IndexAllSlots(slot).ItemInstance?.Name ?? "nothing") + ".");
     }
 
@@ -363,6 +397,69 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             }
         }
         Mod.Log("baseddiag walk: route finished.");
+    }
+
+    private static void LitterCounts(string? upgradeId)
+    {
+        foreach (var id in _site.BuildIds.Distinct().Where(i => upgradeId == null || i == upgradeId))
+        {
+            var rooms = ConstructionLitter.RoomsOf(_site, id);
+            Mod.Log("baseddiag litter: " + id + " " + Mod.StageOf(_site, id) + ", " + rooms.Count + " room(s), planned "
+                    + (rooms.Count == 0 ? 0 : ConstructionLitter.CountFor(rooms)) + ", in the rooms now " + ConstructionLitter.CountIn(_site, id) + ".");
+        }
+        var manager = Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.Trash.TrashManager>.Instance;
+        Mod.Log("baseddiag litter: trash items in the world " + (manager == null || manager._trashItems == null ? -1 : manager._trashItems.Count) + ".");
+    }
+
+    // The game's own pickup of the equipped trash grabber, on the pieces nearest the player.
+    private static void Pickup(int count)
+    {
+        var grabber = UnityEngine.Object.FindObjectOfType<Il2CppScheduleOne.Equipping.Equippable_TrashGrabber>();
+        if (grabber == null) { Mod.Warn("baseddiag litter pickup: no trash grabber equipped."); return; }
+        var manager = Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.Trash.TrashManager>.Instance;
+        var here = Il2CppScheduleOne.PlayerScripts.Player.Local.transform.position;
+        var items = new List<Il2CppScheduleOne.Trash.TrashItem>();
+        foreach (var item in manager._trashItems) if (item != null) items.Add(item);
+        int before = items.Count, taken = 0;
+        foreach (var item in items.OrderBy(i => (i.transform.position - here).sqrMagnitude).Take(count))
+        {
+            if (grabber.GetCapacity() <= 0) { Mod.Warn("baseddiag litter pickup: the grabber is full."); break; }
+            Mod.Log("baseddiag litter pickup: " + item.ID + " at " + item.transform.position + ", " + Vector3.Distance(here, item.transform.position).ToString("F2") + " m away.");
+            grabber.PickupTrash(item);
+            taken++;
+        }
+        MelonLoader.MelonCoroutines.Start(AfterPickup(before, taken));
+    }
+
+    // The game destroys picked trash at the end of the frame, so the count is read a moment later.
+    private static System.Collections.IEnumerator AfterPickup(int before, int taken)
+    {
+        yield return new WaitForSeconds(.5f);
+        var manager = Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.Trash.TrashManager>.Instance;
+        Mod.Log("baseddiag litter pickup: took " + taken + "; trash items in the world " + before + " before, " + manager._trashItems.Count + " after.");
+        LitterCounts(null);
+    }
+
+    // Holds forward on the game's own move input for the given seconds, so the ladder climbs the way a player's key
+    // does, and reports where the player started, whether a ladder took them, and where they ended.
+    private static System.Collections.IEnumerator Climb(float seconds)
+    {
+        var movement = Il2CppScheduleOne.DevUtilities.PlayerSingleton<Il2CppScheduleOne.PlayerScripts.PlayerMovement>.Instance;
+        var start = movement.transform.position;
+        string mounted = "";
+        float end = Time.time + seconds, top = start.y;
+        Mod.Log($"baseddiag climb: start at ({start.x:F2},{start.y:F2},{start.z:F2}), on a ladder {movement.IsOnLadder}.");
+        while (Time.time < end)
+        {
+            Il2CppScheduleOne.GameInput.MotionAxis = new Vector2(0f, 1f);
+            if (movement.IsOnLadder && mounted.Length == 0) mounted = movement.CurrentLadder.name;
+            top = Mathf.Max(top, movement.transform.position.y);
+            yield return null;
+        }
+        Il2CppScheduleOne.GameInput.MotionAxis = Vector2.zero;
+        yield return new WaitForSeconds(.5f);
+        var stop = movement.transform.position;
+        Mod.Log($"baseddiag climb: end at ({stop.x:F2},{stop.y:F2},{stop.z:F2}), highest {top:F2}, ladder {(mounted.Length == 0 ? "none" : mounted)}, on a ladder now {movement.IsOnLadder}.");
     }
 
     // Names the NPCs whose scheduled walk stands still short of its target: the game retries those every frame.

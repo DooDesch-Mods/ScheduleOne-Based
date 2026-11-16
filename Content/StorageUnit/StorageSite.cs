@@ -49,6 +49,7 @@ internal static class StorageSite
                 QuestType = typeof(StorageLoftQuest),
                 OrderEntry = "Order the loft from Ray",
                 Staff = 2,
+                Floor = StorageWorld.UpperFloor,
                 Plan = new PlanRoom[]
                 {
                     new(PlanRoomKind.Existing, -8.8f, 103.8f, -3.8f, 114f),
@@ -63,6 +64,7 @@ internal static class StorageSite
                 QuestType = typeof(StorageEastQuest),
                 OrderEntry = "Order the east units from Ray",
                 Staff = 2,
+                Floor = StorageWorld.UpperFloor,
                 Plan = new PlanRoom[]
                 {
                     new(PlanRoomKind.Existing, -8.75f, 103.8f, -2.2f, 113.8f, "Loft"),
@@ -76,6 +78,7 @@ internal static class StorageSite
                 QuestType = typeof(StorageSouthQuest),
                 OrderEntry = "Order the south units from Ray",
                 Staff = 1,
+                Floor = StorageWorld.UpperFloor,
                 Plan = new PlanRoom[]
                 {
                     new(PlanRoomKind.Existing, -8.75f, 103.8f, 3.2f, 113.8f, "Loft"),

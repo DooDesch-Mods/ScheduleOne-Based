@@ -149,6 +149,8 @@ public sealed class Mod : MelonMod
             ConstructionJournal.Reset();
             ProjectFolder.Reset();
             PlanCopies.Reset();
+            Content.StorageUnit.StorageVfx.Reset();
+            Content.StorageUnit.StorageLadder.Reset();
             RayMenu.Reset();
             StaffRoom.Reset();
             foreach (var site in Sites) site.Crew?.Cleanup();
@@ -258,10 +260,21 @@ public sealed class Mod : MelonMod
                 catch (Exception error) { Contain("expansion menu at Ray", error); }
             }
             foreach (var site in Sites) TickCrew(site);
+            TickStorageEffects();
             TickHold();
             TickJournal();
         }
         catch (Exception error) { Contain("runtime update", error); }
+    }
+
+    private static void TickStorageEffects()
+    {
+        var site = Sites.FirstOrDefault(s => s.Base.Id == Content.StorageUnit.StorageDefinition.BaseId);
+        if (site == null) return;
+        try { Content.StorageUnit.StorageVfx.Tick(Constructing(site) != null); }
+        catch (Exception error) { Contain("storage site effects", error); }
+        try { Content.StorageUnit.StorageLadder.Tick(); }
+        catch (Exception error) { Contain("storage ladder", error); }
     }
 
     // The quest names what still stands on the walls, so the list shrinks while the player clears them.
@@ -276,6 +289,10 @@ public sealed class Mod : MelonMod
     internal static UpgradeStage StageOf(SiteDefinition site, string upgradeId) => Engine.GetUpgrade(site.Base.Id, upgradeId).Stage;
 
     internal static string? Constructing(SiteDefinition site) => site.ConstructingId(id => StageOf(site, id));
+
+    // Every build of every site that is complete, permits included.
+    private static List<(SiteDefinition Site, string UpgradeId)> Finished() =>
+        Sites.SelectMany(site => site.BuildIds.Distinct().Where(id => StageOf(site, id) == UpgradeStage.Complete).Select(id => (site, id))).ToList();
 
     private static void TickFolder()
     {
@@ -656,6 +673,7 @@ public sealed class Mod : MelonMod
         }
         SetHeld("");
         var before = Engine.ExportState();
+        var finishedBefore = Finished();
         var result = Engine.AdvanceSleep(cycle);
         if (!result.Applied) { Log("Sleep skipped: " + result.Reason); return; }
         _worldDirty = true;
@@ -666,6 +684,12 @@ public sealed class Mod : MelonMod
         }
         Changed();
         Log("Construction sleep cycle " + cycle + " applied; revision " + Engine.Revision + ".");
+        // A stage that finished in this sleep leaves the crew's trash behind, once, on the host.
+        foreach (var (site, upgradeId) in Finished().Except(finishedBefore))
+        {
+            try { ConstructionLitter.Drop(site, upgradeId); }
+            catch (Exception error) { Contain("construction litter for " + upgradeId, error); }
+        }
     }
 
     internal static void Changed()
@@ -832,6 +856,7 @@ public sealed class Mod : MelonMod
 
     internal static void Log(string message) => Instance.LoggerInstance.Msg("[Based] " + message);
     internal static void Warn(string message) => Instance.LoggerInstance.Warning("[Based] " + message);
+    internal static void Error(string message) => Instance.LoggerInstance.Error("[Based] " + message);
 
     // An error in the crew or the plan costs that feature, not the player's ability to save.
     private static void Contain(string operation, Exception error)
