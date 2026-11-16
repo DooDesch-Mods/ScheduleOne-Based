@@ -9,9 +9,9 @@ namespace Based.Runtime;
 // vendor says that line. Require reads MelonLoader's registered mods only: touching a type of a missing mod throws
 // when the calling method is compiled, not at the line that uses it.
 //
-// The minimums are the versions in thunderstore/manifest.json; below them Based stays off. MapExpansions is the
-// exception: Based runs from 1.1.0, the first release with WorldStateDefinition.NavigationExistingFloor, and only
-// warns below the manifest version.
+// The minimums are the versions in thunderstore/manifest.json; below them Based stays off. That includes
+// MapExpansions: the Storage Unit sets CopyDefinition.Tilt and the 1.3.0 cuts and grids while the sites register, so
+// an older MapExpansions would stop the Sweatshop as well.
 internal static class MissingMods
 {
     internal static string Line { get; private set; } = "";
@@ -24,10 +24,6 @@ internal static class MissingMods
         // The file is S1API.Il2Cpp.MelonLoader.dll, but the assembly inside it is named S1API.
         S1ApiLoaded = AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name is "S1API" or "S1API.Il2Cpp.MelonLoader");
         if (!S1ApiLoaded) MelonLoader.MelonLogger.Warning("The S1API assembly is not loaded; only the missing-mods notice runs.");
-        Line = Require.Check(new Need("MapExpansions")
-        {
-            Minimum = "1.1.0",
-            Effect = "employees can ignore storage, drying racks and the loading dock in the new part of the Sweatshop, and the corner under the moved sink stays blocked when another mod removes the sink",
-        }) ?? "";
+        Line = Require.Check() ?? "";
     }
 }

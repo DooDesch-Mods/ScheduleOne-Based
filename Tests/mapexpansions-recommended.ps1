@@ -1,19 +1,20 @@
 <#
-In-game check: Based runs with every MapExpansions from 1.1.0 on and warns below the recommended 1.2.0. With
--TooOldCase it also starts once on 1.0.0: Based must stay off and name MapExpansions as too old.
+In-game check: Based needs the MapExpansions version in thunderstore/manifest.json as a hard minimum. With
+-TooOldCase it starts once on the last release below it (1.2.0): Based must stay off, name MapExpansions as too old
+and never reach for a member that release lacks.
 
-For each release (1.1.0, 1.2.0) it puts that release's MapExpansions.dll into the slot, starts the game with
--KeepSlot and reads MelonLoader/Latest.log: Based must initialize, and the [Requirements] line must warn for
-1.1.0 and pass for 1.2.0. Build the slot once before, with this worktree's Based (-Build takes the folder name
-under the workspace root, not a path):
+For each release in -Versions it puts that release's MapExpansions.dll into the slot, starts the game with
+-KeepSlot and reads MelonLoader/Latest.log: Based must initialize and every manifest minimum must pass. The
+default is empty until 1.3.0 is released. Build the slot once before, with this worktree's Based (-Build takes the
+folder name under the workspace root, not a path):
 
     pwsh -File Workspace/tools/session/session.ps1 -Slot mptest -Build _wt-Based-<topic> -Profile main -NoApp
     pwsh -File <this worktree>/Tests/mapexpansions-recommended.ps1 [-Slot mptest] [-TooOldCase] [-MissingCase] [-S1ApiMissingCase]
 #>
 param(
     [string]$Slot = 'mptest',
-    [string[]]$Versions = @('1.1.0', '1.2.0'),
-    # Also start once on MapExpansions 1.0.0, which lacks WorldStateDefinition.NavigationExistingFloor.
+    [string[]]$Versions = @(),
+    # Also start once on MapExpansions 1.2.0, which lacks CopyDefinition.Tilt.
     [switch]$TooOldCase,
     # Also start once without Personnel: Based must stay off and name the missing mod.
     [switch]$MissingCase,
@@ -57,17 +58,18 @@ function Use-MapExpansions([string]$v) {
 }
 
 if ($TooOldCase) {
-    Use-MapExpansions '1.0.0'
+    $tooOld = '1.2.0'
+    Use-MapExpansions $tooOld
     pwsh -File (Join-Path $root 'Workspace\tools\session\session.ps1') -Slot $Slot -KeepSlot -NoApp
-    if ($LASTEXITCODE -ne 0) { Check "MapExpansions 1.0.0: game ready" $false "session.ps1 exit $LASTEXITCODE" }
+    if ($LASTEXITCODE -ne 0) { Check "MapExpansions ${tooOld}: game ready" $false "session.ps1 exit $LASTEXITCODE" }
     else {
         $lines = Get-Content $log
         $off = $lines | Where-Object { $_ -match 'Based stays off: ' }
         $off | ForEach-Object { Write-Host "  $_" }
-        Check "MapExpansions 1.0.0: Based stays off and names it" ([bool]($off | Where-Object { $_ -match 'MapExpansions 1\.0\.0 (is too old|ist zu alt)' })) ($off -join ' | ')
-        Check "MapExpansions 1.0.0: Based did not initialize" (-not ($lines | Where-Object { $_ -match 'Based initialized' })) 'Based initialized anyway'
-        $missing = $lines | Where-Object { $_ -match 'NavigationExistingFloor|MissingField.*MapExpansions|MissingMethod.*MapExpansions' }
-        Check "MapExpansions 1.0.0: no missing-member error" (-not $missing) ($missing -join ' | ')
+        Check "MapExpansions ${tooOld}: Based stays off and names it" ([bool]($off | Where-Object { $_ -match "MapExpansions $([regex]::Escape($tooOld)) (is too old|ist zu alt)" })) ($off -join ' | ')
+        Check "MapExpansions ${tooOld}: Based did not initialize" (-not ($lines | Where-Object { $_ -match 'Based initialized' })) 'Based initialized anyway'
+        $missing = $lines | Where-Object { $_ -match 'Tilt|MissingField.*MapExpansions|MissingMethod.*MapExpansions' }
+        Check "MapExpansions ${tooOld}: no missing-member error" (-not $missing) ($missing -join ' | ')
     }
 }
 
@@ -84,19 +86,13 @@ foreach ($v in $Versions) {
     $usable = $lines | Where-Object { $_ -match '\[Based\] \[Requirements\] every dependency in thunderstore/manifest\.json is usable: ' }
     $usable | ForEach-Object { Write-Host "  $_" }
     $problems = ($lines | Where-Object { $_ -match '\[Requirements\].*not usable|too old' }) -join ' | '
-    Check "MapExpansions ${v}: hard minimum 1.1.0 met" ([bool]($usable | Where-Object { $_ -match 'MapExpansions 1\.1\.0\+' })) $problems
-    # The other minimums come from thunderstore/manifest.json.
+    # Every minimum, MapExpansions included, comes from thunderstore/manifest.json.
     $manifest = Get-Content (Join-Path $PSScriptRoot '..\thunderstore\manifest.json') -Raw | ConvertFrom-Json
     foreach ($dep in $manifest.dependencies) {
-        if ($dep -notmatch '^[^-]+-([^-]+)-(\d+\.\d+\.\d+)$' -or $Matches[1] -in 'MelonLoader', 'MapExpansions') { continue }
+        if ($dep -notmatch '^[^-]+-([^-]+)-(\d+\.\d+\.\d+)$' -or $Matches[1] -eq 'MelonLoader') { continue }
         $name = if ($Matches[1] -eq 'S1API_Forked') { 'S1API \(Forked by Bars\)' } else { [regex]::Escape($Matches[1]) }
         $min = [regex]::Escape($Matches[2])
         Check "MapExpansions ${v}: manifest minimum $dep checked" ([bool]($usable | Where-Object { $_ -match "$name $min\+" })) $problems
-    }
-    if ([version]$v -lt [version]'1.2.0') {
-        Check "MapExpansions ${v}: warns below 1.2.0" ([bool]($req | Where-Object { $_ -match 'older than the recommended 1\.2\.0' })) ($req -join ' | ')
-    } else {
-        Check "MapExpansions ${v}: meets 1.2.0" ([bool]($req | Where-Object { $_ -match 'meets the recommended 1\.2\.0' })) ($req -join ' | ')
     }
 }
 if ($MissingCase) {
