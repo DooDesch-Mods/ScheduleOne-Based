@@ -21,7 +21,7 @@ folder_join = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(folder_join)
 Log, Run = folder_join.Log, folder_join.Run
 
-STATE = r"baseddiag: %s door (open|closed); (no leaf bound|leaf at \(([-\d.]+), ([-\d.]+), ([-\d.]+)\), progress ([\d.]+))"
+STATE = r"baseddiag: %s (open|closed); (no leaf bound|leaf at \(([-\d.]+), ([-\d.]+), ([-\d.]+)\), progress ([\d.]+))"
 # key: (console argument, log name, shot folder, shot eye, shot target, upgrade). The leaf's slide axis is z for both.
 DOORS = {
     "sunroom": ("sunroom", "Sunroom door", "sunroom", (-179.5, -2.2, 113.5), (-183, -2.6, 111.6), "sunroom"),
@@ -95,9 +95,17 @@ def main():
     host, client = run.host, run.client
 
     doors = [DOORS[d] for d in args.doors.split(",") if d]
-    command(host, "baseddiag site=bungalow phase complete", r"baseddiag", 10)
-    for door in doors:
-        command(host, "baseddiag site=bungalow phase complete " + door[5], r"baseddiag", 10)
+    # Right after the host reports ready, Based may still be setting up and the jump fails; it is repeated until it
+    # takes.
+    for text in ["baseddiag site=bungalow phase complete"] + ["baseddiag site=bungalow phase complete " + d[5] for d in doors]:
+        line = None
+        for attempt in range(12):
+            line = command(host, text, r"baseddiag", 10)
+            if line and "failed" not in line:
+                break
+            print("      '%s' not taken yet (attempt %d): %s" % (text, attempt + 1, (line or "no reply")[-160:]), flush=True)
+            time.sleep(5)
+        run.check("host: %s" % text, bool(line and "failed" not in line), line)
     time.sleep(6)
     opened = {}
     for door in doors:
