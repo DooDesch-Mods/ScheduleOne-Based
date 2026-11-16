@@ -60,11 +60,16 @@ def latest(run, mark, lines, test, why):
 
 def room_items(run, room):
     log = run.cmd("mxreach %s" % CODE, wait=3.0)
-    items = []
+    items, seen = [], set()
     for l in log:
         m = re.search(r"mxreach:   (\S+) at \((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\) on expansion tiles: vanilla reach (yes|NO)", l)
         if not m:
             continue
+        # mxreach repeats the object list once per employee; count each item once.
+        key = m.group(1, 2, 3, 4)
+        if key in seen:
+            continue
+        seen.add(key)
         x, y, z = float(m.group(2)), float(m.group(3)), float(m.group(4))
         # An item's pivot can sit above its feet (a storage rack's by 0.87 m), never below the floor.
         if UPPER_Y - 0.1 <= y <= UPPER_Y + 1.5 and room["x"][0] <= x <= room["x"][1] and room["z"][0] <= z <= room["z"][1]:
