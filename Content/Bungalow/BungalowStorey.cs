@@ -40,7 +40,8 @@ public static class BungalowStorey
     // west along the house's south front, it ends on a landing against the west room's east wall.
     private const string Stair = "@Properties/DocksWarehouse/IndustrialShed/dockshed/Stairs (1)";
     private static readonly Vector3 StairTop = new(-90.87f, .83f, -54.3f);
-    private const float StairYaw = -60f, StairScale = 1.015f;
+    // Scaled so its foot meets the gravel at y -3.96 east of the porch.
+    private const float StairYaw = -60f, StairScale = 1.085f;
     private const float StairRise = 3.05f * StairScale, StairRun = 5.43f * StairScale;
     private const float LandingWest = EastWall, LandingEast = -168.35f, LandingSouth = 111.1f, LandingNorth = BalconySouth;
     private const float StairFoot = LandingEast + StairRun;
@@ -147,7 +148,7 @@ public static class BungalowStorey
     private static CopyDefinition Shell(int level)
     {
         var shell = Copy("shell", House, PropertyPivot, PropertyPivot + new Vector3(0f, Lift, 0f), 0);
-        foreach (var part in new[] { "Foundation", "Bench", "Cabinets", "Sink", "SmallRoof", "PorchBeam", "PorchBeam.001" })
+        foreach (var part in new[] { "Foundation", "Bench", "Cabinets", "SmallRoof", "PorchBeam", "PorchBeam.001" })
             shell.Exclude.Add(part);
         if (level < 3)
             foreach (var part in new[] { "Roof", "ShadowCaster", "InnerRoof", "RoofBeams" })
@@ -222,7 +223,10 @@ public static class BungalowStorey
         // The seam check samples 0.6 m to each side of the strip's edge, so the strip at the stair's foot reaches well past
         // the volume.
         state.NavigationExistingFloor.Add(BoundsOf(StairFoot + .1f, -4.4f, LandingSouth - .1f, StairFoot + 2f, -3f, LandingNorth + .1f));
+        // The first two straddle the join: the gravel at the stair's foot and its second tread.
+        float tread = StairFoot - .6f;
         state.NavigationProbes.Add(new Vector3(StairFoot + .8f, -4f, 111.85f));
+        state.NavigationProbes.Add(new Vector3(tread, UpperFloor - (tread - LandingEast) * StairRise / StairRun, 111.85f));
         state.NavigationProbes.Add(new Vector3(-169.1f, UpperFloor, 111.85f));
         state.NavigationProbes.Add(new Vector3(-167f, UpperFloor, 114f));
         state.NavigationProbes.Add(new Vector3(-171f, UpperFloor, 113.8f));
