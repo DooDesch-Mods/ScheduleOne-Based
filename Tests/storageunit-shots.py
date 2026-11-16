@@ -58,9 +58,12 @@ VIEWS = {
     # The yard west of the stair with the fire barrel and the trash, from the street and close up.
     "yard-strip": ((-13.8, 1.9, 106.8), (-11.3, 0.4, 101.0)),
     "yard-fire": ((-10.8, 1.8, 99.7), (-12.35, 0.7, 102.35)),
-    # The interior ladder from the hall floor and down from the loft, and the trash of a finished stage.
-    "ladder-hall": ((-2.6, 1.6, 99.5), (-2.65, 2.0, 103.3)),
-    "ladder-loft": ((-3.5, 4.9, 107.5), (-2.65, 3.0, 103.3)),
+    # The interior ladder on Unit 3's front from the hall floor, its top at the walkway's edge from below and from the
+    # walkway, and the trash of a finished stage.
+    "ladder-hall": ((-6.2, 1.6, 96.6), (-2.3, 1.9, 100.46)),
+    "ladder-below": ((-3.4, 2.5, 99.8), (-2.3, 3.2, 100.46)),
+    "ladder-top": ((-1.2, 4.6, 100.46), (-2.35, 3.1, 100.46)),
+    "ladder-rail": ((-1.0, 4.4, 99.3), (-2.3, 3.0, 100.6)),
     "litter-loft": ((-3.0, 4.9, 113.0), (-6.5, 3.2, 107.5)),
     "litter-east": ((2.9, 4.9, 113.4), (0.5, 3.2, 107.0)),
     # Where the crew works on the night of each stage: the wall the door is cut through, the loft's south edge, the

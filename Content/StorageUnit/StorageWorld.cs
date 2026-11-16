@@ -168,6 +168,7 @@ public static class StorageWorld
         if (level >= 4) WalkwayOpen(state, geometry, level);
         if (level >= 5) EastRoom(state, geometry);
         if (level >= 6) SouthOpen(state, geometry);
+        if (level >= StorageLadder.FromLevel) LadderOpening(state, geometry);
         if (level >= 7) SouthRoom(state, geometry);
         SiteProps(state, geometry, level);
         state.Copies.Add(geometry);
@@ -479,7 +480,7 @@ public static class StorageWorld
             BoundsOf(-8.85f, 3.15f, 103.7f, -4.5f, 6.25f, 103.85f)));
         // A steel beam closes the opening under the block's top and hides the edge of the loft's ceiling.
         Face(geometry, "gallery-beam", Metal, UnitWest, LoftCeiling - .15f, UnitSouth - .07f, UnitEast, UnitTop, UnitSouth + .07f);
-        GalleryRail(state, geometry, level);
+        GalleryRail(state, geometry);
 
         foreach (var (id, z) in new[] { ("loft-light-south", 106.0f), ("loft-light-middle", 108.8f), ("loft-light-north", 111.6f) })
         {
@@ -538,13 +539,11 @@ public static class StorageWorld
     }
 
     // The walkway's railing continues along the opening and meets it at its last post. The vanilla piece is 1.9 m long
-    // with a post at each end; the run's last piece lies over the one before it, a few millimetres aside. From the south
-    // stage on the run stops short of the walkway's post and leaves the opening above the ladder from the hall.
-    private static void GalleryRail(WorldStateDefinition state, CopyDefinition geometry, int level)
+    // with a post at each end; the run's last piece lies over the one before it, a few millimetres aside.
+    private static void GalleryRail(WorldStateDefinition state, CopyDefinition geometry)
     {
         const float piece = 1.9f, start = UnitWest + .05f;
-        bool ladder = level >= StorageLadder.FromLevel;
-        float end = ladder ? StorageLadder.OpeningWest : RailEnd.x, cross = RailEnd.z;
+        float end = RailEnd.x, cross = RailEnd.z;
         int full = (int)((end - start + .001f) / piece);
         float rest = end - start - full * piece;
         bool overlaps = rest > .05f;
@@ -556,14 +555,47 @@ public static class StorageWorld
             float side = cross - (last && overlaps ? .004f : 0f);
             var rail = Copy("gallery-rail-" + i, Fence, FencePost, new Vector3(from, UpperY, side), 90);
             if (last && overlaps) rail.Exclude.Add("outdoorfence/Post");
-            // The walkway's railing already stands at the run's end; at the opening the run's own post ends it.
-            if (last && !ladder) rail.Exclude.Add("outdoorfence/Post.001");
+            // The walkway's railing already stands at the run's end.
+            if (last) rail.Exclude.Add("outdoorfence/Post.001");
             state.Copies.Add(rail);
         }
         geometry.Boxes.Add(new BoxDefinition
         {
             Id = "gallery-guard", Kind = BoxKind.Block, Box = BoundsOf(start, UpperY, cross - .07f, end, UpperY + 2.1f, cross + .07f)
         });
+    }
+
+    // The ladder from the hall comes up through the walkway's railing over Unit 3. The vanilla piece above it,
+    // "OutdoorFence (1)" from z 99.89 to 101.79, loses its bars and keeps its posts. Two copies of the piece, a few
+    // millimetres behind the vanilla run, put a post beside each rail. A piece holds ten bar spaces of 0.19 m, and the
+    // copies are shifted by whole spaces (one south, five north), so their bars cover the vanilla bars and the opening
+    // runs from post to post at z 100.08 and 100.84. Steel brackets hold the rails to Unit 3's front.
+    private const float BarSpace = .19f, UnitThreeFront = -1.76f;
+    private static readonly float[] BracketHeights = { 1.0f, 2.3f };
+
+    private static void LadderOpening(WorldStateDefinition state, CopyDefinition geometry)
+    {
+        const float piece = 1.9f, vanillaSouth = 99.89f;
+        float x = FencePost.x + .004f, south = vanillaSouth + BarSpace, north = FencePost.z - 5 * BarSpace;
+        state.Rules.Add(Rule("ladder-rail-bars", "OutdoorFence (1)", "Storage warehouse", ObjectEffect.Remove,
+            BoundsOf(FencePost.x - .1f, UpperY + .05f, vanillaSouth + .07f, FencePost.x + .1f, UpperY + 2.1f, FencePost.z - .07f)));
+        // South of the opening the copy ends in its far post; north of it the copy starts with its own post.
+        var southRail = Copy("ladder-rail-south", Fence, FencePost, new Vector3(x, UpperY, south - piece));
+        southRail.Exclude.Add("outdoorfence/Post");
+        state.Copies.Add(southRail);
+        var northRail = Copy("ladder-rail-north", Fence, FencePost, new Vector3(x, UpperY, north));
+        northRail.Exclude.Add("outdoorfence/Post.001");
+        state.Copies.Add(northRail);
+        // The copies carry no collider; unseen walls take the place of the vanilla bars beside the opening.
+        foreach (var (id, from, to) in new[] { ("ladder-rail-guard-south", vanillaSouth, south), ("ladder-rail-guard-north", north, FencePost.z) })
+            geometry.Boxes.Add(new BoxDefinition
+            {
+                Id = id, Kind = BoxKind.Block, Box = BoundsOf(FencePost.x - .07f, UpperY, from, FencePost.x + .07f, UpperY + 2.1f, to)
+            });
+        foreach (float z in new[] { StorageLadder.SouthRail, StorageLadder.NorthRail })
+            foreach (float y in BracketHeights)
+                Face(geometry, "ladder-bracket-" + Mathf.RoundToInt(z * 100) + "-" + Mathf.RoundToInt(y * 10), Metal,
+                    StorageLadder.BackX - .02f, y, z - .02f, UnitThreeFront, y + .05f, z + .02f);
     }
 
     // Night 2: a door breaks through the upper west wall onto the landing, and the four small units above Unit 1 become

@@ -7,7 +7,7 @@ using Object = UnityEngine.Object;
 
 namespace Based.Content.StorageUnit;
 
-// The ladder from the hall up to the loft, from the south stage on. It is a clone of the game's own climbable ladder at
+// The ladder from the hall up to the walkway, from the south stage on. It is a clone of the game's own climbable ladder at
 // the chemical plant: its trigger mounts the local player and climbing is the game's. A world state's copies lose their
 // scripts, so the ladder is cloned at runtime on every machine from the stage the world state shows, like the effects.
 // The clone has no networked part; each player climbs on their own machine.
@@ -15,12 +15,19 @@ internal static class StorageLadder
 {
     private const string Template = "Map/Hyland Point/Region_Westville/ChemicalPlant/Functional Ladder";
     // The template's origin is the trigger's bottom corner on the climber's side; its ground lies there, its yellow
-    // ladder reaches 3.42 m above it and its trigger 3.40 m. Placed on the hall floor (0.10) it reaches 0.25 m above
-    // the loft floor (3.25), like the plant's roof. Turned like the template, the climber stands south of it in the
-    // hall and faces north, and the ladder's back (0.24 m behind the origin) stands 2 cm in front of the loft's edge
-    // (103.50). It stands between Unit 1's door frame (-4.25) and Unit 2's (-1.93), under the gallery railing's opening.
-    internal static readonly Vector3 Origin = new(-2.95f, .1f, 103.24f);
-    internal const float OpeningWest = -3.2f, Width = .6f;
+    // ladder reaches 3.42 m above it and its trigger 3.40 m. The ladder stands on the hall's east side against the
+    // plain stretch of Unit 3's front (z 100.03 .. 101.5), between its roller door and the security camera, and climbs
+    // to the walkway over Unit 3. Nobody passes there: the bays end 0.04 m west of it, the nook to Unit 2's door begins
+    // north of the camera and Geraldine's door lies 3 m south. Turned 90 degrees from the template, the climber stands
+    // west of it and faces east; the ladder's back (0.24 m behind the origin) lies on the walkway slab's edge (x -2.25)
+    // and its rails run from z 100.18 to 100.74, centred between the posts of the walkway's railing above.
+    internal static readonly Vector3 Origin = new(-2.49f, .1f, 100.74f);
+    internal const float Yaw = 90f;
+    // Where the rails stand, for the brackets to Unit 3's front and the opening in the walkway's railing.
+    internal const float BackX = -2.25f, SouthRail = 100.18f, NorthRail = 100.74f;
+    // The trigger keeps the template's height, 0.25 m over the walkway floor, so the climb ends over the edge as at the
+    // plant; only the yellow ladder is lowered until its rails and top rung end level with the floor.
+    private const string Visual = "ladder_a";
     // The south stage's first night.
     internal const int FromLevel = 6;
     private const float CheckInterval = 1f;
@@ -73,8 +80,9 @@ internal static class StorageLadder
         var clone = Object.Instantiate(template);
         clone.name = "Based_StorageLadder";
         clone.transform.SetParent(null, false);
-        clone.transform.SetPositionAndRotation(Origin, template.transform.rotation);
+        clone.transform.SetPositionAndRotation(Origin, Quaternion.Euler(0f, Yaw, 0f) * template.transform.rotation);
         clone.transform.localScale = template.transform.lossyScale;
+        string top = LowerToFloor(clone);
         // The plant's links let NPCs climb; employees keep the outside stair the walking map was checked for.
         int links = 0;
         foreach (var link in clone.GetComponentsInChildren<OffMeshLink>(true))
@@ -94,7 +102,28 @@ internal static class StorageLadder
         clone.SetActive(true);
         _live = clone;
         Mod.Log("Storage ladder placed at " + Origin + " for stage " + state + ": " + links + " off-mesh link(s) removed, "
-                + clone.GetComponentsInChildren<Renderer>(true).Length + " renderer(s). " + Describe());
+                + clone.GetComponentsInChildren<Renderer>(true).Length + " renderer(s), " + top + ". " + Describe());
+    }
+
+    // Moves the yellow ladder down until its highest point is the walkway floor; the part below the hall floor stays
+    // hidden under it.
+    private static string LowerToFloor(GameObject clone)
+    {
+        var visual = clone.transform.Find(Visual);
+        var renderer = visual != null ? visual.GetComponentInChildren<Renderer>(true) : null;
+        if (renderer == null)
+        {
+            Mod.Warn("Storage ladder: the clone has no " + Visual + " renderer; its top stays 0.27 m over the walkway floor.");
+            return "top not lowered";
+        }
+        float drop = renderer.bounds.max.y - StorageWorld.UpperFloor;
+        if (drop < 0f || drop > 1f)
+        {
+            Mod.Warn("Storage ladder: the yellow ladder's top is " + drop.ToString("F2") + " m from the walkway floor; it is left as cloned.");
+            return "top not lowered";
+        }
+        visual!.position -= new Vector3(0f, drop, 0f);
+        return "yellow ladder lowered " + drop.ToString("F2") + " m to top " + renderer.bounds.max.y.ToString("F2");
     }
 
     private static void Remove(string why)

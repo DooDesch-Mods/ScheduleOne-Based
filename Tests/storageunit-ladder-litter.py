@@ -26,7 +26,7 @@ S1 = r"F:\Projects\Mods\Schedule1\Workspace\tools\bridge\s1.py"
 SITE = "site=storageunit"
 LOFT = "ray.storageunit-loft"
 # The hall floor in front of the ladder, facing it (north), and the loft floor height.
-FOOT = ("-2.65", "0.1", "102.75")
+FOOT = ("-2.85", "0.1", "100.46")
 LOFT_FLOOR = 3.1
 
 
@@ -79,7 +79,7 @@ def litter_now(run, pick):
 
 
 def climb(run, pick, slot, label):
-    s1(slot, "tp", *FOOT, "--yaw", "0")
+    s1(slot, "tp", *FOOT, "--yaw", "90")
     time.sleep(1.5)
     log = run.cmd("baseddiag climb 5", wait=7.0)
     start, end = pick(log, "baseddiag climb: start"), pick(log, "baseddiag climb: end")
@@ -112,7 +112,7 @@ def main():
     line = ladder_line(run, pick)
     run.check("ladder with the south build's first night", "ladder at" in line and "climb height" in line, line or "no reply")
     climb(run, pick, args.slot, "south build")
-    shots(args.slot, args.out, "ladder", "ladder-hall,ladder-loft")
+    shots(args.slot, args.out, "ladder", "ladder-hall,ladder-below,ladder-top,ladder-rail")
 
     # Trash: the loft's last night, then the sleep that completes it.
     run.cmd("baseddiag %s phase %s:loft-door" % (SITE, LOFT), wait=10.0)
