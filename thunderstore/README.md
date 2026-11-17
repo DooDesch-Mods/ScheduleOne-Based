@@ -17,7 +17,7 @@
 
 ![Based](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/header.jpg)
 
-> Too little room in the Sweatshop? Buy the rest of the floor, order the work and watch a crew build it over four nights.
+> Too little room? Expand the Sweatshop or the Storage Unit, order the work and watch a crew build it night by night.
 
 ## What it does
 
@@ -41,9 +41,27 @@ Once the expansion is done, the project folder offers the next stage: a loading 
 restaurant, for $1,500 and one night of work. After that the Sweatshop shows up in the delivery app, and
 employees can unload the van there.
 
+## Storage Unit
+
+Own the Storage Unit and talk to Ray at Ray's Realty. The upper floor is empty, and he sells it in steps:
+
+| Build | Price | Nights | What you get |
+|---|---|---|---|
+| Permit | $1,000 | - | The plans and a project folder |
+| Loft above the unit | $4,000 | 3 | An outside steel stair, the loft, 2 more employees |
+| East units | $4,000 | 2 | A walkway past the elevator, 2 more employees |
+| South units | $2,000 | 2 | 1 more employee |
+| Second loading bay | $1,500 | 1 | A second delivery spot in the hall |
+
+Each build needs the one before. Every night shows its stage with the crew at work, and every new room has its
+own light switch.
+
+Until the last night the foreman takes a tip in cash or product. The more you tip, the less construction trash is
+left after each night; at 10% of the build price none is left.
+
 ## You pick the next base
 
-The Sweatshop is the first base. The Discord votes on which property comes next:
+The Sweatshop and the Storage Unit are done. The Discord votes on which property comes next:
 [mods.doodesch.de](https://mods.doodesch.de).
 
 ## Co-op
@@ -61,6 +79,8 @@ Wait until no delivery is on its way to the Sweatshop, since the dock goes with 
 ![The build plan](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/build-plan.jpg)
 
 ![The finished space](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/finished.jpg)
+
+![The Storage Unit's outside stair under construction](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/storage-unit-construction.jpg)
 
 ## Requirements
 
