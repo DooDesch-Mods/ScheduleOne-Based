@@ -63,6 +63,7 @@ class Run:
             stream.reconfigure(encoding="utf-8", errors="replace")
         self.g = Game(slot)
         self.results = []
+        self.issues = {}
 
     def check(self, name, ok, detail=""):
         verdict = "PASS" if ok else "FAIL"
@@ -177,11 +178,19 @@ class Run:
         return len(self.botanists())
 
     def reshuffle(self):
+        # Like a player, the clear leaves a pot in use where it is; only the pots taken out are put back.
+        out = []
+        busy = 0
         for x, y in RESHUFFLE:
-            self.lines("mxreach clear %s %d %d %d %d" % (CODE, x, y, x + 1, y + 1))
+            text = "\n".join(self.lines("mxreach clear %s %d %d %d %d" % (CODE, x, y, x + 1, y + 1)))
+            if "mxreach clear: removing" in text:
+                out.append((x, y))
+            elif "mxreach clear: skipping" in text:
+                busy += 1
         time.sleep(5)
-        back = sum(self.place(x, y)[0] for x, y in RESHUFFLE)
-        print("  layout change while working: %d of %d pots taken out and put back" % (back, len(RESHUFFLE)), flush=True)
+        back = sum(self.place(x, y)[0] for x, y in out)
+        print("  layout change while working: %d of %d pots taken out, %d put back, %d in use stayed"
+              % (len(out), len(RESHUFFLE), back, busy), flush=True)
         if back:
             self.sow_and_ripen()
 
@@ -214,6 +223,7 @@ class Run:
                     # "-" is an employee without an idle point; it never counts as standing at one.
                     away = float(idle.group(1)) if idle and idle.group(1) != "-" else float("inf")
                     history.setdefault(name, []).append((time.time(), pos, m.group(5), m.group(6), away))
+                    self.issues[name] = line.split("issues: ", 1)[-1] if "issues: " in line else ""
                 m = POTS.search(line)
                 if m:
                     pots = tuple(int(v) for v in m.groups())
@@ -322,7 +332,11 @@ def main():
     for name in sorted(history):
         # The trace logs each finished harvest under the full name; history keys are first names.
         harvests = sum(n for full, n in r.harvests.items() if full.split(" ")[0] == name)
-        r.check("Based#69: %s keeps harvesting" % name, harvests >= 3, "%d harvests in %.1f min" % (harvests, args.minutes))
+        # Full drying racks stop harvests in vanilla too; the game then names the reason in the worker's issues.
+        full = "destination is full" in r.issues.get(name, "") and history[name][-1][2] == "Wait ouside"
+        r.check("Based#69: %s keeps harvesting, or waits with the game's 'destination is full' issue" % name,
+                harvests >= 3 or full,
+                "%d harvests in %.1f min%s" % (harvests, args.minutes, ", waits outside: destination full" if full else ""))
     if pots:
         print("  pots at the end: %d, planted %d, ready for harvest %d" % (pots[0], pots[2], pots[3]))
     r.pot_states("at the end")
