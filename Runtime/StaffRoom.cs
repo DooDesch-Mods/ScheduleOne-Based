@@ -59,18 +59,30 @@ internal static class StaffRoom
         int have = known == null ? 0 : known.Length;
         if (have >= wanted) return;
         if (site.StaffPlaces.Count == 0) throw new InvalidOperationException(site.Base.Id + " defines no places for employees.");
-        if (wanted - have > site.StaffPlaces.Count)
-            Mod.Warn(site.Base.Id + " has " + site.StaffPlaces.Count + " places for " + (wanted - have) + " employees; some share one.");
+
+        // The limit rises with each finished room, so earlier calls may have added places already. They live under the
+        // one holder; the site's spots are counted from the first place after the game's own, so a later room takes
+        // the next free spot instead of starting again at the first.
+        var holder = property.transform.Find(HolderName);
+        if (holder == null)
+        {
+            holder = new GameObject(HolderName).transform;
+            holder.SetParent(property.transform, false);
+        }
+        int ours = 0;
+        for (int i = 0; i < have; i++)
+            if (known![i] != null && known[i].parent == holder) ours++;
+        int first = have - ours;
+        if (wanted - first > site.StaffPlaces.Count)
+            Mod.Warn(site.Base.Id + " has " + site.StaffPlaces.Count + " places for " + (wanted - first) + " employees; some share one.");
 
         var center = Vector3.zero;
         foreach (var spot in site.StaffPlaces) center += spot / site.StaffPlaces.Count;
-        var holder = new GameObject(HolderName).transform;
-        holder.SetParent(property.transform, false);
         var places = new Transform[wanted];
         for (int i = 0; i < have; i++) places[i] = known![i];
         for (int i = have; i < wanted; i++)
         {
-            var spot = site.StaffPlaces[(i - have) % site.StaffPlaces.Count];
+            var spot = site.StaffPlaces[(i - first) % site.StaffPlaces.Count];
             var place = new GameObject("Place " + i).transform;
             place.SetParent(holder, false);
             place.position = spot;

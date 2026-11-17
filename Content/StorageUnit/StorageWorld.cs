@@ -66,7 +66,11 @@ public static class StorageWorld
     // the loft's ceiling panel mounts it flat against the panel without reaching into it.
     private const string LampModel = "Map/Hyland Point/Region_Northtown/Storage warehouse/Storage Unit/FluroBar (1)";
     private static readonly Vector3 LampPivot = new(-6.52f, 2.87f, 107.23f);
-    private const float LampRange = 3.6f, LampY = LoftCeiling - .033f;
+    // The bars hang 2.7 m over the floor, like Unit 1's own bar over its floor. URP fades a light towards the end of its
+    // reach, so a reach of 3.6 left the room's far floor dark. The reach is 6 like the house bars, not Unit 1's 8: extra
+    // lights cast no shadows here, and Unit 1's floor 5.9 m under the loft bars would be lit through the loft floor. The
+    // higher intensity makes up for the shorter reach, so the floor gets about as much light as Unit 1's.
+    private const float LampRange = 6f, LampIntensity = 2.8f, LampY = LoftCeiling - .033f;
     private const string RoomSwitch = "Map/Hyland Point/Region_Northtown/Storage warehouse/Storage Unit/ModularSwitch";
     // Unit 1's wall switch: the centre of its back plate, 1.2 m above Unit 1's floor on the unit's west wall, facing east.
     private static readonly Vector3 SwitchPivot = new(-4.62f, 1.3f, 104.78f);
@@ -125,8 +129,8 @@ public static class StorageWorld
     // clear of the stair (x from -10.49) and the street lamp's base (x -12.5 .. -11.5, z 100.5 .. 101.5).
     private static readonly Vector3 FireDrumAt = new(-12.35f, 0f, 102.35f);
     internal static readonly Vector3 FireSpot = FireDrumAt + new Vector3(0, .85f, 0);
-    // One row of lamps over the middle; within this reach the light ends before the outside of the east wall (3.51).
-    private const float EastLampX = .6f, EastLampRange = 2.9f;
+    // One row of lamps over the middle.
+    private const float EastLampX = .6f;
 
     // C: the walkway south of B (x -2.05 .. 0.25) and the three units of Unit4 east of it. The elevator stands between
     // them and B's room; its shaft behind it stays closed.
@@ -140,8 +144,7 @@ public static class StorageWorld
     // The walkway's railing to the hall (x -2.1) stands between two lines; a steel kerb in front of it reaches to the
     // line at x -1.75 and leaves out the top of the ladder.
     private const float KerbEdge = -1.75f, KerbHeight = .1f, KerbBack = -2.08f;
-    // Within this reach the light ends before the outside of the east wall (3.51) and the south wall (93.5).
-    private const float SouthLampX = 1.1f, SouthLampRange = 2.35f;
+    private const float SouthLampX = 1.1f;
 
     // Order of the states; each level includes all lower ones.
     private static readonly string[] States = { "a-stair", "a-door", "a-complete", "b-open", "b-complete", "c-open", "c-complete" };
@@ -205,9 +208,9 @@ public static class StorageWorld
         return state;
     }
 
-    // A tipped bucket rests on its rim, a jerry can on its broad side; the lift keeps either out of the floor.
-    private static readonly Vector3 BucketTipped = new(88f, 0f, 0f), JerryCanFlat = new(0f, 0f, 90f);
-    private const float BucketTippedLift = .17f, JerryCanFlatLift = .08f;
+    // A jerry can on its broad side; the lift keeps it out of the floor.
+    private static readonly Vector3 JerryCanFlat = new(0f, 0f, 90f);
+    private const float JerryCanFlatLift = .08f;
 
     // What the crew leaves on site for one night of work. The timber stock shrinks from build to build; each night's site
     // stands where that night's work is and is gone once the work is done. Props sit in small groups with one stray,
@@ -240,25 +243,25 @@ public static class StorageWorld
             case 2:
                 Outside(state);
                 Stock(state, geometry, "loft", -3.3f, UpperY, 112.7f, 12);
-                state.Copies.Add(Copy("loft-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-7.85f, UpperY, 112.95f), 13));
+                // The stack's base is 1.47 m square; turned by 5° it keeps 5 cm off the west and north linings.
+                state.Copies.Add(Copy("loft-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-7.88f, UpperY, 112.93f), 5));
                 state.Copies.Add(Copy("loft-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(-3.25f, UpperY, 104.85f), -7));
                 SiteTable(state, geometry, "loft-table", -5.5f, UpperY, 108.8f, 4);
                 Clutter(state, geometry, "loft-trash-can", Camp + "Trash Can Prop", TrashCanPivot, -6.55f, UpperY, 113.25f, 37, .32f, .77f);
                 Clutter(state, geometry, "loft-crate", Camp + "Wood Crate Prop (1)", CratePivot, -8.2f, UpperY, 111.45f, 14, .45f, .8f);
                 Clutter(state, geometry, "loft-gas-bottle", Camp + "Gas Bottle Prop (1)", GasBottlePivot, -2.48f, UpperY, 106.14f, 21, .32f, .72f);
-                // The jerry can lies on its side by the generator, the bucket is tipped over beside the table.
+                // The jerry can lies on its side by the generator, the bucket stands beside the table.
                 state.Copies.Add(Copy("loft-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(-3.9f, UpperY + JerryCanFlatLift, 104.3f), 68,
                     tilt: JerryCanFlat));
-                state.Copies.Add(Copy("loft-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(-4.1f, UpperY + BucketTippedLift, 108.3f), 133,
-                    tilt: BucketTipped));
-                Cinderblock(state, "loft-cinderblock-a", -6.05f, UpperY, 113.4f, 11);
+                state.Copies.Add(Copy("loft-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(-3.98f, UpperY - BucketUprightDrop, 108.3f), 133));
+                Cinderblock(state, "loft-cinderblock-a", -5.9f, UpperY, 113.4f, 11);
                 Cinderblock(state, "loft-cinderblock-b", -8.35f, UpperY, 110.25f, 71);
                 Cinderblock(state, "loft-cinderblock-c", -2.45f, UpperY, 110.95f, -26);
                 // Brick from the cut through the west wall, inside and out.
                 RubblePile(state, "door-rubble", -8.2f, UpperY, 107f, .35f, 11);
                 RubblePile(state, "door-rubble-stray", -7.55f, UpperY, 105.25f, .14f, 23);
                 RubblePile(state, "landing-rubble", -9.85f, LandingDeck, 106f, .14f, 37);
-                WorkLight(state, "loft-work-light", -5.5f, 108.8f, LampRange);
+                WorkLight(state, "loft-work-light", -5.5f, 108.8f);
                 break;
             case 4:
                 Stock(state, geometry, "walkway", -1f, UpperY, 112.9f, 8);
@@ -266,27 +269,29 @@ public static class StorageWorld
                 // north of the plank wall (z to 103.94), the generator and the can beside each other north of them.
                 state.Copies.Add(Copy("walkway-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-.6f, UpperY, 104.9f)));
                 state.Copies.Add(Copy("walkway-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(-1.55f, UpperY, 106.45f), 8));
-                SiteTable(state, geometry, "walkway-table", -.35f, UpperY, 108.8f, 86);
+                SiteTable(state, geometry, "walkway-table", -.42f, UpperY, 108.8f, 86);
                 state.Copies.Add(Copy("walkway-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(-.35f, UpperY, 106.35f), 152));
-                Clutter(state, geometry, "walkway-gas-bottle", Camp + "Gas Bottle Prop (1)", GasBottlePivot, -1.93f, UpperY, 111.8f, -29, .32f, .72f);
+                Clutter(state, geometry, "walkway-gas-bottle", Camp + "Gas Bottle Prop (1)", GasBottlePivot, -1.93f, UpperY, 111.62f, -29, .32f, .72f);
                 Clutter(state, geometry, "walkway-trash-can", Camp + "Trash Can Prop", TrashCanPivot, -1.88f, UpperY, 109.95f, -19, .32f, .77f);
                 state.Copies.Add(Copy("walkway-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(-1.86f, UpperY - BucketUprightDrop, 110.7f), 47));
                 Cinderblock(state, "walkway-cinderblock", -1.7f, UpperY, 107.6f, 41);
                 break;
             case 6:
-                Stock(state, geometry, "south", 2.4f, UpperY, 95f, 4);
-                state.Copies.Add(Copy("south-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(2.68f, UpperY, 100.85f), 19));
+                // The room's linings lie at x 3.24, z 94.31 and z 101.29. From the south: the generator, the pallet and the
+                // jerry can between them, the gas bottle and the bucket with two blocks, the table, the barrels in the
+                // north-east corner; each keeps a few centimetres off the linings and its neighbours.
+                Stock(state, geometry, "south", 2.4f, UpperY, 95.15f, 4);
+                state.Copies.Add(Copy("south-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(2.35f, UpperY, 100.4f), 8));
                 state.Copies.Add(Copy("south-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(.93f, UpperY, 94.93f), -14));
-                SiteTable(state, geometry, "south-table", 2.7f, UpperY, 98.6f, 93);
-                WorkLight(state, "south-work-light", SouthLampX, 97.7f, SouthLampRange);
-                // The jerry can lies on its side by the generator, the bucket is tipped over by the table.
-                state.Copies.Add(Copy("south-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(1.6f, UpperY + JerryCanFlatLift, 94.5f), 107,
+                SiteTable(state, geometry, "south-table", 2.6f, UpperY, 98.3f, 93);
+                WorkLight(state, "south-work-light", SouthLampX, 97.7f);
+                // The jerry can lies on its side by the generator, the bucket stands by the blocks.
+                state.Copies.Add(Copy("south-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(1.23f, UpperY + JerryCanFlatLift, 95.36f), 107,
                     tilt: JerryCanFlat));
-                Clutter(state, geometry, "south-gas-bottle", Camp + "Gas Bottle Prop (1)", GasBottlePivot, .73f, UpperY, 96.13f, 24, .32f, .72f);
-                state.Copies.Add(Copy("south-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(3.0f, UpperY + BucketTippedLift, 96.55f), -58,
-                    tilt: BucketTipped));
+                Clutter(state, geometry, "south-gas-bottle", Camp + "Gas Bottle Prop (1)", GasBottlePivot, .73f, UpperY, 96.45f, 24, .32f, .72f);
+                state.Copies.Add(Copy("south-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(1.05f, UpperY - BucketUprightDrop, 97.1f), -58));
                 Cinderblock(state, "south-cinderblock-a", 1.63f, UpperY, 97.42f, 17);
-                Cinderblock(state, "south-cinderblock-b", 2.95f, UpperY, 97.25f, 63);
+                Cinderblock(state, "south-cinderblock-b", 1.6f, UpperY, 98.2f, 63);
                 break;
         }
     }
@@ -340,12 +345,17 @@ public static class StorageWorld
     }
 
     // The crew's lamp burns all night, on no switch, until the room gets its own.
-    private static void WorkLight(WorldStateDefinition state, string id, float x, float z, float range)
+    private static void WorkLight(WorldStateDefinition state, string id, float x, float z) => state.Copies.Add(Lamp(id, x, z, null));
+
+    // A copy of Unit 1's ceiling bar under the upper level's ceiling; with a switch id it follows that switch.
+    private static CopyDefinition Lamp(string id, float x, float z, string? lightSwitch)
     {
         var light = Copy(id, LampModel, LampPivot, new Vector3(x, LampY, z));
         light.LightsOn = true;
-        light.LightRange = range;
-        state.Copies.Add(light);
+        light.LightRange = LampRange;
+        light.LightIntensity = LampIntensity;
+        if (lightSwitch != null) light.LightSwitch = "copy:" + lightSwitch;
+        return light;
     }
 
     // A low mound of broken brick with flat scraps of the units' sheet. A box cannot turn on its own, so each handful
@@ -454,13 +464,7 @@ public static class StorageWorld
     private static void SouthRoom(WorldStateDefinition state, CopyDefinition geometry)
     {
         foreach (var (id, z) in new[] { ("south-light-south", 96.0f), ("south-light-north", 99.4f) })
-        {
-            var light = Copy(id, LampModel, LampPivot, new Vector3(SouthLampX, LampY, z));
-            light.LightsOn = true;
-            light.LightSwitch = "copy:" + SouthSwitch;
-            light.LightRange = SouthLampRange;
-            state.Copies.Add(light);
-        }
+            state.Copies.Add(Lamp(id, SouthLampX, z, SouthSwitch));
         // On the room's north wall beside the way in from the walkway, facing south into the room.
         state.Copies.Add(WallSwitch(SouthSwitch, EastFront + .3f, SouthRoomNorth - SwitchProud, -90));
 
@@ -490,8 +494,24 @@ public static class StorageWorld
         if (level < 5) Face(geometry, "walkway-beam", Metal, FacesBack - .006f, LoftCeiling - .156f, UnitSouth + .006f, UnitEast, UnitTop - .02f, UnitNorth);
         if (level < 6) SiteWall(geometry);
         // The linings of the loft and of Unit5 both end at the block's north face; a sheet closes the walkway between
-        // them, in front of the hall's brick.
-        Solid(geometry, "walkway-north-end", UnitSheet, UnitEast + .006f, UpperY, UnitNorth - .008f, EastFront - .006f, UnitTop - WallSkin, UnitNorth - .002f);
+        // them, in front of the hall's brick. The openings to the walkway also cut 10 cm off each lining's north wall
+        // beside them, so the sheet reaches on behind both linings. Its face stands 5 mm behind their plane and 5 mm in
+        // front of the brick: closer than that, the depth buffer flickers between the two where they overlap.
+        Solid(geometry, "walkway-north-end", UnitSheet, UnitEast - .16f, UpperY, UnitNorth - .005f, EastFront + .16f, UnitTop - WallSkin, UnitNorth - .002f);
+        // The same cut takes the south walls' last 10 cm beside both openings; a sheet behind each closes the slit. It is
+        // 1 mm thin and 4.5 mm off both the lining and the block's face, so it never draws at their depth.
+        Face(geometry, "loft-south-end", UnitSheet, UnitEast - .16f, UpperY, UnitSouth + .0045f, UnitEast, LoftCeiling, UnitSouth + .0055f);
+        Face(geometry, "east-south-end", UnitSheet, EastFront, UpperY, UnitSouth + .0045f, EastFront + .16f, LoftCeiling, UnitSouth + .0055f);
+        EndCover(geometry, "loft-north-cover", UnitEast - .18f, UnitEast, UnitNorth - LiningGap, -1);
+    }
+
+    // A room's lining runs a 6 cm steel frame around the opening of its open face, and the opening cuts that frame and a
+    // slit beside it into each end wall it reaches, floor to ceiling, where they show as a black line. A strip of the
+    // wall's sheet 5 mm in front of the end wall's lining (plane z) covers both; inward points into the room.
+    private static void EndCover(CopyDefinition geometry, string id, float x1, float x2, float z, float inward)
+    {
+        float near = z + inward * .005f, far = z + inward * .006f;
+        Face(geometry, id, UnitSheet, x1, UpperY, Mathf.Min(near, far), x2, LoftCeiling, Mathf.Max(near, far));
     }
 
     // A temporary wall closes the walkway to the south until C opens it: boards nailed to a timber frame, the frame on
@@ -533,16 +553,11 @@ public static class StorageWorld
         room.FloorMaterial = FloorSheet;
         room.FrameMaterial = Metal;
         state.Rules.Add(room);
+        EndCover(geometry, "east-south-cover", EastFront, EastFront + .17f, UnitSouth + LiningGap, 1);
+        EndCover(geometry, "east-north-cover", EastFront, EastFront + .17f, UnitNorth - LiningGap, -1);
 
         foreach (var (id, z) in new[] { ("east-light-south", 106.0f), ("east-light-middle", 108.8f), ("east-light-north", 111.6f) })
-        {
-            var light = Copy(id, LampModel, LampPivot, new Vector3(EastLampX, LampY, z));
-            light.LightsOn = true;
-            light.LightSwitch = "copy:" + EastSwitch;
-            // Within this reach the light ends before the outside of the east wall.
-            light.LightRange = EastLampRange;
-            state.Copies.Add(light);
-        }
+            state.Copies.Add(Lamp(id, EastLampX, z, EastSwitch));
         // On Unit 5's south wall at the corner where the walkway leads in, facing north into the room.
         state.Copies.Add(WallSwitch(EastSwitch, EastFront + .3f, UnitSouth + LiningGap + SwitchProud, 90));
 
@@ -579,18 +594,14 @@ public static class StorageWorld
         // A steel post stands at the corner where the opening meets the walkway. It takes in the end of the gallery's
         // railing and the walkway railing's last post, and its north face lies on the grid's line. Its top stays inside
         // the beam.
-        Face(geometry, "walkway-corner-post", Metal, UnitEast - .078f, UpperY - .013f, RailEnd.z - .03f, CornerPostEast, UnitTop - WallSkin, GalleryEdge - WallSkin);
+        // The post reaches west to the loft's edge: before B the end of the walkway's roller face beside it has no side of
+        // its own, and from B on the steel frame around the gallery opening ends there. Both show as a dark line next to
+        // a narrower post.
+        Face(geometry, "walkway-corner-post", Metal, FacesBack - .006f, UpperY - .013f, RailEnd.z - .03f, CornerPostEast, UnitTop - WallSkin, GalleryEdge - WallSkin);
         GalleryRail(state, geometry);
 
         foreach (var (id, z) in new[] { ("loft-light-south", 106.0f), ("loft-light-middle", 108.8f), ("loft-light-north", 111.6f) })
-        {
-            var light = Copy(id, LampModel, LampPivot, new Vector3(-5.5f, LampY, z));
-            light.LightsOn = true;
-            light.LightSwitch = "copy:" + LoftSwitch;
-            // Walls do not stop this light; within this reach it ends before the outside of the west and north walls.
-            light.LightRange = LampRange;
-            state.Copies.Add(light);
-        }
+            state.Copies.Add(Lamp(id, -5.5f, z, LoftSwitch));
         // On the west wall just south of the door from the landing; the door swings open against the wall north of it.
         state.Copies.Add(WallSwitch(LoftSwitch, UnitWest + LiningGap + SwitchProud, WindowSouth - .35f, 180));
 
@@ -752,13 +763,14 @@ public static class StorageWorld
         }
         // The hall's roof trusses run through the block; inside it they would stand in the room. From B's second night
         // their braces at the east wall would stand in the east room. All trusses are one renderer, which a state cuts
-        // once, so one area covers both rooms.
+        // once, so one area covers both rooms. The cut reaches 5 mm behind the linings and under the floor's lining, so
+        // the cut faces never lie in a lining's plane.
         float trussEast = level >= 5 ? EastWall : UnitEast;
         var trusses = Rule("unit-trusses", "Truss", "Storage warehouse", ObjectEffect.Cut,
-            BoundsOf(UnitWest + .01f, UpperY + .01f, UnitSouth + .01f, trussEast - .01f, UnitTop - .01f, UnitNorth - .01f));
+            BoundsOf(UnitWest - .005f, UpperY - .005f, UnitSouth - .005f, trussEast + .005f, UnitTop - .01f, UnitNorth + .005f));
         // From C's first night Unit4 is a room too; the walkway between it and the hall keeps its trusses.
         if (level >= 6)
-            trusses.Openings.Add(BoundsOf(EastFront + .01f, UpperY + .01f, SouthEnd + .01f, EastWall - .01f, UnitTop - .01f, SouthUnitNorth - .01f));
+            trusses.Openings.Add(BoundsOf(EastFront + .01f, UpperY - .005f, SouthEnd + .01f, EastWall + .005f, UnitTop - .01f, SouthUnitNorth - .01f));
         state.Rules.Add(trusses);
         var room = Rule("unit-room", "Unit6", "Storage warehouse", ObjectEffect.Hollow, units);
         room.Openings.Add(DoorCut);
@@ -829,6 +841,7 @@ public static class StorageWorld
         var target = new Vector3(-9.84f, LandingTop - StairDrop, LandingSouth + StairInto);
         state.Copies.Add(Copy("west-stair", Stair, StairTop, target, StairYaw, StairScale));
         StairRail(state, geometry);
+        StairUnderside(state);
         // The deck reaches into the brick, so its top never meets the wall's face in one edge. Its top lies 6 mm under the
         // ledge's along the wall, which ends at the same height, and its bottom 6 mm under the posts' tops.
         Solid(geometry, "landing", Metal, LandingWest, LandingBottom - .006f, LandingSouth, LandingEast + .06f, LandingDeck, LandingNorth);
@@ -895,6 +908,29 @@ public static class StorageWorld
         };
         Face(soffit, "sheet", Metal, AnchorPoint.x - .75f, AnchorPoint.y - .03f, AnchorPoint.z, AnchorPoint.x + .75f, AnchorPoint.y, AnchorPoint.z + length);
         state.Copies.Add(soffit);
+    }
+
+    // The world's walking map runs on over the ground under the stair, so an NPC there walks inside the steps. Unseen
+    // blocks under the stair, stepped below its soffit, carve that ground out; NPCs go round the stair or up it. A copy
+    // carves one box around all of its colliders, so each step is a copy of its own. The steps start a little up the
+    // stair, clear of the seam where its own walking map meets the ground.
+    private static void StairUnderside(WorldStateDefinition state)
+    {
+        const float top = LandingSouth + StairInto, from = 100.1f, below = .35f;
+        const int steps = 8;
+        float Nosing(float z) => LandingTop - StairDrop - (top - z) * StairRise / StairRun;
+        float length = (LandingSouth - from) / steps;
+        for (int i = 0; i < steps; i++)
+        {
+            float z0 = from + i * length, z1 = z0 + length;
+            var step = new CopyDefinition
+            {
+                Id = "stair-underside-" + i, Template = Anchor, Frame = Anchor, OwnMesh = false, Obstacle = true,
+                At = new LocalPoint(AnchorPoint, 0)
+            };
+            Block(step, "block", -10.55f, -.15f, z0, -9.13f, Nosing(z0) - below, z1);
+            state.Copies.Add(step);
+        }
     }
 
     private static void Railing(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end, bool firstPost = true,
