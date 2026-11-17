@@ -34,7 +34,7 @@ BUILDS = [
     ("sunroom", ["sunroom-base", "sunroom-glass", "complete"]),
     ("deck", ["deck-stilts", "complete"]),
     ("carport", ["complete"]),
-    ("storey", ["storey-floor", "storey-walls", "storey-roof", "complete"]),
+    ("storey", ["storey-floor", "storey-frame", "storey-walls", "storey-roof", "complete"]),
 ]
 TOL = .011
 # Grids by their height and west edge, when every build stands: (name, y, x min, x max, z min, z max).

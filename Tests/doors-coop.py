@@ -1,4 +1,5 @@
-"""Co-op check for the Bungalow's copied sliding doors (Content/Bungalow/BungalowDoors.cs): the sunroom's and the upper storey's.
+"""Co-op check for the Bungalow's copied doors (Content/Bungalow/BungalowDoors.cs): the sunroom's and the upper storey's
+sliding doors, and the upper storey's two wooden doors (landing and hall), which swing.
 
 The door is a visual copy plus Based's own logic, so its open state travels over Based's NativeBus, not FishNet. The
 host opens each door before the client joins; the client must find it open (late join). Then the client closes and
@@ -21,11 +22,19 @@ folder_join = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(folder_join)
 Log, Run = folder_join.Log, folder_join.Run
 
-STATE = r"baseddiag: %s (open|closed); (no leaf bound|leaf at \(([-\d.]+), ([-\d.]+), ([-\d.]+)\), progress ([\d.]+))"
-# key: (console argument, log name, shot folder, shot eye, shot target, upgrade). The leaf's slide axis is z for both.
+# The wooden doors stand in the upper floor's wall at x -169.93 (landing door z 113.3, hall door z 119.0); both are
+# seen from the room east of that wall.
+LANDING_EYE, LANDING_TARGET = (-166.6, 0.95, 115.2), (-169.9, 0.25, 113.6)
+HALL_EYE, HALL_TARGET = (-166.6, 0.95, 117.2), (-169.9, 0.25, 119.3)
+STATE = (r"baseddiag: %s (open|closed); (no leaf bound|leaf at \(([-\d.]+), ([-\d.]+), ([-\d.]+)\), "
+         r"(progress|angle) (-?[\d.]+))")
+# key: (console argument, log name, shot folder, shot eye, shot target, upgrade). A sliding leaf reports its progress
+# (0 closed, 1 open), a swinging leaf its angle (0 closed, the house door's swing when open).
 DOORS = {
     "sunroom": ("sunroom", "Sunroom door", "sunroom", (-179.5, -2.2, 113.5), (-183, -2.6, 111.6), "sunroom"),
     "storey": ("storey", "Upper storey door", "storey", (-172.5, 1.0, 113.5), (-176.2, 0.4, 111.4), "storey"),
+    "landing": ("landing", "Upper landing door", "storey", LANDING_EYE, LANDING_TARGET, "storey"),
+    "hall": ("hall", "Upper hall door", "storey", HALL_EYE, HALL_TARGET, "storey"),
 }
 
 
@@ -36,15 +45,24 @@ def command(game, text, pattern, timeout=10):
 
 
 def state(game, door, timeout=8):
-    """Waits until the leaf has finished sliding, then returns (open, progress, z) or None."""
+    """Waits until the leaf has finished moving, then returns (open, progress, leaf position) or None. A swinging leaf
+    counts as settled once two readings a second apart show the same angle; its progress is 1 when open, 0 when shut."""
     end = time.time() + timeout
-    last = None
+    last, angle = None, None
     while time.time() < end:
         pattern = STATE % door[1].lower()
         line = command(game, "baseddiag door %s state" % door[0], pattern, 5)
         m = re.search(pattern, line or "")
         if m and m.group(3):
-            last = (m.group(1) == "open", float(m.group(6)), float(m.group(5)))
+            is_open, value = m.group(1) == "open", float(m.group(8))
+            where = (float(m.group(4)), float(m.group(5)), float(m.group(6)))
+            if m.group(7) == "angle":
+                settled = angle is not None and abs(value - angle) < 0.5
+                angle = value
+                progress = (1.0 if abs(value) > 1 else 0.0) if settled else 0.5
+                last = (is_open, progress, where)
+            else:
+                last = (is_open, value, where)
             if last[1] in (0.0, 1.0) and last[0] == (last[1] == 1.0):
                 return last
         time.sleep(1)
@@ -89,7 +107,7 @@ def main():
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--join", choices=("locallobby", "browser"), default="browser")
     parser.add_argument("--joined", action="store_true", help="the client is already in the host's world")
-    parser.add_argument("--doors", default="sunroom,storey")
+    parser.add_argument("--doors", default="sunroom,storey,landing,hall")
     args = parser.parse_args()
     run = Run(args.host, args.client)
     host, client = run.host, run.client
@@ -97,7 +115,8 @@ def main():
     doors = [DOORS[d] for d in args.doors.split(",") if d]
     # Right after the host reports ready, Based may still be setting up and the jump fails; it is repeated until it
     # takes.
-    for text in ["baseddiag site=bungalow phase complete"] + ["baseddiag site=bungalow phase complete " + d[5] for d in doors]:
+    upgrades = list(dict.fromkeys(d[5] for d in doors))
+    for text in ["baseddiag site=bungalow phase complete"] + ["baseddiag site=bungalow phase complete " + u for u in upgrades]:
         line = None
         for attempt in range(12):
             line = command(host, text, r"baseddiag", 10)
@@ -132,8 +151,9 @@ def main():
         c = state(client, door, 15)
         run.check("%s: late joiner finds it open" % name, bool(c and c[0] and c[1] == 1.0), c)
         if h and c:
-            run.check("%s: leaf stands at the same place on both" % name, abs(h[2] - c[2]) < 0.02,
-                      "host z %.2f, client z %.2f" % (h[2], c[2]))
+            gap = sum((a - b) ** 2 for a, b in zip(h[2], c[2])) ** .5
+            run.check("%s: leaf stands at the same place on both" % name, gap < 0.02,
+                      "host %s, client %s" % (h[2], c[2]))
 
         host_log = Log(host)
         command(client, "baseddiag door %s close" % door[0], r"asked the host to close", 10)
@@ -142,7 +162,7 @@ def main():
         h, c = state(host, door), state(client, door)
         run.check("%s: closed on the host" % name, bool(h and not h[0] and h[1] == 0.0), h)
         run.check("%s: closed on the client" % name, bool(c and not c[0] and c[1] == 0.0), c)
-        shot(args.client, door[2], "coop-client-closed", door[3], door[4])
+        shot(args.client, door[2], "coop-%s-client-closed" % door[0], door[3], door[4])
 
         host_log = Log(host)
         command(client, "baseddiag door %s open" % door[0], r"asked the host to open", 10)
@@ -151,7 +171,7 @@ def main():
         h, c = state(host, door), state(client, door)
         run.check("%s: open on the host" % name, bool(h and h[0] and h[1] == 1.0), h)
         run.check("%s: open on the client" % name, bool(c and c[0] and c[1] == 1.0), c)
-        shot(args.client, door[2], "coop-client-open", door[3], door[4])
+        shot(args.client, door[2], "coop-%s-client-open" % door[0], door[3], door[4])
 
         client_log = Log(client)
         command(host, "baseddiag door %s close" % door[0], name + " closed by the host", 10)

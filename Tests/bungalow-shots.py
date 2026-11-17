@@ -76,8 +76,14 @@ VIEWS = {
         # Downstairs under the new floor: the ceiling must stay shut and shaded.
         "lower": ["--eye", "-171", "-2.0", "110", "--target", "-174", "-2.0", "120"],
         "top": ["--topdown", "-180", "105", "-158", "125"],
-        # Where the carpenter works on floor and walls days.
-        "carpenter": ["--eye", "-161.5", "-2.6", "114.5", "--target", "-165.6", "-3.2", "111"],
+        # The crew's site east of the house from the pavement: table, fire barrel, generator, sign and cones.
+        "site": ["--eye", "-157.8", "-2.2", "112.5", "--target", "-162.2", "-3.4", "118.5"],
+        # The timber stock and the barrels north of the house.
+        "stock": ["--eye", "-159.2", "-2.4", "125.6", "--target", "-162.6", "-3.5", "122.4"],
+        # The fitter's two welds: the stair's foot post and the landing's south post.
+        "weld": ["--eye", "-164.5", "-2.3", "107.2", "--target", "-165.5", "-3", "111.4"],
+        # The balcony and its canopy from below, from the porch.
+        "under-balcony": ["--eye", "-164.9", "-3.1", "114.6", "--target", "-167.5", "-0.9", "113.4"],
     },
 }
 

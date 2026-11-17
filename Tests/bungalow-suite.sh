@@ -21,6 +21,7 @@ step crew python _wt-Based-bungalow/Tests/crew-check.py --slot "$SLOT" --only bu
 step sheets python _wt-Based-bungalow/Tests/bungalow-sheets.py --slot "$SLOT"
 step rain bash _wt-Based-bungalow/Tests/bungalow-rain.sh "$SLOT"
 step sunroom-nav bash _wt-Based-bungalow/Tests/sunroom-nav.sh "$SLOT"
+step storey-doors python _wt-Based-bungalow/Tests/storey-doors.py --slot "$SLOT"
 step storey python _wt-Based-bungalow/Tests/storey-function.py --slot "$SLOT"
 step litter python _wt-Based-bungalow/Tests/bungalow-checks.py --slot "$SLOT" --only litter
 exit $fail

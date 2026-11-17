@@ -108,21 +108,35 @@ def sunroom(slot):
 
 
 def storey(slot):
-    """On the floor and walls days of the second storey the carpenter works at the stair and the porch posts."""
+    """The second storey's crew: the foreman at the site table and the carpenter at the timber stock every day, the
+    fitter welding at the stair on the floor and frame days. Only the carpenter swings a hammer."""
     run(slot, "baseddiag site=bungalow phase complete")
-    for phase in ("storey-floor", "storey-walls"):
-        out = run(slot, "baseddiag site=bungalow phase " + phase + " storey")
-        check(f"storey {phase}", "ray.bungalow-storey" in out, out.strip()[-300:])
+    # phase, workers on the job, the fitter among them
+    days = ((None, 2, False), ("storey-floor", 3, True), ("storey-frame", 3, True), ("storey-walls", 2, False), ("storey-roof", 2, False))
+    for phase, expected, fitter in days:
+        name = phase or "ordered"
+        out = run(slot, "baseddiag site=bungalow phase " + (phase + " storey" if phase else "ordered storey"))
+        check(f"storey {name}", "ray.bungalow-storey" in out, out.strip()[-300:])
         code, out = s1(slot, "time", "1000")
         check("time 1000", code == 0, out.strip()[-200:])
-        workers = [w for w in wait_for_work(slot, "bungalow", 1, 1) if w.get("visible")]
-        check(f"one worker on the storey {phase}", len(workers) == 1, f"{len(workers)} visible")
+        workers = [w for w in wait_for_work(slot, "bungalow", expected, 1) if w.get("visible")]
+        ids = sorted(str(w.get("id", "")) for w in workers)
+        check(f"{expected} workers on the storey {name}", len(workers) == expected, ", ".join(ids) or "none visible")
+        check(f"storey {name} foreman on the job", any("foreman" in i for i in ids), ", ".join(ids))
+        check(f"storey {name} carpenter on the job", any("carpenter" in i for i in ids), ", ".join(ids))
+        check(f"storey {name} fitter {'on' if fitter else 'off'} the job", any("lumberjack" in i for i in ids) == fitter, ", ".join(ids))
         for w in workers:
-            check(f"storey {phase} worker is the carpenter", "carpenter" in str(w.get("id", "")).lower(), str(w.get("id")))
-            check(f"storey {phase} worker follows the storey", w.get("upgrade") == "ray.bungalow-storey", str(w.get("upgrade")))
-            check(f"storey {phase} worker at its anchor", w.get("atAnchor") is True, str(w.get("anchor")))
-            check(f"storey {phase} worker swings", w.get("hammering") is True)
-            check(f"storey {phase} worker without failure", not w.get("failure"), str(w.get("failure")))
+            wid = str(w.get("id", ""))
+            check(f"storey {name} {wid} follows the storey", w.get("upgrade") == "ray.bungalow-storey", str(w.get("upgrade")))
+            check(f"storey {name} {wid} at its anchor", w.get("atAnchor") is True, str(w.get("anchor")))
+            check(f"storey {name} {wid} {'swings' if 'carpenter' in wid else 'keeps the hammer down'}",
+                  (w.get("hammering") is True) == ("carpenter" in wid), str(w.get("hammering")))
+            check(f"storey {name} {wid} without failure", not w.get("failure"), str(w.get("failure")))
+        if fitter:
+            # The welder's sparks fly while he stands at the weld.
+            out = run(slot, "baseddiag vfx")
+            line = next((l for l in out.splitlines() if "bungalow effects" in l), "")
+            check(f"storey {name} weld sparks", "weld-sparks" in line, line.strip()[-200:])
     run(slot, "baseddiag site=bungalow phase complete storey")
 
 

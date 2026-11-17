@@ -24,7 +24,7 @@ BUILDS = {
     "B": ("sunroom", "sunroom", ["vanilla", "sunroom-base", "sunroom-glass", "complete"]),
     "D": ("deck", "deck", ["vanilla", "deck-stilts", "complete"]),
     "E": ("carport", "carport", ["vanilla", "complete"]),
-    "F": ("storey", "storey", ["vanilla", "storey-floor", "storey-walls", "storey-roof", "complete"]),
+    "F": ("storey", "storey", ["vanilla", "storey-floor", "storey-frame", "storey-walls", "storey-roof", "complete"]),
 }
 TIMES = {"day": "1200", "night": "2200"}
 # A customer who walks up to the player opens a deal dialogue that covers every shot. Dismissing it is the third answer;
