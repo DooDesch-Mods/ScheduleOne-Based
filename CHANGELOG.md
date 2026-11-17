@@ -4,6 +4,14 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.2.1] - 2026-11-17
+
+### Fixed
+- Storage Unit: workers waiting for work gather at the fire barrel and the outside stair instead of standing in
+  the hall.
+- Sweatshop workers no longer stand still and stop working when another mod allows more employees than Based plans
+  for.
+
 ## [1.2.0] - 2026-11-17
 
 ### Added
