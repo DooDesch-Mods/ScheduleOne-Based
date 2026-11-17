@@ -89,7 +89,8 @@ public static class BungalowDeck
         for (int i = 0; i < BeamX.Length; i++)
         {
             float x = BeamX[i];
-            Solid(geometry, "beam-" + i, Timber, x - .08f, beamBottom, South + .05f, x + .08f, beamTop, North - .05f);
+            // The beams end at the cross beams' inner faces, so no face of one lies in the other's plane.
+            Solid(geometry, "beam-" + i, Timber, x - .08f, beamBottom, South + .1f, x + .08f, beamTop, North - .1f);
             for (int j = 0; j < PostZ.Length; j++)
                 Solid(geometry, "post-" + i + "-" + j, Timber, x - .08f, PostBottom[i], PostZ[j] - .08f, x + .08f, beamBottom, PostZ[j] + .08f);
         }
@@ -99,16 +100,21 @@ public static class BungalowDeck
 
         if (finished)
         {
-            Solid(geometry, "boards", Boards, West, beamTop, South, East, Top, North);
-            Face(geometry, "fascia-south", Timber, East, FasciaBottom, South, East + .03f, Top, StepSouth);
-            Face(geometry, "fascia-north", Timber, East, FasciaBottom, StepNorth, East + .03f, Top, North);
-            Face(geometry, "step-riser", Timber, East, FasciaBottom, StepSouth, East + .03f, StepY, StepNorth);
+            // The railings stand just outside the grid's edges, their unseen walls' inner faces on the edge lines; the
+            // boards reach out under them.
+            const float guard = .07f, overhang = 2 * guard + .01f;
+            Solid(geometry, "boards", Boards, West - overhang, beamTop, South - overhang, East, Top, North + overhang);
+            // The fascias stop 3 mm under the boards' top, so their upper ends never lie in the boards' plane.
+            Face(geometry, "fascia-south", Timber, East, FasciaBottom, South - overhang, East + .03f, Top - .003f, StepSouth);
+            Face(geometry, "fascia-north", Timber, East, FasciaBottom, StepNorth, East + .03f, Top - .003f, North + overhang);
+            // The riser closes the deck's side above the step, between the two fascias.
+            Face(geometry, "step-riser", Timber, East, StepY, StepSouth, East + .03f, Top, StepNorth);
             Solid(geometry, "step", Boards, East, FasciaBottom, StepSouth, East + StepOut, StepY, StepNorth);
 
-            float railY = Top + FenceAboveFloor, inset = .1f;
-            FenceRun(state, geometry, "west", false, West + inset, South + inset, North - inset, startPost: false, endPost: false);
-            FenceRun(state, geometry, "south", true, South + inset, West + inset, East - inset, railY);
-            FenceRun(state, geometry, "north", true, North - inset, West + inset, East - inset, railY);
+            float railY = Top + FenceAboveFloor;
+            FenceRun(state, geometry, "west", false, West - guard, South - guard, North + guard, startPost: false, endPost: false);
+            FenceRun(state, geometry, "south", true, South - guard, West - guard, East, railY);
+            FenceRun(state, geometry, "north", true, North + guard, West - guard, East, railY);
 
             var extension = new PropertyExtensionDefinition { Id = ExtensionId, PropertyCode = "bungalow", GridIndex = GridIndex };
             for (int x = TileXMin; x <= TileXMax; x++)

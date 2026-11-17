@@ -12,8 +12,9 @@ public static class BungalowCarport
     public const string DockId = "carport-dock";
     private const string TemplateProperty = "bungalow";
     private const int TemplateDock = 0;
-    // The vanilla dock stands at (-166.06, -4, 109.35); the second bay lies south of it under the same roof.
-    private static readonly Vector3 DockPosition = new(-166.06f, -4f, 106.45f);
+    // The vanilla dock stands at (-166.06, -4, 109.35); the second bay lies south of it under the same roof, far enough
+    // that the two painted outlines on the ground do not overlap.
+    private static readonly Vector3 DockPosition = new(-166.06f, -4f, 106.05f);
     private const float DockYaw = 90f;
 
     private const string Property = "@Properties/Bungalow";

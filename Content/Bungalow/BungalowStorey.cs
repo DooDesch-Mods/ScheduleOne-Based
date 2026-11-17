@@ -9,8 +9,6 @@ namespace Based.Content.Bungalow;
 // lamps; the last fits the sliding door and hands the rooms over. Every state holds the work of the states before it.
 public static class BungalowStorey
 {
-    // Saved id of the upper floor's property extension; renaming it loses what stands upstairs.
-    public const string ExtensionId = "bungalow-storey";
     public const string FloorState = "floor", WallsState = "walls", RoofState = "roof";
     // The upper storey stands this far above the house; the door of the copy is found by it.
     public const float Lift = 3f;
@@ -25,25 +23,29 @@ public static class BungalowStorey
     private const string Metal = "metal_darkgrey_mat";
 
     // The ceiling's colliders end at -0.65; they are the upper floor. The boards are drawn just above them.
-    private const float UpperFloor = -.65f, BoardsBottom = -.69f, BoardsTop = -.645f;
-    // The outer walls are cut where their copy begins; the white cladding's copy reaches 0.35 m lower.
-    private const float WallCut = -.65f, CladdingCut = -1f;
+    internal const float UpperFloor = -.65f;
+    private const float BoardsBottom = -.69f, BoardsTop = -.645f;
+    // The outer walls are cut where their copy begins, so no band of wall is drawn twice; the white cladding's copy
+    // reaches lower.
+    private const float WallCut = -.7f, CladdingCut = -1f;
     // The house's outline and the rooms inside it: the west rooms run the full depth, the north-east room fills the rest.
     private const float HouseWest = -176.17f, HouseEast = -163.75f, HouseSouth = 109.23f, HouseNorth = 121.63f;
     private const float InWest = -176.05f, InEast = -163.85f, InSouth = 109.35f, InNorth = 121.55f;
     private const float EastWall = -169.85f, NorthRoomSouth = 115.35f;
 
-    // The balcony on the porch's posts, where the porch roof was.
-    private const float BalconyEast = -164.4f, BalconySouth = 112.6f, BalconyBottom = -.85f;
+    // The balcony on the porch's posts, where the porch roof was. Its open edges and the landing's lie on the lines of
+    // the ground floor's grids. The porch roof is taken off from its own south edge on.
+    private const float BalconyEast = -164.35f, BalconySouth = 112.85f, BalconyBottom = -.85f, PorchRoofSouth = 112.4f;
 
     // The docks shed's steel stair rises 3.05 m over a 5.43 m run, its top edge centred on this point. Turned to climb
-    // west along the house's south front, it ends on a landing against the west room's east wall.
+    // west along the house's south front, it ends on a landing against the west room's east wall. The carport's posts
+    // stand just south of the landing.
     private const string Stair = "@Properties/DocksWarehouse/IndustrialShed/dockshed/Stairs (1)";
     private static readonly Vector3 StairTop = new(-90.87f, .83f, -54.3f);
     // Scaled so its foot meets the gravel at y -3.96 east of the porch.
     private const float StairYaw = -60f, StairScale = 1.085f;
     private const float StairRise = 3.05f * StairScale, StairRun = 5.43f * StairScale;
-    private const float LandingWest = EastWall, LandingEast = -168.35f, LandingSouth = 111.1f, LandingNorth = BalconySouth;
+    private const float LandingWest = EastWall, LandingEast = -168.35f, LandingSouth = 111.35f, LandingNorth = BalconySouth;
     private const float StairFoot = LandingEast + StairRun;
 
     private const float RailHeight = 1.05f, GuardHeight = 2.1f;
@@ -51,17 +53,29 @@ public static class BungalowStorey
     // The upper sliding door opens on a French balcony: a railing just outside its frame.
     private const float DoorPlane = -176.08f, DoorSouth = 110.25f, DoorNorth = 112.55f;
 
-    // The Storage Unit's ceiling light, hung as far under the upper ceiling as it hangs under the unit's.
-    private const string LampModel = "Map/Hyland Point/Region_Northtown/Storage warehouse/Storage Unit/FluroBar (1)";
-    private static readonly Vector3 LampPivot = new(-6.52f, 2.87f, 107.23f);
-    private const float LampY = UpperFloor + 2.95f - .23f, LampRange = 3.6f;
-    private static readonly Vector2[] Lamps = { new(-173f, 112.35f), new(-173f, 118.5f), new(-166.9f, 118.5f) };
+    // The house's three ceiling lights, copied 3 m up: each hangs under the upper ceiling where its original hangs under
+    // the lower one, turned the same way.
+    private const float LampRange = 3.6f;
+    private static readonly string[] Lamps = { "FluroBar", "FluroBar (1)", "FluroBar (2)" };
+    // The house's two wall switches, copied 3 m up onto the same walls: the one beside the door from the landing switches
+    // the west room's two lamps, the one on the partition the east room's lamp. Each is a circuit of its own, apart from
+    // the ground floor's.
+    private static readonly (string Id, string Template, int[] Lamps)[] Switches =
+    {
+        ("storey-switch-west", "ModularSwitch", new[] { 0, 1 }),
+        ("storey-switch-east", "ModularSwitch (1)", new[] { 2 })
+    };
 
-    // The upper grid is turned like the house's own and starts at the north-west corner, so its tiles count from 0:
-    // tile x runs south from z 121.5, tile y east from x -176.0. The walls between the rooms take row 12 and column 12.
-    private const int GridIndex = 1;
-    private static readonly Vector3 GridOrigin = new(-176f, UpperFloor, 121.5f);
-    private static readonly (int X0, int X1, int Y0, int Y1)[] Rooms = { (0, 11, 0, 11), (13, 23, 0, 11), (0, 11, 13, 23) };
+    // Each room upstairs repeats the grid of the room below it, 3 m up: 12 by 12 tiles, tile x running south and tile y
+    // east from the origin tile's centre, so every edge lies on the walls as it does downstairs. The ids are saved;
+    // renaming one loses what stands in that room.
+    private static readonly (string Id, int GridIndex, Vector3 Origin, float West, float South, float East, float North)[] Floors =
+    {
+        ("bungalow-storey-east", 0, new Vector3(-169.6f, UpperFloor, 121.25f), -169.85f, 115.5f, -163.85f, 121.5f),
+        ("bungalow-storey-south", 1, new Vector3(-175.75f, UpperFloor, 115.1f), -176f, 109.35f, -170f, 115.35f),
+        ("bungalow-storey-north", 2, new Vector3(-175.75f, UpperFloor, 121.25f), -176f, 115.5f, -170f, 121.5f)
+    };
+    private const int FloorTiles = 12;
 
     private static bool _registered;
 
@@ -93,10 +107,9 @@ public static class BungalowStorey
         var house = BoundsOf(HouseWest - .3f, WallCut, HouseSouth - .3f, HouseEast + .3f, 6f, HouseNorth + .3f);
         // "Roof" also names the beams under the ceiling; the area starts above them.
         Rule(state, "roof", "Roof", ObjectEffect.Remove, BoundsOf(HouseWest - .5f, .3f, HouseSouth - .5f, HouseEast + .5f, 3f, HouseNorth + .5f));
-        Rule(state, "porch-roof", "SmallRoof", ObjectEffect.Remove, BoundsOf(EastWall, -1.2f, BalconySouth - .2f, HouseEast, -.4f, NorthRoomSouth + .2f));
+        Rule(state, "porch-roof", "SmallRoof", ObjectEffect.Remove, BoundsOf(EastWall, -1.2f, PorchRoofSouth, HouseEast, -.4f, NorthRoomSouth + .2f));
         Rule(state, "walls", "OuterWalls", ObjectEffect.Cut, house);
-        Rule(state, "cladding", "Block", ObjectEffect.Cut, BoundsOf(HouseWest - .3f, CladdingCut, HouseSouth - .3f, HouseEast + .3f, 6f, HouseNorth + .3f));
-        // The roof's shadow hull would darken the open floor; once the roof is back, the original and the copy cast both
+        Rule(state, "cladding", "Block", ObjectEffect.Cut, BoundsOf(HouseWest - .3f, CladdingCut, HouseSouth - .3f, HouseEast + .3f, 6f, HouseNorth + .3f));        // The roof's shadow hull would darken the open floor; once the roof is back, the original and the copy cast both
         // storeys' shadows.
         if (level < 3) Rule(state, "shadow", "ShadowCaster", ObjectEffect.Remove, house);
 
@@ -105,19 +118,23 @@ public static class BungalowStorey
             Id = "storey-build", Template = Anchor, Frame = Property, OwnMesh = false, Obstacle = false,
             At = new LocalPoint(PropertyPivot, PropertyYaw)
         };
-        Face(geometry, "boards-west", Boards, InWest, BoardsBottom, InSouth, EastWall, BoardsTop, InNorth);
-        Face(geometry, "boards-north-east", Boards, EastWall, BoardsBottom, NorthRoomSouth, InEast, BoardsTop, InNorth);
+        // The boards end 2 cm inside the walls they run under, so their ends never lie in a wall's face.
+        Face(geometry, "boards-west", Boards, InWest, BoardsBottom, InSouth, EastWall - .02f, BoardsTop, InNorth);
+        Face(geometry, "boards-north-east", Boards, EastWall, BoardsBottom, NorthRoomSouth + .02f, InEast, BoardsTop, InNorth);
         Solid(geometry, "balcony", Boards, EastWall, BalconyBottom, BalconySouth, BalconyEast, UpperFloor, NorthRoomSouth);
         StairAndLanding(state, geometry);
-        Railing(geometry, "balcony-south", true, BalconySouth + .03f, LandingEast, BalconyEast - .03f);
-        Railing(geometry, "balcony-east", false, BalconyEast - .03f, BalconySouth, NorthRoomSouth);
+        // The two balcony railings share the corner post, which the south run sets.
+        const float corner = .03f;
+        Railing(geometry, "balcony-south", true, BalconySouth + corner, LandingEast, BalconyEast - corner + .025f);
+        Railing(geometry, "balcony-east", false, BalconyEast - corner, BalconySouth + corner - .025f, NorthRoomSouth, firstPost: false);
 
         if (level == 1)
         {
             // Until the walls stand, a site railing runs along the open edges of the floor.
             const float i = .1f;
             Railing(geometry, "site-west", false, HouseWest + i, HouseSouth + i, HouseNorth - i);
-            Railing(geometry, "site-north", true, HouseNorth - i, HouseWest + i, HouseEast - i);
+            // The north run leaves the corner post to the west run.
+            Railing(geometry, "site-north", true, HouseNorth - i, HouseWest + i, HouseEast - i, firstPost: false);
             Railing(geometry, "site-east", false, HouseEast - i, NorthRoomSouth, HouseNorth - i);
             Railing(geometry, "site-south-east", true, NorthRoomSouth + i, BalconyEast, HouseEast - i);
             Railing(geometry, "site-south", true, HouseSouth + i, HouseWest + i, EastWall);
@@ -130,12 +147,21 @@ public static class BungalowStorey
         }
 
         if (level >= 3)
-            for (int i = 0; i < Lamps.Length; i++)
+            foreach (var (switchId, template, lamps) in Switches)
             {
-                var lamp = Copy("lamp-" + i, LampModel, LampPivot, new Vector3(Lamps[i].x, LampY, Lamps[i].y), 0);
-                lamp.LightsOn = true;
-                lamp.LightRange = LampRange;
-                state.Copies.Add(lamp);
+                // A networked copy, so the switch works and every peer sees the same state.
+                var wallSwitch = Copy(switchId, House + "/" + template, PropertyPivot, PropertyPivot + new Vector3(0f, Lift, 0f), 0);
+                wallSwitch.VisualOnly = false;
+                wallSwitch.IndependentMesh = false;
+                state.Copies.Add(wallSwitch);
+                foreach (int i in lamps)
+                {
+                    var lamp = Copy("lamp-" + i, House + "/" + Lamps[i], PropertyPivot, PropertyPivot + new Vector3(0f, Lift, 0f), 0);
+                    lamp.LightsOn = true;
+                    lamp.LightSwitch = "copy:" + switchId;
+                    lamp.LightRange = LampRange;
+                    state.Copies.Add(lamp);
+                }
             }
 
         if (level == 4) Finish(state);
@@ -148,7 +174,9 @@ public static class BungalowStorey
     private static CopyDefinition Shell(int level)
     {
         var shell = Copy("shell", House, PropertyPivot, PropertyPivot + new Vector3(0f, Lift, 0f), 0);
-        foreach (var part in new[] { "Foundation", "Bench", "Cabinets", "SmallRoof", "PorchBeam", "PorchBeam.001" })
+        // The house's switches and ceiling lights come as copies of their own: a visual copy would neither switch nor
+        // light, and would hang in the same place as the switched lamp.
+        foreach (var part in new[] { "Foundation", "Bench", "Cabinets", "SmallRoof", "PorchBeam", "PorchBeam.001", "ModularSwitch", "ModularSwitch (1)", "FluroBar", "FluroBar (1)", "FluroBar (2)" })
             shell.Exclude.Add(part);
         if (level < 3)
             foreach (var part in new[] { "Roof", "ShadowCaster", "InnerRoof", "RoofBeams" })
@@ -198,19 +226,21 @@ public static class BungalowStorey
         }
     }
 
-    // The finished storey: the rooms upstairs join the property's grid, and employees walk up the stair.
+    // The finished storey: the rooms upstairs get grids of their own, and employees walk up the stair.
     private static void Finish(WorldStateDefinition state)
     {
-        var extension = new PropertyExtensionDefinition
+        foreach (var floor in Floors)
         {
-            Id = ExtensionId, PropertyCode = "bungalow", GridIndex = GridIndex, GridOrigin = GridOrigin
-        };
-        foreach (var (x0, x1, y0, y1) in Rooms)
-            for (int x = x0; x <= x1; x++)
-                for (int y = y0; y <= y1; y++)
+            var extension = new PropertyExtensionDefinition
+            {
+                Id = floor.Id, PropertyCode = "bungalow", GridIndex = floor.GridIndex, GridOrigin = floor.Origin
+            };
+            for (int x = 0; x < FloorTiles; x++)
+                for (int y = 0; y < FloorTiles; y++)
                     extension.Tiles.Add(new GridCoordinate(x, y));
-        extension.Bounds.Add(BoundsOf(InWest, UpperFloor - .1f, InSouth, InEast, UpperFloor + 2.95f, InNorth));
-        state.PropertyExtensions.Add(extension);
+            extension.Bounds.Add(BoundsOf(floor.West, UpperFloor - .1f, floor.South, floor.East, UpperFloor + 2.95f, floor.North));
+            state.PropertyExtensions.Add(extension);
+        }
 
         state.NavigationBounds = BoundsOf(HouseWest - .2f, -4.3f, HouseSouth - .2f, StairFoot + .9f, UpperFloor + 2.5f, HouseNorth + .2f);
         state.NavigationAgents.AddRange(new[] { "Humanoid", "Ignore Costs", "Employee" });
@@ -224,10 +254,10 @@ public static class BungalowStorey
         // the volume.
         state.NavigationExistingFloor.Add(BoundsOf(StairFoot + .1f, -4.4f, LandingSouth - .1f, StairFoot + 2f, -3f, LandingNorth + .1f));
         // The first two straddle the join: the gravel at the stair's foot and its second tread.
-        float tread = StairFoot - .6f;
-        state.NavigationProbes.Add(new Vector3(StairFoot + .8f, -4f, 111.85f));
-        state.NavigationProbes.Add(new Vector3(tread, UpperFloor - (tread - LandingEast) * StairRise / StairRun, 111.85f));
-        state.NavigationProbes.Add(new Vector3(-169.1f, UpperFloor, 111.85f));
+        float tread = StairFoot - .6f, middle = (LandingSouth + LandingNorth) * .5f;
+        state.NavigationProbes.Add(new Vector3(StairFoot + .8f, -4f, middle));
+        state.NavigationProbes.Add(new Vector3(tread, UpperFloor - (tread - LandingEast) * StairRise / StairRun, middle));
+        state.NavigationProbes.Add(new Vector3(-169.1f, UpperFloor, middle));
         state.NavigationProbes.Add(new Vector3(-167f, UpperFloor, 114f));
         state.NavigationProbes.Add(new Vector3(-171f, UpperFloor, 113.8f));
         state.NavigationProbes.Add(new Vector3(-173f, UpperFloor, 118.5f));
@@ -238,20 +268,23 @@ public static class BungalowStorey
         state.Rules.Add(new ObjectRule { Id = id, Name = name, Parent = "bungalow", Side = WorldSide.Main, Effect = effect, Area = area });
 
     // Posts and two rails of dark steel, with an unseen wall to head height that keeps a jump from carrying over them.
-    private static void Railing(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end)
+    // The rails end inside the end posts and stop 1 cm under the posts' tops, so no rail face lies in a post's face.
+    // Without its first post the run starts in a post another run sets; its rails then start clear of that run's rails.
+    private static void Railing(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end, bool firstPost = true)
     {
         const float half = .025f;
         float top = UpperFloor + RailHeight;
         int posts = Math.Max(2, (int)Math.Ceiling((end - start) / 1.2f) + 1);
-        for (int i = 0; i < posts; i++)
+        for (int i = firstPost ? 0 : 1; i < posts; i++)
         {
             float at = Mathf.Lerp(start + half, end - half, i / (float)(posts - 1));
             if (alongX) Face(geometry, id + "-post-" + i, Metal, at - half, UpperFloor, cross - half, at + half, top, cross + half);
             else Face(geometry, id + "-post-" + i, Metal, cross - half, UpperFloor, at - half, cross + half, top, at + half);
         }
-        foreach (var (name, y) in new[] { ("top", top - .04f), ("middle", UpperFloor + .5f) })
-            if (alongX) Face(geometry, id + "-rail-" + name, Metal, start, y, cross - .02f, end, y + .04f, cross + .02f);
-            else Face(geometry, id + "-rail-" + name, Metal, cross - .02f, y, start, cross + .02f, y + .04f, end);
+        float from = start + half + (firstPost ? 0f : .02f), to = end - half;
+        foreach (var (name, y) in new[] { ("top", top - .05f), ("middle", UpperFloor + .5f) })
+            if (alongX) Face(geometry, id + "-rail-" + name, Metal, from, y, cross - .02f, to, y + .04f, cross + .02f);
+            else Face(geometry, id + "-rail-" + name, Metal, cross - .02f, y, from, cross + .02f, y + .04f, to);
         Block(geometry, id + "-guard", alongX ? start : cross - .05f, UpperFloor, alongX ? cross - .05f : start,
             alongX ? end : cross + .05f, UpperFloor + GuardHeight, alongX ? cross + .05f : end);
     }

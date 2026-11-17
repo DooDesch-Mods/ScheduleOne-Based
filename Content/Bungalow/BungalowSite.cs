@@ -103,7 +103,14 @@ internal static class BungalowSite
                 Name = "Second storey",
                 QuestType = typeof(BungalowStoreyQuest),
                 OrderEntry = "Order the second storey from Ray",
-                Staff = 3
+                Staff = 3,
+                Floor = BungalowStorey.UpperFloor,
+                Plan = new PlanRoom[]
+                {
+                    new(PlanRoomKind.New, -176f, 109.35f, -170f, 115.35f),
+                    new(PlanRoomKind.New, -176f, 115.5f, -170f, 121.5f),
+                    new(PlanRoomKind.New, -169.85f, 115.5f, -163.85f, 121.5f, "Second storey")
+                }
             },
             new SiteFollowUp(BungalowDefinition.SunroomId, "Sunroom: Bungalow", "Ready to move in",
                 new[] { "Two more employees can work here." })
@@ -111,19 +118,44 @@ internal static class BungalowSite
                 Name = "Sunroom",
                 QuestType = typeof(BungalowSunroomQuest),
                 OrderEntry = "Order the sunroom from Ray",
-                Staff = 2
+                Staff = 2,
+                Floor = -3.7f,
+                Plan = new PlanRoom[]
+                {
+                    new(PlanRoomKind.Existing, -176f, 109.35f, -170f, 115.35f),
+                    new(PlanRoomKind.Existing, -176f, 115.5f, -170f, 121.5f),
+                    new(PlanRoomKind.Existing, -170f, 115.5f, -163.85f, 121.5f, "Bungalow"),
+                    new(PlanRoomKind.New, -183f, 109.35f, -176.17f, 121.35f, "Sunroom")
+                }
             },
             new SiteFollowUp(BungalowDefinition.CarportId, "Double carport: Bungalow", "Ready for deliveries",
                 new[] { "A second delivery spot under the roof." })
             {
-                Name = "Double carport"
+                Name = "Double carport",
+                // The gravel under the roof, between the posts.
+                Floor = -4f,
+                Plan = new PlanRoom[]
+                {
+                    new(PlanRoomKind.Existing, -176f, 109.35f, -170f, 115.35f),
+                    new(PlanRoomKind.Existing, -176f, 115.5f, -170f, 121.5f),
+                    new(PlanRoomKind.Existing, -170f, 115.5f, -163.85f, 121.5f, "Bungalow"),
+                    new(PlanRoomKind.New, -168.4f, 104.6f, -162.3f, 110.7f, "Double carport")
+                }
             },
             new SiteFollowUp(BungalowDefinition.DeckId, "Slope deck: Bungalow", "Finished",
                 new[] { "A deck over the slope behind the house." })
             {
                 Name = "Slope deck",
                 QuestType = typeof(BungalowDeckQuest),
-                OrderEntry = "Order the slope deck from Ray"
+                OrderEntry = "Order the slope deck from Ray",
+                Floor = -3.7f,
+                Plan = new PlanRoom[]
+                {
+                    new(PlanRoomKind.Existing, -176f, 109.35f, -170f, 115.35f),
+                    new(PlanRoomKind.Existing, -176f, 115.5f, -170f, 121.5f),
+                    new(PlanRoomKind.Existing, -170f, 115.5f, -163.85f, 121.5f, "Bungalow"),
+                    new(PlanRoomKind.New, -194f, 107.85f, -188f, 117.85f, "Slope deck")
+                }
             }
         }
     };

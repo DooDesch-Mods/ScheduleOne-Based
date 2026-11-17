@@ -17,7 +17,7 @@ internal static class BungalowDoors
     // Where each copy's root stands: the house door's root at (-176.08, -3.70, 111.93), moved into the sunroom's west front
     // or lifted with the upper storey.
     internal static readonly CopiedSlidingDoor Sunroom = new("Sunroom door", "BASED-DOOR1:", BungalowDefinition.SunroomExpansionId,
-        new Vector3(-183.05f, -3.70f, 111.93f));
+        new Vector3(-183.05f - BungalowSunroom.DoorOut, -3.70f, 111.93f));
     internal static readonly CopiedSlidingDoor Storey = new("Upper storey door", "BASED-DOOR2:", BungalowDefinition.StoreyExpansionId,
         new Vector3(-176.08f, -3.70f + BungalowStorey.Lift, 111.93f));
 

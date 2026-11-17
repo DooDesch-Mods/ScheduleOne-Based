@@ -28,10 +28,11 @@ public static class BungalowSunroom
     private const string Glass = "window_glass_material";
     private const string Metal = "metal light black";
 
-    // The wall planes. The east side is the house's west wall; the ends line up with the house's corner posts.
+    // The wall planes. The east side is the house's west wall. The end walls' inner faces lie on the grid's lines, like the
+    // west wall's, 5 cm inside the house's corner posts.
     private const float Floor = -3.70f, SlabBottom = -4.15f;
-    private const float West = -183.05f, House = -176.17f, South = 109.23f, North = 121.63f;
-    private const float SlabWest = -183.15f, SlabEast = -176.4f, SlabSouth = 109.13f, SlabNorth = 121.73f;
+    private const float West = -183.05f, House = -176.17f, South = 109.30f, North = 121.40f;
+    private const float SlabWest = -183.15f, SlabEast = -176.4f, SlabSouth = South - .1f, SlabNorth = North + .1f;
     // The roof's top meets the house 0.15 m under the eave at -0.7.
     private const float RoofAtHouse = -.85f;
 
@@ -48,6 +49,9 @@ public static class BungalowSunroom
     private const string HouseDoorFrame = Property + "/bungalow/DoorFrame";
     private const float HouseDoorPlane = -176.08f, DoorSouth = 110.25f, DoorNorth = 112.55f, DoorTop = -1.5f;
     private const float HouseDoorLeafSouth = 111.4f;
+    // The copied door and its frame stand this much further out than the west front, so the closed leaf's inner face
+    // lies on the grid's west line instead of inside the room.
+    internal const float DoorOut = .03f;
     private const float SideLight = DoorSouth - South;
     private const float FramesSouth = DoorNorth + SideLight;
 
@@ -127,8 +131,8 @@ public static class BungalowSunroom
             SideLightOf(geometry, "west-light-north", DoorNorth, FramesSouth, top, glazed);
             Face(geometry, "west-transom", Metal, West - .05f, DoorTop, DoorSouth, West + .05f, top, DoorNorth);
 
-            var shift = new Vector3(West - HouseDoorPlane, 0f, 0f);
-            var frame = Tilted("west-door-frame", HouseDoorFrame, new Vector3(HouseDoorPlane, Floor, DoorSouth), new Vector3(West, Floor, DoorSouth), Quaternion.identity, 1f);
+            var shift = new Vector3(West - DoorOut - HouseDoorPlane, 0f, 0f);
+            var frame = Tilted("west-door-frame", HouseDoorFrame, new Vector3(HouseDoorPlane, Floor, DoorSouth), new Vector3(West - DoorOut, Floor, DoorSouth), Quaternion.identity, 1f);
             state.Copies.Add(frame);
             if (glazed)
             {
@@ -221,9 +225,13 @@ public static class BungalowSunroom
         {
             float x = West + k * width;
             float x0 = Mathf.Max(West, x - .02f), x1 = Mathf.Min(House, x + .02f);
-            Face(geometry, id + "-mullion-" + k, Metal, x0, bottom, z - .03f, x1, RoofUnderside(x1), z + .03f);
+            // The corner mullion stands against the west wall's frames, whose tops reach the same height; it stops 5 mm
+            // lower so the two tops do not lie in one plane.
+            float mullionTop = RoofUnderside(x1) - (k == 0 ? .005f : 0f);
+            Face(geometry, id + "-mullion-" + k, Metal, x0, bottom, z - .03f, x1, mullionTop, z + .03f);
             if (!glazed || k == columns) continue;
-            Face(geometry, id + "-pane-" + k, Glass, x, bottom, z - .01f, x + width, RoofUnderside(x + width), z + .01f);
+            // The pane spans between the two mullions, so its top and bottom never lie in a mullion's plane.
+            Face(geometry, id + "-pane-" + k, Glass, x + .02f, bottom, z - .01f, x + width - .02f, RoofUnderside(x + width - .02f), z + .01f);
         }
     }
 
@@ -234,10 +242,14 @@ public static class BungalowSunroom
         float mid = Floor + (top - Floor) * .5f;
         Face(geometry, id + "-edge-0", Metal, West - .03f, Floor, z0, West + .03f, top, z0 + bar);
         Face(geometry, id + "-edge-1", Metal, West - .03f, Floor, z1 - bar, West + .03f, top, z1);
-        Face(geometry, id + "-sill", Metal, West - .03f, Floor, z0, West + .03f, Floor + bar, z1);
-        Face(geometry, id + "-rail", Metal, West - .03f, mid - bar * .5f, z0, West + .03f, mid + bar * .5f, z1);
-        Face(geometry, id + "-head", Metal, West - .03f, top - bar, z0, West + .03f, top, z1);
-        if (glazed) Face(geometry, id + "-pane", Glass, West - .01f, Floor, z0, West + .01f, top, z1);
+        // Sill, rail and head run between the two edges, so no two bars share a face at the corners; the sill's underside
+        // and the head's top stay 3 mm inside the edges' ends, so those faces do not lie in one plane either.
+        Face(geometry, id + "-sill", Metal, West - .03f, Floor + .003f, z0 + bar, West + .03f, Floor + bar, z1 - bar);
+        Face(geometry, id + "-rail", Metal, West - .03f, mid - bar * .5f, z0 + bar, West + .03f, mid + bar * .5f, z1 - bar);
+        Face(geometry, id + "-head", Metal, West - .03f, top - bar, z0 + bar, West + .03f, top - .003f, z1 - bar);
+        // The pane ends inside the border, so none of its faces lies in a plane of the metal around it.
+        const float inset = .01f;
+        if (glazed) Face(geometry, id + "-pane", Glass, West - .01f, Floor + inset, z0 + inset, West + .01f, top - inset, z1 - inset);
     }
 
     // Places a copy so that the source point lands on the target, turned by the world rotation and scaled about it. The
