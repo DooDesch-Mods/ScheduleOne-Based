@@ -40,6 +40,7 @@ internal static class StorageSite
             new(-5.0f, 0.1f, 113.4f)
         },
         RegisterWorld = StorageWorld.Register,
+        Crew = StorageCrew.Instance,
         FollowUps = new[]
         {
             new SiteFollowUp(StorageDefinition.LoftId, "Loft: Storage Unit", "Ready to move in",

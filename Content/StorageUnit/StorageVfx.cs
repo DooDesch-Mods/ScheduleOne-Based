@@ -41,7 +41,9 @@ internal static class StorageVfx
         var wanted = new Dictionary<string, (string Template, Vector3 At, float Yaw)>();
         if (!off && level >= 1 && (night || force)) wanted[FireId] =(FireTemplate, StorageWorld.FireSpot, 0f);
         var spark = StorageWorld.SparkSpot(level);
-        if (!off && spark != null && ((constructing && night) || force)) wanted["work-sparks"] = (SparksTemplate, spark.Value.At, spark.Value.Yaw);
+        // Sparks fly only while the fitter stands at the cut with his torch.
+        bool welder = StorageCrew.WelderAtSpot;
+        if (!off && spark != null && ((constructing && welder) || force)) wanted["work-sparks"] = (SparksTemplate, spark.Value.At, spark.Value.Yaw);
 
         // An effect whose spot moved with the stage goes and comes back at the new spot.
         foreach (var id in Live.Keys.ToList())
@@ -53,12 +55,13 @@ internal static class StorageVfx
         if (Live.TryGetValue("work-sparks", out var sparks) && sparks != null && Particles(sparks) == 0)
             foreach (var system in sparks.GetComponentsInChildren<ParticleSystem>(true)) system.Play(true);
 
-        string shown = string.Join(",", Live.Keys.OrderBy(k => k)) + "@" + level;
+        string shown = string.Join(",", Live.Keys.OrderBy(k => k)) + "@" + level + (welder ? "+welder" : "");
         if (shown != _shown)
         {
             _shown = shown;
             Mod.Log("Storage site effects: " + (Live.Count == 0 ? "none" : string.Join(", ", Live.Keys)) + " at stage " + (state ?? "none")
-                + (constructing ? ", constructing" : "") + (night ? ", night" : ", day") + ", mode " + Current + ".");
+                + (constructing ? ", constructing" : "") + (night ? ", night" : ", day") + (welder ? ", welder at the cut" : ", no welder")
+                + ", mode " + Current + ".");
         }
     }
 
