@@ -28,7 +28,8 @@ public static class BungalowDefinition
             new UpgradeDefinition(StoreyId, 0, StoreyPrice, 5, new[] { PermitId }, new[]
             {
                 new ConstructionPhase("storey-floor", 1, BungalowStorey.FloorState),
-                new ConstructionPhase("storey-walls", 2, BungalowStorey.WallsState),
+                new ConstructionPhase("storey-frame", 2, BungalowStorey.FrameState),
+                new ConstructionPhase("storey-walls", 3, BungalowStorey.WallsState),
                 new ConstructionPhase("storey-roof", 4, BungalowStorey.RoofState)
             }, new[] { new UpgradeEffect("world-state", StoreyExpansionId, "complete") }),
             new UpgradeDefinition(SunroomId, 0, SunroomPrice, 3, new[] { PermitId }, new[]
@@ -66,6 +67,7 @@ internal static class BungalowSite
         PhaseTitles = new Dictionary<string, string>
         {
             ["storey-floor"] = "Floor",
+            ["storey-frame"] = "Frame",
             ["storey-walls"] = "Walls",
             ["storey-roof"] = "Roof and interior",
             ["sunroom-base"] = "Foundation",
@@ -94,7 +96,7 @@ internal static class BungalowSite
             BungalowSunroom.Register();
             BungalowStorey.Register();
         },
-        Crew = new BungalowCrew(),
+        Crew = BungalowCrew.Instance,
         FollowUps = new[]
         {
             new SiteFollowUp(BungalowDefinition.StoreyId, "Second storey: Bungalow", "Ready to move in",

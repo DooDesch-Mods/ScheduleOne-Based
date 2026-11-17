@@ -5,11 +5,14 @@ namespace Based.Content.Bungalow;
 
 // A second storey on the Bungalow: the house's own shell copied 3 m up, a balcony where the porch roof was, and a
 // steel stair from the gravel south of the porch up to a landing beside it. The first night takes the roof off, lays
-// the upper floor and sets the stair; the second raises the walls; the fourth puts the roof back on and hangs the
-// lamps; the last fits the sliding door and hands the rooms over. Every state holds the work of the states before it.
+// the upper floor and sets the stair; the second stands the timber frame; the third closes the walls; the fourth puts
+// the roof back on and hangs the lamps; the last fits the sliding door and hands the rooms over. Every state holds the
+// work of the states before it.
 public static class BungalowStorey
 {
-    public const string FloorState = "floor", WallsState = "walls", RoofState = "roof";
+    public const string FloorState = "floor", FrameState = "frame", WallsState = "walls", RoofState = "roof";
+    // The states in which the upper walls and their doors stand.
+    public static readonly string[] WallStates = { WallsState, RoofState, "complete" };
     // The upper storey stands this far above the house; the door of the copy is found by it.
     public const float Lift = 3f;
 
@@ -21,6 +24,9 @@ public static class BungalowStorey
 
     private const string Boards = "wood planks medium brown mat";
     private const string Metal = "metal_darkgrey_mat";
+    // Rough timber for the frame and the band that marks the floor line on the facade.
+    private const string Timber = "wood brown";
+    private const string Concrete = "concrete_grey2";
 
     // The ceiling's colliders end at -0.65; they are the upper floor. The boards are drawn just above them.
     internal const float UpperFloor = -.65f;
@@ -94,13 +100,15 @@ public static class BungalowStorey
             Id = BungalowDefinition.StoreyExpansionId, DisplayName = "Bungalow second storey", Version = "1.0.0", Source = null
         };
         definition.WorldStates.Add(BuildState(FloorState, 1));
-        definition.WorldStates.Add(BuildState(WallsState, 2));
-        definition.WorldStates.Add(BuildState(RoofState, 3));
-        definition.WorldStates.Add(BuildState("complete", 4));
+        definition.WorldStates.Add(BuildState(FrameState, 2));
+        definition.WorldStates.Add(BuildState(WallsState, 3));
+        definition.WorldStates.Add(BuildState(RoofState, 4));
+        definition.WorldStates.Add(BuildState("complete", 5));
         return definition;
     }
 
-    // Level 1 is the open floor with the stair, 2 the walls, 3 the roof and lamps, 4 the finished storey.
+    // Level 1 is the open floor with the stair, 2 the timber frame, 3 the walls, 4 the roof and lamps, 5 the finished
+    // storey.
     private static WorldStateDefinition BuildState(string id, int level)
     {
         var state = new WorldStateDefinition { Id = id };
@@ -109,9 +117,15 @@ public static class BungalowStorey
         Rule(state, "roof", "Roof", ObjectEffect.Remove, BoundsOf(HouseWest - .5f, .3f, HouseSouth - .5f, HouseEast + .5f, 3f, HouseNorth + .5f));
         Rule(state, "porch-roof", "SmallRoof", ObjectEffect.Remove, BoundsOf(EastWall, -1.2f, PorchRoofSouth, HouseEast, -.4f, NorthRoomSouth + .2f));
         Rule(state, "walls", "OuterWalls", ObjectEffect.Cut, house);
-        Rule(state, "cladding", "Block", ObjectEffect.Cut, BoundsOf(HouseWest - .3f, CladdingCut, HouseSouth - .3f, HouseEast + .3f, 6f, HouseNorth + .3f));        // The roof's shadow hull would darken the open floor; once the roof is back, the original and the copy cast both
+        // The corner posts reach up to -0.5, past the floor line; their tops would stand inside the copies' feet.
+        Rule(state, "corner-posts", "CornerPost", ObjectEffect.Cut, house);
+        // The gable's vent sits above the old eave; with the roof gone it would hang in the air, and once the upper
+        // storey stands it would sit in its wall. The copy of it rides up with the copied gable.
+        Rule(state, "fake-window", "FakeWindow", ObjectEffect.Remove, BoundsOf(HouseEast - .15f, -.6f, 117.9f, HouseEast + .25f, 1f, 119.1f));
+        Rule(state, "cladding", "Block", ObjectEffect.Cut, BoundsOf(HouseWest - .3f, CladdingCut, HouseSouth - .3f, HouseEast + .3f, 6f, HouseNorth + .3f));
+        // The roof's shadow hull would darken the open floor; once the roof is back, the original and the copy cast both
         // storeys' shadows.
-        if (level < 3) Rule(state, "shadow", "ShadowCaster", ObjectEffect.Remove, house);
+        if (level < 4) Rule(state, "shadow", "ShadowCaster", ObjectEffect.Remove, house);
 
         var geometry = new CopyDefinition
         {
@@ -120,33 +134,41 @@ public static class BungalowStorey
         };
         // The boards end 2 cm inside the walls they run under, so their ends never lie in a wall's face.
         Face(geometry, "boards-west", Boards, InWest, BoardsBottom, InSouth, EastWall - .02f, BoardsTop, InNorth);
-        Face(geometry, "boards-north-east", Boards, EastWall, BoardsBottom, NorthRoomSouth + .02f, InEast, BoardsTop, InNorth);
+        // The north-east boards start where the west boards end, so no gap opens under the wall between them.
+        Face(geometry, "boards-north-east", Boards, EastWall - .02f, BoardsBottom, NorthRoomSouth + .02f, InEast, BoardsTop, InNorth);
         Solid(geometry, "balcony", Boards, EastWall, BalconyBottom, BalconySouth, BalconyEast, UpperFloor, NorthRoomSouth);
         StairAndLanding(state, geometry);
+        // The stair's foot stands on a cast pad, so its bottom tread ends on concrete, not in the gravel.
+        Solid(geometry, "stair-footing", Concrete, StairFoot - .35f, -4.08f, LandingSouth - .15f, StairFoot + .75f, -3.93f, LandingNorth + .15f);
         // The two balcony railings share the corner post, which the south run sets.
         const float corner = .03f;
         Railing(geometry, "balcony-south", true, BalconySouth + corner, LandingEast, BalconyEast - corner + .025f);
         Railing(geometry, "balcony-east", false, BalconyEast - corner, BalconySouth + corner - .025f, NorthRoomSouth, firstPost: false);
 
-        if (level == 1)
+        // Until the walls stand, the open edges of the floor are guarded: by a site railing on the first night, by the
+        // frame and an unseen wall behind it on the second.
+        if (level <= 2)
         {
-            // Until the walls stand, a site railing runs along the open edges of the floor.
             const float i = .1f;
-            Railing(geometry, "site-west", false, HouseWest + i, HouseSouth + i, HouseNorth - i);
+            bool rails = level == 1;
+            Edge(geometry, "site-west", rails, false, HouseWest + i, HouseSouth + i, HouseNorth - i);
             // The north run leaves the corner post to the west run.
-            Railing(geometry, "site-north", true, HouseNorth - i, HouseWest + i, HouseEast - i, firstPost: false);
-            Railing(geometry, "site-east", false, HouseEast - i, NorthRoomSouth, HouseNorth - i);
-            Railing(geometry, "site-south-east", true, NorthRoomSouth + i, BalconyEast, HouseEast - i);
-            Railing(geometry, "site-south", true, HouseSouth + i, HouseWest + i, EastWall);
-            Railing(geometry, "site-landing", false, EastWall - i, HouseSouth + i, LandingSouth);
+            Edge(geometry, "site-north", rails, true, HouseNorth - i, HouseWest + i, HouseEast - i, firstPost: false);
+            Edge(geometry, "site-east", rails, false, HouseEast - i, NorthRoomSouth, HouseNorth - i);
+            Edge(geometry, "site-south-east", rails, true, NorthRoomSouth + i, BalconyEast, HouseEast - i);
+            Edge(geometry, "site-south", rails, true, HouseSouth + i, HouseWest + i, EastWall);
+            Edge(geometry, "site-landing", rails, false, EastWall - i, HouseSouth + i, LandingSouth);
         }
-        else
+        if (level == 2) Frame(geometry);
+        if (level >= 3)
         {
             state.Copies.Add(Shell(level));
-            Railing(geometry, "door-balcony", false, DoorPlane - .25f, DoorSouth, DoorNorth);
+            // The French balcony's railing stands on the facade, just clear of the sliding door's frame.
+            Railing(geometry, "door-balcony", false, HouseWest - .06f, DoorSouth, DoorNorth);
+            Band(geometry);
         }
 
-        if (level >= 3)
+        if (level >= 4)
             foreach (var (switchId, template, lamps) in Switches)
             {
                 // A networked copy, so the switch works and every peer sees the same state.
@@ -164,25 +186,131 @@ public static class BungalowStorey
                 }
             }
 
-        if (level == 4) Finish(state);
+        if (level == 5) Finish(state);
+        BungalowSiteProps.Add(state, level);
         state.Copies.Add(geometry);
         return state;
     }
 
     // The house's own shell, 3 m up, without the ground floor's foundation, kitchen and porch. The roof and the ceiling
-    // come with level 3, the sliding door with the finished storey.
+    // come with level 4, the sliding door with the finished storey.
     private static CopyDefinition Shell(int level)
     {
         var shell = Copy("shell", House, PropertyPivot, PropertyPivot + new Vector3(0f, Lift, 0f), 0);
         // The house's switches and ceiling lights come as copies of their own: a visual copy would neither switch nor
-        // light, and would hang in the same place as the switched lamp.
-        foreach (var part in new[] { "Foundation", "Bench", "Cabinets", "SmallRoof", "PorchBeam", "PorchBeam.001", "ModularSwitch", "ModularSwitch (1)", "FluroBar", "FluroBar (1)", "FluroBar (2)" })
+        // light, and would hang in the same place as the switched lamp. "Block" is the house's stand-in for the far
+        // view, a closed box with a pitched top that the game hides up close; its copy would stand inside the rooms.
+        foreach (var part in new[] { "Foundation", "Bench", "Cabinets", "SmallRoof", "PorchBeam", "PorchBeam.001", "ModularSwitch", "ModularSwitch (1)", "FluroBar", "FluroBar (1)", "FluroBar (2)", "Block" })
             shell.Exclude.Add(part);
-        if (level < 3)
-            foreach (var part in new[] { "Roof", "ShadowCaster", "InnerRoof", "RoofBeams" })
+        // The gable's vent comes with the roof it sits under.
+        if (level < 4)
+            foreach (var part in new[] { "Roof", "ShadowCaster", "InnerRoof", "RoofBeams", "FakeWindow" })
                 shell.Exclude.Add(part);
-        if (level < 4) shell.Exclude.Add("Sliding Glass Door");
+        if (level < 5) shell.Exclude.Add("Sliding Glass Door");
         return shell;
+    }
+
+    // The upper walls' centre lines and their openings, from the walls of the house below. A door's opening runs to its
+    // head; a window's has a sill.
+    private const float DoorHead = UpperFloor + 2.2f, WindowSill = UpperFloor + 1.2f, WindowHead = UpperFloor + 2.15f;
+    private const float FrameTop = 2.25f, StudSpacing = .6f;
+
+    // The second night's timber frame: studs on every wall line, plates top and bottom, headers over the doors and
+    // windows. It is drawn only; the unseen walls of Edge keep anyone from stepping off the floor.
+    private static void Frame(CopyDefinition geometry)
+    {
+        var door = float.NaN;
+        StudWall(geometry, "frame-west", false, -176.11f, HouseSouth, HouseNorth, (DoorSouth, DoorNorth, door), (117.65f, 119.13f, WindowSill));
+        StudWall(geometry, "frame-north", true, 121.59f, HouseWest + .1f, HouseEast - .1f, (-172.38f, -170.9f, WindowSill));
+        StudWall(geometry, "frame-east", false, -163.8f, NorthRoomSouth, HouseNorth - .1f);
+        StudWall(geometry, "frame-south", true, 109.29f, HouseWest + .1f, EastWall);
+        StudWall(geometry, "frame-west-room", false, -169.93f, HouseSouth + .1f, NorthRoomSouth, (113.2f, 114.45f, door));
+        StudWall(geometry, "frame-south-east", true, 115.42f, EastWall + .1f, HouseEast - .1f);
+        StudWall(geometry, "frame-partition", true, 115.43f, HouseWest + .1f, -170.05f);
+        StudWall(geometry, "frame-hall", false, -169.93f, 115.5f, HouseNorth - .1f, (117.97f, 119.03f, door));
+    }
+
+    private static void StudWall(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end,
+        params (float From, float To, float Sill)[] openings)
+    {
+        const float half = .025f, depth = .05f, plate = .05f, plateDepth = .055f;
+        float bottom = BoardsTop, sole = bottom + plate, top = FrameTop, head = top - .08f;
+        void Piece(string name, float a1, float y1, float a2, float y2, float d)
+        {
+            if (alongX) Face(geometry, id + "-" + name, Timber, a1, y1, cross - d, a2, y2, cross + d);
+            else Face(geometry, id + "-" + name, Timber, cross - d, y1, a1, cross + d, y2, a2);
+        }
+        // Plates are a little deeper than the studs, so a stud's sides never lie in a plate's face.
+        Piece("top-plate", start, head, end, top, plateDepth);
+        float from = start;
+        foreach (var opening in openings.OrderBy(o => o.From))
+        {
+            if (float.IsNaN(opening.Sill))
+            {
+                Piece("sole-" + Mathf.RoundToInt(from * 10), from, bottom, opening.From, sole, plateDepth);
+                from = opening.To;
+            }
+            float headAt = float.IsNaN(opening.Sill) ? DoorHead : WindowHead;
+            Piece("header-" + Mathf.RoundToInt(opening.From * 10), opening.From, headAt, opening.To, headAt + .12f, plateDepth);
+            if (!float.IsNaN(opening.Sill))
+                Piece("sill-" + Mathf.RoundToInt(opening.From * 10), opening.From, opening.Sill - .05f, opening.To, opening.Sill, plateDepth);
+        }
+        Piece("sole-" + Mathf.RoundToInt(from * 10), from, bottom, end, sole, plateDepth);
+
+        // Studs stand evenly from end to end, with a jamb stud on each side of every opening.
+        var at = new List<float>();
+        int count = Math.Max(1, (int)Math.Ceiling((end - start) / StudSpacing));
+        for (int i = 0; i <= count; i++) at.Add(Mathf.Lerp(start + half, end - half, i / (float)count));
+        foreach (var opening in openings)
+        {
+            at.Add(opening.From - half);
+            at.Add(opening.To + half);
+        }
+        at.Sort();
+        float last = float.NegativeInfinity;
+        foreach (float p in at)
+        {
+            // A jamb stud that lands on a stud of the even row takes its place.
+            if (p - last < .06f) continue;
+            last = p;
+            // Each stud reaches a centimetre into the plates, so no end face lies in a plate's face.
+            float low = sole - .01f, high = head + .01f;
+            var inside = openings.Where(o => p > o.From && p < o.To).ToArray();
+            if (inside.Length == 0)
+            {
+                Piece("stud-" + Mathf.RoundToInt(p * 100), p - half, low, p + half, high, depth);
+                continue;
+            }
+            var o = inside[0];
+            float headAt = float.IsNaN(o.Sill) ? DoorHead : WindowHead;
+            Piece("cripple-" + Mathf.RoundToInt(p * 100), p - half, headAt + .11f, p + half, high, depth);
+            if (!float.IsNaN(o.Sill)) Piece("under-" + Mathf.RoundToInt(p * 100), p - half, low, p + half, o.Sill - .04f, depth);
+        }
+    }
+
+    // A railing on the first night; on the second the frame stands there and only the railing's unseen wall stays.
+    private static void Edge(CopyDefinition geometry, string id, bool rails, bool alongX, float cross, float start, float end, bool firstPost = true)
+    {
+        if (rails)
+        {
+            Railing(geometry, id, alongX, cross, start, end, firstPost);
+            return;
+        }
+        Block(geometry, id + "-guard", alongX ? start : cross - .05f, UpperFloor, alongX ? cross - .05f : start,
+            alongX ? end : cross + .05f, UpperFloor + GuardHeight, alongX ? cross + .05f : end);
+    }
+
+    // A timber band where the upper floor meets the walls, so the two storeys read apart from outside. It stands 4 cm
+    // proud of the cladding and reaches 1 cm into it.
+    private static void Band(CopyDefinition geometry)
+    {
+        const float low = -.95f, high = -.62f, proud = .04f, sunk = .01f;
+        float w = HouseWest, e = HouseEast, s = HouseSouth, n = HouseNorth;
+        Face(geometry, "band-west", Timber, w - proud, low, s - proud, w + sunk, high, n + proud);
+        Face(geometry, "band-north", Timber, w + sunk, low, n - sunk, e - sunk, high, n + proud);
+        Face(geometry, "band-east", Timber, e - sunk, low, NorthRoomSouth, e + proud, high, n + proud);
+        Face(geometry, "band-south", Timber, w + sunk, low, s - proud, EastWall + proud, high, s + sunk);
+        Face(geometry, "band-landing", Timber, EastWall - sunk, low, s + sunk, EastWall + proud, high, LandingSouth);
     }
 
     private static void StairAndLanding(WorldStateDefinition state, CopyDefinition geometry)
@@ -253,6 +381,10 @@ public static class BungalowStorey
         // The seam check samples 0.6 m to each side of the strip's edge, so the strip at the stair's foot reaches well past
         // the volume.
         state.NavigationExistingFloor.Add(BoundsOf(StairFoot + .1f, -4.4f, LandingSouth - .1f, StairFoot + 2f, -3f, LandingNorth + .1f));
+        // The gravel east of the house, which the paths from the street to the stair cross, and the ground under the
+        // landing, where the stair's underside would otherwise cut a hole into the game's map.
+        state.NavigationExistingFloor.Add(BoundsOf(HouseEast + .2f, -4.4f, NorthRoomSouth, StairFoot + 1f, -3f, HouseNorth + .2f));
+        state.NavigationExistingFloor.Add(BoundsOf(EastWall, -4.4f, LandingSouth - .05f, LandingEast, -2.5f, LandingNorth + .15f));
         // The first two straddle the join: the gravel at the stair's foot and its second tread.
         float tread = StairFoot - .6f, middle = (LandingSouth + LandingNorth) * .5f;
         state.NavigationProbes.Add(new Vector3(StairFoot + .8f, -4f, middle));

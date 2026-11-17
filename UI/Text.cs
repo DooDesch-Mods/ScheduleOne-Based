@@ -175,8 +175,12 @@ internal static class Text
         ["Frames are up. The glass goes in tonight."] = "Die Rahmen stehen. Heute Nacht kommt das Glas rein.",
         ["Three pines in the way of the sunroom. Not for long."] = "Drei Kiefern stehen dem Wintergarten im Weg. Nicht mehr lange.",
         ["Stilts are in. The boards go on tonight."] = "Die Stelzen stehen. Heute Nacht kommen die Bohlen drauf.",
-        ["Floor and stair are in. The walls go up tonight."] = "Boden und Treppe sind drin. Heute Nacht kommen die Wände hoch.",
-        ["Walls stand. The roof goes on next."] = "Die Wände stehen. Als Nächstes kommt das Dach drauf.",        ["Open"] = "Öffnen",
+        ["The roof comes off tonight. Floor and stair go in."] = "Heute Nacht kommt das Dach runter. Boden und Treppe kommen rein.",
+        ["Floor and stair are in. The frame goes up tonight."] = "Boden und Treppe sind drin. Heute Nacht stellen wir das Ständerwerk.",
+        ["The frame stands. The walls close tonight."] = "Das Ständerwerk steht. Heute Nacht machen wir die Wände zu.",
+        ["Walls stand. The roof goes on tonight."] = "Die Wände stehen. Heute Nacht kommt das Dach drauf.",
+        ["The roof is on. Doors and lights go in tonight."] = "Das Dach ist drauf. Heute Nacht kommen Türen und Licht rein.",
+        ["Open"] = "Öffnen",
         ["Close"] = "Schließen",
     });
 }

@@ -153,6 +153,7 @@ public sealed class Mod : MelonMod
             PlanCopies.Reset();
             Tips.Reset();
             Content.StorageUnit.StorageVfx.Reset();
+            Content.Bungalow.BungalowVfx.Reset();
             Content.StorageUnit.StorageLadder.Reset();
             RayMenu.Reset();
             StaffRoom.Reset();
@@ -282,6 +283,10 @@ public sealed class Mod : MelonMod
         catch (Exception error) { Contain("storage site effects", error); }
         try { Content.StorageUnit.StorageLadder.Tick(); }
         catch (Exception error) { Contain("storage ladder", error); }
+        var bungalow = Sites.FirstOrDefault(s => s.Base.Id == Content.Bungalow.BungalowDefinition.BaseId);
+        if (bungalow == null) return;
+        try { Content.Bungalow.BungalowVfx.Tick(Constructing(bungalow) == Content.Bungalow.BungalowDefinition.StoreyId); }
+        catch (Exception error) { Contain("bungalow site effects", error); }
     }
 
     // The quest names what still stands on the walls, so the list shrinks while the player clears them.

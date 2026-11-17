@@ -99,8 +99,10 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                             _ => throw new ArgumentException("baseddiag vfx [on|off|force]")
                         };
                         Content.StorageUnit.StorageVfx.Refresh();
+                        Content.Bungalow.BungalowVfx.Refresh();
                     }
                     Mod.Log("baseddiag: storage effects " + Content.StorageUnit.StorageVfx.Describe());
+                    Mod.Log("baseddiag: bungalow effects " + Content.Bungalow.BungalowVfx.Describe());
                     break;
                 case "creator":
                     // A joining test client without saved looks starts in the character creator; finish it with the defaults.

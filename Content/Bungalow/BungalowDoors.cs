@@ -2,6 +2,7 @@ using Based.Runtime;
 using Based.UI;
 using Il2CppScheduleOne.Doors;
 using Il2CppScheduleOne.Interaction;
+using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.PlayerScripts;
 using MapExpansions;
 using MelonLoader;
@@ -11,16 +12,26 @@ using Object = UnityEngine.Object;
 
 namespace Based.Content.Bungalow;
 
-// The Bungalow's copied sliding doors: the sunroom's west door and the upper storey's west door onto its railing.
+// The Bungalow's copied doors: the sunroom's west door, the upper storey's sliding door onto its railing, and the upper
+// storey's two wooden doors, from the landing into the west room and between the north rooms.
 internal static class BungalowDoors
 {
-    // Where each copy's root stands: the house door's root at (-176.08, -3.70, 111.93), moved into the sunroom's west front
-    // or lifted with the upper storey.
-    internal static readonly CopiedSlidingDoor Sunroom = new("Sunroom door", "BASED-DOOR1:", BungalowDefinition.SunroomExpansionId,
-        new Vector3(-183.05f - BungalowSunroom.DoorOut, -3.70f, 111.93f));
-    internal static readonly CopiedSlidingDoor Storey = new("Upper storey door", "BASED-DOOR2:", BungalowDefinition.StoreyExpansionId,
-        new Vector3(-176.08f, -3.70f + BungalowStorey.Lift, 111.93f));
+    private const string House = "@Properties/Bungalow/bungalow/";
+    private static readonly Vector3 Up = new(0f, BungalowStorey.Lift, 0f);
 
+    // Where each sliding copy's root stands: the house door's root at (-176.08, -3.70, 111.93), moved into the sunroom's
+    // west front or lifted with the upper storey.
+    internal static readonly CopiedDoor Sunroom = new("Sunroom door", "BASED-DOOR1:", BungalowDefinition.SunroomExpansionId,
+        House + "Sliding Glass Door", new Vector3(-183.05f - BungalowSunroom.DoorOut, -3.70f, 111.93f), false, "complete");
+    internal static readonly CopiedDoor Storey = new("Upper storey door", "BASED-DOOR2:", BungalowDefinition.StoreyExpansionId,
+        House + "Sliding Glass Door", new Vector3(-176.08f, -3.70f, 111.93f) + Up, false, "complete");
+    // The wooden doors stand in the copied walls from the night the walls go up; their roots are found from the house's.
+    internal static readonly CopiedDoor Landing = new("Upper landing door", "BASED-DOOR3:", BungalowDefinition.StoreyExpansionId,
+        House + "Classical Wooden door", null, true, BungalowStorey.WallStates);
+    internal static readonly CopiedDoor Hall = new("Upper hall door", "BASED-DOOR4:", BungalowDefinition.StoreyExpansionId,
+        House + "Classical Wooden door (1)", null, true, BungalowStorey.WallStates);
+
+    private static readonly CopiedDoor[] All = { Sunroom, Storey, Landing, Hall };
     private static bool _subscribed;
 
     internal static void Init()
@@ -33,77 +44,96 @@ internal static class BungalowDoors
 
     internal static void Tick()
     {
-        try { Sunroom.Tick(); }
-        catch (Exception error) { MelonLogger.Error("[Based] Sunroom door tick failed: " + error); }
-        try { Storey.Tick(); }
-        catch (Exception error) { MelonLogger.Error("[Based] Upper storey door tick failed: " + error); }
+        foreach (var door in All)
+        {
+            try { door.Tick(); }
+            catch (Exception error) { MelonLogger.Error("[Based] " + door.Name + " tick failed: " + error); }
+        }
     }
 
-    // Dev console: "door [sunroom|storey] open|close|state"; without a door name the sunroom's door answers.
+    // Dev console: "door [sunroom|storey|landing|hall] open|close|state"; without a door name the sunroom's door answers.
     internal static string Debug(List<string> args)
     {
         var door = Sunroom;
         int at = 1;
-        if (args.Count > 1 && args[1] == "storey") { door = Storey; at = 2; }
-        else if (args.Count > 1 && args[1] == "sunroom") at = 2;
+        if (args.Count > 1)
+        {
+            var named = args[1] switch { "sunroom" => Sunroom, "storey" => Storey, "landing" => Landing, "hall" => Hall, _ => null };
+            if (named != null) { door = named; at = 2; }
+        }
         return door.Name.ToLowerInvariant() + " " + door.Debug(args.Count > at ? args[at] : "state");
     }
 
     private static void OnHost(int peer, string payload)
     {
-        if (!Sunroom.OnHost(peer, payload)) Storey.OnHost(peer, payload);
+        foreach (var door in All)
+            if (door.OnHost(peer, payload)) return;
     }
 
     private static void OnClient(string payload)
     {
-        if (!Sunroom.OnClient(payload)) Storey.OnClient(payload);
+        foreach (var door in All)
+            if (door.OnClient(payload)) return;
     }
 }
 
 // A world state builds every peer's world on its own and may hold no networked part, so a door in it is a visual copy of
-// the house's sliding door and this class makes it work: it finds the copy's sliding leaf, gives it a collider and an
-// interaction, and slides it the way the house's door slides. The host owns the open state; a client asks the host, and
-// the host tells every peer, a late joiner included when it finds its copy.
-internal sealed class CopiedSlidingDoor
+// one of the house's doors and this class makes it work: it finds the copy's leaf, gives it a collider and an
+// interaction, and moves it the way the house's door moves, sliding or swinging on its hinge. The host owns the open
+// state; a client asks the host, and the host tells every peer, a late joiner included when it finds its copy. A
+// swinging door also opens on each peer by itself while an NPC stands in it, as the game's doors do for NPCs.
+internal sealed class CopiedDoor
 {
-    private const string HouseDoorPath = "@Properties/Bungalow/bungalow/Sliding Glass Door";
-    private const string CopyName = "Sliding Glass Door";
     // Used only when the house door has no slide script to read: the leaf slides over the fixed light to the south.
     private static readonly Vector3 FallbackSlide = new(0f, 0f, -1.05f);
-    private const float SearchInterval = 5f;
-    private const float InteractionRange = 2.5f;
+    private const float FallbackSwing = 100f, SwingSpeed = 220f;
+    private const float SearchInterval = 5f, InteractionRange = 2.5f;
+    private const float NpcCheckInterval = .25f, NpcReach = 1.3f, NpcHeight = 1.6f;
 
     internal readonly string Name;
     private readonly string _wire;
     private readonly string _expansion;
-    private readonly Vector3 _copyRoot;
+    private readonly string _housePath;
+    private readonly string _copyName;
+    private readonly Vector3? _copyRoot;
+    private readonly bool _swing;
+    private readonly string[] _states;
 
     private Transform? _leaf;
     private InteractableObject? _interaction;
     private Vector3 _closed, _open;
+    private Quaternion _closedTurn;
+    private Vector3 _hinge, _across, _doorway;
+    private float _swingAngle = FallbackSwing, _angle;
     private float _duration = 1f;
     private AnimationCurve? _curve;
-    private bool _isOpen;
+    // 0 closed; for a sliding door 1 open; for a swinging door 1 or -1, the side the leaf swings to.
+    private int _side;
+    private int _npcSide;
     private float _progress;
-    private float _nextSearch;
+    private float _nextSearch, _nextNpcCheck;
     private bool _queried;
     private string _lastMiss = "";
     private bool? _shownOpen;
 
-    internal CopiedSlidingDoor(string name, string wire, string expansion, Vector3 copyRoot)
+    internal CopiedDoor(string name, string wire, string expansion, string housePath, Vector3? copyRoot, bool swing, params string[] states)
     {
         Name = name;
         _wire = wire;
         _expansion = expansion;
+        _housePath = housePath;
+        _copyName = housePath.Substring(housePath.LastIndexOf('/') + 1);
         _copyRoot = copyRoot;
+        _swing = swing;
+        _states = states;
     }
 
     internal void Tick()
     {
-        bool built = MapExpansionsApi.GetWorldState(_expansion) == "complete" && MapExpansionsApi.IsWorldStateApplied(_expansion);
-        if (!built)
+        string? state = MapExpansionsApi.IsWorldStateApplied(_expansion) ? MapExpansionsApi.GetWorldState(_expansion) : null;
+        if (state == null || Array.IndexOf(_states, state) < 0)
         {
-            if (_leaf != null || _interaction != null) Mod.Log(Name + " released: its build is not complete on this peer.");
+            if (_leaf != null || _interaction != null) Mod.Log(Name + " released: its build stage is " + (state ?? "none") + " on this peer.");
             Release();
             return;
         }
@@ -120,7 +150,8 @@ internal sealed class CopiedSlidingDoor
             _queried = true;
             Mod.Log(Name + " asked the host for its state.");
         }
-        Slide();
+        if (_swing) WatchNpcs();
+        Move();
     }
 
     private void Release()
@@ -129,30 +160,50 @@ internal sealed class CopiedSlidingDoor
         _interaction = null;
         _shownOpen = null;
         _queried = false;
-        _progress = _isOpen ? 1f : 0f;
+        _npcSide = 0;
+        _progress = _side != 0 ? 1f : 0f;
+        _angle = _side * _swingAngle;
     }
 
     private bool Bind()
     {
-        var copy = FindCopy();
-        if (copy == null) { Miss("no copy named '" + CopyName + "' stands at " + _copyRoot); return false; }
+        var house = GameObject.Find(_housePath);
+        if (house == null) { Miss("the house door '" + _housePath + "' is not in the scene"); return false; }
+        var root = _copyRoot ?? house.transform.position + new Vector3(0f, BungalowStorey.Lift, 0f);
+        var copy = FindCopy(root);
+        if (copy == null) { Miss("no copy named '" + _copyName + "' stands at " + root); return false; }
 
-        Vector3 slide = FallbackSlide;
         string leafPath = "Container";
-        var house = GameObject.Find(HouseDoorPath);
-        var sliding = house != null ? house.GetComponentInChildren<SlidingDoor>(true) : null;
-        if (sliding != null && sliding.DoorTransform != null && sliding.OpenPosition != null && sliding.ClosedPosition != null)
+        Vector3 slide = FallbackSlide;
+        if (_swing)
         {
-            slide = sliding.OpenPosition.position - sliding.ClosedPosition.position;
-            leafPath = PathBelow(house!.transform, sliding.DoorTransform);
-            _duration = Mathf.Max(.2f, sliding.SlideDuration);
-            _curve = sliding.SlideCurve;
+            var pivot = house.GetComponentInChildren<PivotDoor>(true);
+            if (pivot != null && pivot.DoorTransform != null)
+            {
+                leafPath = PathBelow(house.transform, pivot.DoorTransform);
+                _swingAngle = Mathf.Abs(pivot.OpenOutwardsAngle) > 1f ? Mathf.Abs(pivot.OpenOutwardsAngle) : FallbackSwing;
+            }
+            else
+                Mod.Warn(Name + ": the house door at '" + _housePath + "' has no readable pivot script; the leaf '" + leafPath + "' swings by " + FallbackSwing + " degrees.");
         }
         else
-            Mod.Warn(Name + ": the house door at '" + HouseDoorPath + "' has no readable slide script; the leaf slides by " + FallbackSlide + " over 1 s.");
+        {
+            var sliding = house.GetComponentInChildren<SlidingDoor>(true);
+            if (sliding != null && sliding.DoorTransform != null && sliding.OpenPosition != null && sliding.ClosedPosition != null)
+            {
+                slide = sliding.OpenPosition.position - sliding.ClosedPosition.position;
+                leafPath = PathBelow(house.transform, sliding.DoorTransform);
+                _duration = Mathf.Max(.2f, sliding.SlideDuration);
+                _curve = sliding.SlideCurve;
+            }
+            else
+                Mod.Warn(Name + ": the house door at '" + _housePath + "' has no readable slide script; the leaf slides by " + FallbackSlide + " over 1 s.");
+        }
 
         var leaf = copy.Find(leafPath);
         if (leaf == null) { Miss("the copy has no leaf at '" + leafPath + "'"); return false; }
+        // A copy is taken in whatever pose the house's door had then; a swinging leaf starts closed.
+        if (_swing) leaf.localRotation = Quaternion.identity;
 
         var bounds = new Bounds(leaf.position, Vector3.zero);
         int renderers = 0;
@@ -174,24 +225,34 @@ internal sealed class CopiedSlidingDoor
         var interaction = blocker.AddComponent<InteractableObject>();
         interaction.MaxInteractionRange = InteractionRange;
         interaction.RequiresUniqueClick = true;
-        interaction.onInteractStart.AddListener((UnityAction)(() => Request(!_isOpen)));
+        interaction.onInteractStart.AddListener((UnityAction)(() => Request(_side == 0)));
 
         _leaf = leaf;
         _interaction = interaction;
         _closed = leaf.position;
         _open = _closed + slide;
-        _progress = _isOpen ? 1f : 0f;
+        _closedTurn = leaf.localRotation;
+        // The hinge is the leaf's pivot; the leaf reaches from it across the doorway. Turning by a positive angle moves
+        // the leaf to the side Cross(up, across) points to.
+        _hinge = leaf.position;
+        var reach = bounds.center - _hinge;
+        reach.y = 0f;
+        _across = reach.sqrMagnitude > .0001f ? reach.normalized : Vector3.forward;
+        _doorway = _hinge + reach;
+        _progress = _side != 0 ? 1f : 0f;
+        _angle = _side * _swingAngle;
         _lastMiss = "";
         Place();
-        Mod.Log(Name + " bound: leaf '" + leafPath + "' at " + _closed + ", slides by " + slide + " in " + _duration.ToString("0.0") +
-                " s, collider " + box.size + " on layer " + LayerMask.LayerToName(blocker.layer) + ", " + (_isOpen ? "open" : "closed") + ".");
+        Mod.Log(Name + " bound: leaf '" + leafPath + "' at " + _closed + (_swing ? ", swings " + _swingAngle.ToString("0") + " degrees"
+                : ", slides by " + slide + " in " + _duration.ToString("0.0") + " s") + ", collider " + box.size + " on layer "
+                + LayerMask.LayerToName(blocker.layer) + ", " + (_side != 0 ? "open" : "closed") + ".");
         return true;
     }
 
-    private Transform? FindCopy()
+    private Transform? FindCopy(Vector3 root)
     {
         foreach (var t in Object.FindObjectsOfType<Transform>(true))
-            if (t.name == CopyName && (t.position - _copyRoot).sqrMagnitude < .25f && t.gameObject.activeInHierarchy) return t;
+            if (t.name == _copyName && (t.position - root).sqrMagnitude < .25f && t.gameObject.activeInHierarchy) return t;
         return null;
     }
 
@@ -209,6 +270,29 @@ internal sealed class CopiedSlidingDoor
         Mod.Warn(Name + " not bound yet: " + reason + "; retrying every " + SearchInterval + " s.");
     }
 
+    // The side of the doorway a point stands on: 1 where Cross(up, across) points, else -1.
+    private int SideOf(Vector3 point) => Vector3.Dot(point - _hinge, Vector3.Cross(Vector3.up, _across)) >= 0f ? 1 : -1;
+
+    // An NPC in the doorway opens a closed leaf away from itself on this peer only; it closes again once the NPC is through.
+    private void WatchNpcs()
+    {
+        if (Time.unscaledTime < _nextNpcCheck) return;
+        _nextNpcCheck = Time.unscaledTime + NpcCheckInterval;
+        int side = 0;
+        var npcs = NPCManager.NPCRegistry;
+        for (int i = 0; npcs != null && i < npcs.Count; i++)
+        {
+            var npc = npcs[i];
+            if (npc == null || !npc.gameObject.activeInHierarchy) continue;
+            var offset = npc.transform.position - _doorway;
+            if (Mathf.Abs(offset.y + 1f) > NpcHeight || new Vector2(offset.x, offset.z).sqrMagnitude > NpcReach * NpcReach) continue;
+            side = -SideOf(npc.transform.position);
+            break;
+        }
+        if (side != 0 && _npcSide == 0) Mod.Log(Name + " opens for an NPC on this peer.");
+        _npcSide = side;
+    }
+
     internal string Debug(string action)
     {
         switch (action)
@@ -218,19 +302,23 @@ internal sealed class CopiedSlidingDoor
             case "state": break;
             default: return "unknown action '" + action + "'; use open, close or state";
         }
-        string where = _leaf == null ? "no leaf bound" : "leaf at " + _leaf.position.ToString("F2") + ", progress " + _progress.ToString("0.00");
+        string where = _leaf == null ? "no leaf bound" : _swing
+            ? "leaf at " + _leaf.position.ToString("F2") + ", angle " + _angle.ToString("0") + (_npcSide != 0 ? ", held open for an NPC" : "")
+            : "leaf at " + _leaf.position.ToString("F2") + ", progress " + _progress.ToString("0.00");
         string hit = _interaction == null ? "no interaction" : "interaction '" + _interaction.message + "' in " + InteractionRange + " m";
-        return (_isOpen ? "open" : "closed") + "; " + where + "; " + hit + ".";
+        return (_side != 0 ? "open" : "closed") + "; " + where + "; " + hit + ".";
     }
 
+    // A swinging leaf opens away from the local player.
     private void Request(bool open)
     {
         try
         {
-            if (NativeBus.IsHost) Broadcast(open, "the host");
+            int side = !open ? 0 : !_swing ? 1 : Player.Local != null && _leaf != null ? -SideOf(Player.Local.transform.position) : 1;
+            if (NativeBus.IsHost) Broadcast(side, "the host");
             else
             {
-                NativeBus.SendToHost(_wire + "set:" + (open ? 1 : 0));
+                NativeBus.SendToHost(_wire + "set:" + side);
                 Mod.Log(Name + ": asked the host to " + (open ? "open" : "close") + " it.");
             }
         }
@@ -244,15 +332,15 @@ internal sealed class CopiedSlidingDoor
         try
         {
             string body = payload.Substring(_wire.Length);
-            if (body == "query") NativeBus.SendToPeer(peer, _wire + "state:" + (_isOpen ? 1 : 0));
-            else if (body.StartsWith("set:", StringComparison.Ordinal)) Broadcast(body == "set:1", "peer " + peer);
+            if (body == "query") NativeBus.SendToPeer(peer, _wire + "state:" + _side);
+            else if (body.StartsWith("set:", StringComparison.Ordinal) && int.TryParse(body.Substring(4), out int side)) Broadcast(Math.Sign(side), "peer " + peer);
             else Mod.Warn(Name + ": unknown message from peer " + peer + ": " + body);
         }
         catch (Exception error) { MelonLogger.Error("[Based] " + Name + " message from peer " + peer + " failed: " + error); }
         return true;
     }
 
-    private void Broadcast(bool open, string by)
+    private void Broadcast(int side, string by)
     {
         var players = Player.PlayerList;
         int sent = 0;
@@ -260,10 +348,10 @@ internal sealed class CopiedSlidingDoor
         {
             var connection = players[i]?.Connection;
             if (connection == null) continue;
-            try { NativeBus.SendToPeer(connection.ClientId, _wire + "state:" + (open ? 1 : 0)); sent++; }
+            try { NativeBus.SendToPeer(connection.ClientId, _wire + "state:" + side); sent++; }
             catch (Exception error) { MelonLogger.Error("[Based] " + Name + " state to peer " + connection.ClientId + " failed: " + error.Message); }
         }
-        Mod.Log(Name + " " + (open ? "opened" : "closed") + " by " + by + "; sent to " + sent + " peers.");
+        Mod.Log(Name + " " + (side != 0 ? "opened" : "closed") + " by " + by + "; sent to " + sent + " peers.");
     }
 
     // True when the message belongs to this door.
@@ -271,29 +359,47 @@ internal sealed class CopiedSlidingDoor
     {
         if (!payload.StartsWith(_wire, StringComparison.Ordinal)) return false;
         string body = payload.Substring(_wire.Length);
-        if (!body.StartsWith("state:", StringComparison.Ordinal)) { Mod.Warn(Name + ": unknown message from the host: " + body); return true; }
-        bool open = body == "state:1";
-        if (open != _isOpen) Mod.Log(Name + " is now " + (open ? "open" : "closed") + (_leaf == null ? " (no copy bound on this peer yet)" : "") + ".");
-        _isOpen = open;
+        if (!body.StartsWith("state:", StringComparison.Ordinal) || !int.TryParse(body.Substring(6), out int side))
+        {
+            Mod.Warn(Name + ": unknown message from the host: " + body);
+            return true;
+        }
+        side = Math.Sign(side);
+        if (side != _side) Mod.Log(Name + " is now " + (side != 0 ? "open" : "closed") + (_leaf == null ? " (no copy bound on this peer yet)" : "") + ".");
+        _side = side;
         return true;
     }
 
-    private void Slide()
+    private void Move()
     {
-        float target = _isOpen ? 1f : 0f;
-        if (_interaction != null && _shownOpen != _isOpen)
+        if (_interaction != null && _shownOpen != (_side != 0))
         {
-            _interaction.SetMessage(Text.T(_isOpen ? "Close" : "Open"));
-            _shownOpen = _isOpen;
+            _interaction.SetMessage(Text.T(_side != 0 ? "Close" : "Open"));
+            _shownOpen = _side != 0;
         }
-        if (Mathf.Approximately(_progress, target)) return;
-        _progress = Mathf.MoveTowards(_progress, target, Time.deltaTime / _duration);
+        if (_swing)
+        {
+            float target = (_side != 0 ? _side : _npcSide) * _swingAngle;
+            if (Mathf.Approximately(_angle, target)) return;
+            _angle = Mathf.MoveTowards(_angle, target, Time.deltaTime * SwingSpeed);
+        }
+        else
+        {
+            float target = _side != 0 ? 1f : 0f;
+            if (Mathf.Approximately(_progress, target)) return;
+            _progress = Mathf.MoveTowards(_progress, target, Time.deltaTime / _duration);
+        }
         Place();
     }
 
     private void Place()
     {
         if (_leaf == null) return;
+        if (_swing)
+        {
+            _leaf.localRotation = _closedTurn * Quaternion.Euler(0f, _angle, 0f);
+            return;
+        }
         float eased = _curve != null && _curve.length > 0 ? _curve.Evaluate(_progress) : Mathf.SmoothStep(0f, 1f, _progress);
         _leaf.position = Vector3.LerpUnclamped(_closed, _open, eased);
     }
