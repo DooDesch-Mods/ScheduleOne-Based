@@ -4,6 +4,17 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.2.0] - 2026-11-17
+
+### Added
+- Storage Unit expansion: Ray sells a loft with an outside stair, an east room, a south room and a second loading bay.
+- Each build takes several nights, and a crew you can watch does the work.
+- Tip the foreman in cash or product to cut the construction trash.
+
+### Changed
+- Construction workers take short breaks during working hours.
+- MapExpansions 1.4.0 or newer is now required.
+
 ## [1.1.6] - 2026-11-11
 
 ### Fixed
