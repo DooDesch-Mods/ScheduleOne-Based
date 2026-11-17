@@ -28,14 +28,20 @@ public static class StorageWorld
     private const string Metal = "metal_darkgrey_mat";
 
     // The upper floor lies at 3.25; the ledge along the west wall and the landing in front of it end at 3.30.
-    private const float UpperY = 3.25f, LandingTop = 3.30f, LandingBottom = 3.20f;
-    internal const float UpperFloor = UpperY;
-    // The landing is centred on the door.
-    private const float LandingWest = -10.65f, LandingEast = -9.01f, LandingSouth = 104.6f, LandingNorth = 106.3f;
-    private const float RailTop = LandingTop + 1.05f, GuardTop = LandingTop + 2.1f;
+    private const float UpperY = 3.25f, LandingTop = 3.30f, LandingBottom = 3.20f, LandingDeck = LandingTop - .006f;
+    internal const float UpperFloor = UpperY, LandingFloor = LandingTop;
+    // The landing's edges lie on the grid's 0.5 m lines (x .25, z .3 past the half metre); the east edge reaches into
+    // the wall. Its railing stands on its own line over the stair's west stringer, inside the deck's west edge.
+    private const float LandingWest = -10.75f, LandingEast = -9.01f, LandingSouth = 104.8f, LandingNorth = 106.3f;
+    private const float LandingRail = -10.62f;
+    // The unseen walls behind railings end just above the rail, as the vanilla fence's collider does (top at 4.48), so
+    // nothing stops the player above them.
+    private const float RailTop = LandingTop + 1.05f, GuardTop = RailTop + .05f, GuardHeight = 1.25f;
 
     // The four small units above Unit 1 (Unit6) and the upper west wall in front of them.
     private const float UnitWest = -8.75f, UnitEast = -2.05f, UnitSouth = 103.8f, UnitNorth = 113.8f, UnitTop = 6.25f;
+    // A room's lining stands 1 cm inside its box; the steel post at the opening's corner is 14 cm wide.
+    private const float LiningGap = .01f, CornerPostEast = UnitEast + .07f;
     private const string UnitSheet = "alum sheet med grey", FloorSheet = "metal_mediumgrey_mat";
     // The back of the walkway's unit faces inside the block, and the loft's ceiling under the roof's eave.
     private const float FacesBack = -2.25f, LoftCeiling = 6.0f;
@@ -43,11 +49,11 @@ public static class StorageWorld
     // has the window's width and head, down to the floor, so no part of the window's recess is left beside it. The
     // leaf is narrower than the window; steel jambs of equal width on both sides centre its opening in the cut.
     private const float WindowSouth = 104.85f, WindowNorth = 106.10f, DoorSill = 3.31f, DoorHead = 5.65f;
-    private const float DoorLeafWidth = 1.06f, DoorClear = DoorLeafWidth + .04f;
+    // The leaf keeps 6 mm to each jamb, the gap of the vanilla door.
+    private const float DoorLeafWidth = 1.06f, DoorLeafHeight = 2.10f, DoorGap = .006f, DoorClear = DoorLeafWidth + 2 * DoorGap;
     private const float DoorSouth = (WindowSouth + WindowNorth - DoorClear) / 2f, DoorNorth = DoorSouth + DoorClear;
     private static readonly Bounds DoorCut = BoundsOf(-9.3f, DoorSill, WindowSouth, -8.7f, DoorHead, WindowNorth);
-    private const string DoorModel = "@Properties/StorageUnit/Industrial Metal Door (2)/Container/IndustrialMetalDoor/industrialmetaldoor/";
-    private const string DoorLeaf = DoorModel + "Door", DoorHandle = DoorModel + "Handle";
+    private const string DoorRoot = "@Properties/StorageUnit/Industrial Metal Door (2)";
     // The leaf's hinge edge at the floor; the handle sits at its east edge.
     private static readonly Vector3 DoorHinge = new(-5.78f, .1f, 103.9f);
 
@@ -56,21 +62,33 @@ public static class StorageWorld
     private const string Fence = "Map/Hyland Point/Region_Northtown/Storage warehouse/Storage warehouse/OutdoorFence";
     private static readonly Vector3 FencePost = new(-2.1f, 3.25f, 101.79f);
     private static readonly Vector3 RailEnd = new(-2.1f, 3.25f, 103.69f);
-    // Unit 1's ceiling light, on Unit 1's switch. The lamp's back lies level with its pivot, so a pivot 2 mm under the
-    // loft's ceiling panel mounts it flat against the panel, with no gap and without reaching into it.
+    // Unit 1's ceiling light, on Unit 1's switch. The lamp's body reaches 3.2 cm above its pivot, so a pivot 3.3 cm under
+    // the loft's ceiling panel mounts it flat against the panel without reaching into it.
     private const string LampModel = "Map/Hyland Point/Region_Northtown/Storage warehouse/Storage Unit/FluroBar (1)";
     private static readonly Vector3 LampPivot = new(-6.52f, 2.87f, 107.23f);
-    private const float LampRange = 3.6f, LampY = LoftCeiling - .002f;
+    private const float LampRange = 3.6f, LampY = LoftCeiling - .033f;
     private const string RoomSwitch = "Map/Hyland Point/Region_Northtown/Storage warehouse/Storage Unit/ModularSwitch";
+    // Unit 1's wall switch: the centre of its back plate, 1.2 m above Unit 1's floor on the unit's west wall, facing east.
+    private static readonly Vector3 SwitchPivot = new(-4.62f, 1.3f, 104.78f);
+    private const float SwitchHeight = 1.2f;
+    // Each new room's wall switch is a networked copy of Unit 1's; its lamps follow it through these ids.
+    private const string LoftSwitch = "loft-switch", EastSwitch = "east-switch", SouthSwitch = "south-switch";
     // Saved id of the loft's property extension; renaming it loses what stands in the loft.
     public const string LoftExtensionId = "storage-loft-floor";
-    // The unit's own grid has its tile (0, 0) at (-4.00, 0.10, 113.75). The loft grid starts 1.5 m further east, at
-    // the loft's east wall, so all its tiles have coordinates from 0 up, the range the heatmap colours.
-    private const float LoftGridX = -2.5f, LoftGridZ = 113.75f;
+    // A tile is centred on its coordinate, 0.5 m square, and every grid is turned by 180°: tile (x, y) has its centre
+    // at origin - (x/2, 0, y/2). The upper floor's grids share one set of lines: across x on the loft's west wall
+    // (-8.75) and the hall's east wall (3.25), across z on the north and south walls of Unit6 and Unit5 (113.8, 103.8).
+    // Walls and railings stand on these lines, so every tile ends at one. The loft grid's tile (0, 0) lies at the loft's
+    // north-east corner, so all its tiles have coordinates from 0 up, the range the heatmap colours.
+    private const float LoftGridX = -2.5f, GridZ = 113.55f, GalleryEdge = 103.8f;
+    // The bars of the gallery's railing, and its unseen wall up to the line.
+    private const float GalleryRailZ = 103.76f;
+    // The upper floor's walls and railings lie within 1 cm of the line; these hold them there.
+    private const float WallSkin = .004f;
 
     // B: the walkway east of the loft (x -2.05 .. 0.25) and Unit5 behind it, up to the hall's east wall.
     public const string EastExtensionId = "storage-east-floor";
-    private const float EastFront = .25f, EastWall = 3.25f, SiteWallHeight = LoftCeiling - UpperY;
+    private const float EastFront = .25f, EastWall = 3.25f, SiteWallHeight = LoftCeiling - UpperY, EastGridX = 3.0f;
     private const string Wood = "wood planks medium brown mat", Trim = "wood brown", Brick = "brick dark light orange";
 
     // The crew's site, with the same templates as the Sweatshop's build.
@@ -99,7 +117,9 @@ public static class StorageWorld
     private static readonly Vector3 CratePivot = new(-91.51f, -4.00f, 57.01f);
     private static readonly Vector3 JerryCanPivot = new(-95.21f, -4.05f, 58.92f);
     private static readonly Vector3 BucketPivot = new(-95.43f, -3.28f, 58.37f);
-    private static readonly Vector3 GasBottlePivot = new(-95.93f, -4.33f, 54.70f);
+    private static readonly Vector3 GasBottlePivot = new(-95.93f, -4.00f, 54.70f);
+    // The bucket's pivot lies 0.20 under its base.
+    private const float BucketUprightDrop = .20f;
     private static readonly Vector3 CinderblockPivot = new(-96.74f, -4.08f, 59.92f);
     // The fire barrel stands in the yard west of the stair, south of the bush (x -13.11 .. -10.63, z 103.08 .. 105.48) and
     // clear of the stair (x from -10.49) and the street lamp's base (x -12.5 .. -11.5, z 100.5 .. 101.5).
@@ -111,8 +131,15 @@ public static class StorageWorld
     // C: the walkway south of B (x -2.05 .. 0.25) and the three units of Unit4 east of it. The elevator stands between
     // them and B's room; its shaft behind it stays closed.
     public const string SouthExtensionId = "storage-south-floor";
-    private const float SouthEnd = 94f, SouthUnitNorth = 101.5f, SouthGridZ = 103.75f;
+    private const float SouthEnd = 94f, SouthUnitNorth = 101.5f, SouthGridZ = GridZ - 10f;
     private const float ElevatorWest = .71f;
+    // Unit4 and the walkway end 0.3 m and 0.2 m short of the grid's lines; a wall on each line closes them there: across
+    // the south end of the walkway and Unit4, and in front of Unit4's north wall. The elevator's face is boxed in up to
+    // the open faces of the rooms (x 0.25), so the walkway keeps one width beside it.
+    private const float SouthWall = SouthGridZ - 9.25f, SouthRoomNorth = SouthGridZ - 2.25f;
+    // The walkway's railing to the hall (x -2.1) stands between two lines; a steel kerb in front of it reaches to the
+    // line at x -1.75 and leaves out the top of the ladder.
+    private const float KerbEdge = -1.75f, KerbHeight = .1f, KerbBack = -2.08f;
     // Within this reach the light ends before the outside of the east wall (3.51) and the south wall (93.5).
     private const float SouthLampX = 1.1f, SouthLampRange = 2.35f;
 
@@ -131,7 +158,7 @@ public static class StorageWorld
         1 => (new Vector3(-9.4f, LandingTop + 1.1f, (WindowSouth + WindowNorth) / 2f), 0f),
         2 => (new Vector3(-6.5f, LoftCeiling - .45f, UnitSouth + .2f), 0f),
         3 => (new Vector3(UnitEast - .1f, UpperY + 1.5f, 108.8f), 0f),
-        4 => (new Vector3(EastFront + .1f, UpperY + 1.5f, 108.8f), 0f),
+        4 => (new Vector3(EastFront - .1f, UpperY + 1.5f, 110.6f), 0f),
         5 => (new Vector3(-1f, UpperY + 1.4f, UnitSouth + .25f), 0f),
         6 => (new Vector3(ElevatorWest - .15f, UpperY + 1.4f, 102.6f), 0f),
         _ => null
@@ -166,6 +193,7 @@ public static class StorageWorld
         };
         StairAndLanding(state, geometry);
         if (level >= 2) Doorway(state, geometry, level);
+        Navigation(state, level);
         if (level >= 3) Gallery(state, geometry, level);
         if (level >= 4) WalkwayOpen(state, geometry, level);
         if (level >= 5) EastRoom(state, geometry);
@@ -205,7 +233,9 @@ public static class StorageWorld
         {
             case 1:
                 Outside(state);
-                state.Copies.Add(Copy("outside-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-11.0f, 0f, 100.95f), 27));
+                // South-west of the stair, clear of its stringers (x from -10.59), the overpass leg (x -12.35 .. -11.65,
+                // z 100.65 .. 101.35) and the sign board (z from 99.55).
+                state.Copies.Add(Copy("outside-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-12.3f, 0f, 98.6f), 8));
                 break;
             case 2:
                 Outside(state);
@@ -227,19 +257,21 @@ public static class StorageWorld
                 // Brick from the cut through the west wall, inside and out.
                 RubblePile(state, "door-rubble", -8.2f, UpperY, 107f, .35f, 11);
                 RubblePile(state, "door-rubble-stray", -7.55f, UpperY, 105.25f, .14f, 23);
-                RubblePile(state, "landing-rubble", -9.85f, LandingTop, 106f, .14f, 37);
+                RubblePile(state, "landing-rubble", -9.85f, LandingDeck, 106f, .14f, 37);
                 WorkLight(state, "loft-work-light", -5.5f, 108.8f, LampRange);
                 break;
             case 4:
                 Stock(state, geometry, "walkway", -1f, UpperY, 112.9f, 8);
-                state.Copies.Add(Copy("walkway-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-.42f, UpperY, 104.6f), -11));
-                state.Copies.Add(Copy("walkway-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(-1.62f, UpperY, 104.42f), 8));
+                // The walkway is 2.3 m wide between the roller-door faces (x 0.25) and the loft; the barrels stand square
+                // north of the plank wall (z to 103.94), the generator and the can beside each other north of them.
+                state.Copies.Add(Copy("walkway-barrels", ManorSite + "SM_Prop_BarrelStack_01", BarrelsPivot, new Vector3(-.6f, UpperY, 104.9f)));
+                state.Copies.Add(Copy("walkway-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, new Vector3(-1.55f, UpperY, 106.45f), 8));
                 SiteTable(state, geometry, "walkway-table", -.35f, UpperY, 108.8f, 86);
-                state.Copies.Add(Copy("walkway-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(-.08f, UpperY, 105.45f), 152));
+                state.Copies.Add(Copy("walkway-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(-.35f, UpperY, 106.35f), 152));
                 Clutter(state, geometry, "walkway-gas-bottle", Camp + "Gas Bottle Prop (1)", GasBottlePivot, -1.93f, UpperY, 111.8f, -29, .32f, .72f);
                 Clutter(state, geometry, "walkway-trash-can", Camp + "Trash Can Prop", TrashCanPivot, -1.88f, UpperY, 109.95f, -19, .32f, .77f);
-                state.Copies.Add(Copy("walkway-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(-1.86f, UpperY, 110.7f), 47));
-                Cinderblock(state, "walkway-cinderblock", .08f, UpperY, 106.25f, 41);
+                state.Copies.Add(Copy("walkway-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(-1.86f, UpperY - BucketUprightDrop, 110.7f), 47));
+                Cinderblock(state, "walkway-cinderblock", -1.7f, UpperY, 107.6f, 41);
                 break;
             case 6:
                 Stock(state, geometry, "south", 2.4f, UpperY, 95f, 4);
@@ -272,10 +304,11 @@ public static class StorageWorld
     }
 
     // Cones and the site sign on the grass strip in front of the stair, and the bricks for the door against the wall.
+    // The cones keep clear of the bus stop (walls from x -11.52, base to z 97.39 west of x -11.30).
     private static void Outside(WorldStateDefinition state)
     {
         state.Copies.Add(Copy("site-sign", BuildSite + "CS_sign_02", SignPivot, new Vector3(-11.25f, -.05f, 99.6f), -10));
-        var cones = new[] { new Vector2(-11.45f, 95.4f), new Vector2(-9.55f, 95.4f), new Vector2(-11.3f, 97.6f) };
+        var cones = new[] { new Vector2(-10.85f, 95.3f), new Vector2(-9.55f, 95.3f), new Vector2(-10.75f, 97.9f) };
         for (int i = 0; i < cones.Length; i++)
             state.Copies.Add(Copy("site-cone-" + i, BuildSite + "TrafficCone/trafficcone", ConePivot, new Vector3(cones[i].x, ConeCentre - .03f, cones[i].y)));
         state.Copies.Add(Copy("outside-bricks", ManorSite + "SM_Prop_Brick_Stack_01", BricksPivot, new Vector3(-9.75f, 0f, 96.5f), scale: .75f));
@@ -322,9 +355,11 @@ public static class StorageWorld
         var random = new System.Random(seed);
         float Between(float from, float to) => from + (float)random.NextDouble() * (to - from);
         var centre = new Vector3(x, floor, z);
+        var laid = new System.Collections.Generic.List<RubblePiece>();
         for (int turn = 0; turn < 3; turn++)
         {
             float yaw = Between(0f, 180f);
+            var turnBy = Quaternion.Euler(0, yaw, 0);
             var handful = new CopyDefinition
             {
                 Id = id + "-" + turn, Template = Anchor, Frame = Anchor, OwnMesh = false, Obstacle = false,
@@ -338,9 +373,48 @@ public static class StorageWorld
                 float bottom = floor + Between(0f, (1f - distance / radius) * radius * .5f);
                 bool scrap = random.Next(4) == 0;
                 float halfLength = Between(.05f, .12f), halfWidth = Between(.03f, .06f), tall = scrap ? .012f : Between(.05f, .085f);
-                Face(handful, "piece-" + i, scrap ? UnitSheet : Brick, px - halfLength, bottom, pz - halfWidth, px + halfLength, bottom + tall, pz + halfWidth);
+                // A piece whose face lies within a few millimetres of a parallel face of a piece it touches grows a
+                // little until no two faces share a plane; its bottom sinks into the floor or the piece below.
+                // Its place in the world is known before the check, which compares it with the other handfuls' pieces there.
+                var piece = new RubblePiece { Turn = turn, X = px, Z = pz, HalfLength = halfLength, HalfWidth = halfWidth, Bottom = bottom, Top = bottom + tall,
+                    At = centre + turnBy * (new Vector3(px, floor, pz) - centre) };
+                for (int tries = 0; tries < 12 && laid.Exists(other => piece.Clashes(other)); tries++)
+                {
+                    piece.Top += .007f;
+                    piece.Bottom -= .007f;
+                    piece.HalfLength += .007f;
+                    piece.HalfWidth += .007f;
+                }
+                laid.Add(piece);
+                Face(handful, "piece-" + i, scrap ? UnitSheet : Brick, px - piece.HalfLength, piece.Bottom, pz - piece.HalfWidth,
+                    px + piece.HalfLength, piece.Top, pz + piece.HalfWidth);
             }
             state.Copies.Add(handful);
+        }
+    }
+
+    // One box of a rubble pile: its place in the handful's own frame and, for pieces of other handfuls, in the world.
+    private sealed class RubblePiece
+    {
+        private const float Gap = .006f;
+        public int Turn;
+        public Vector3 At;
+        public float X, Z, HalfLength, HalfWidth, Bottom, Top;
+
+        public bool Clashes(RubblePiece other)
+        {
+            var at = Turn == other.Turn ? new Vector3(X, 0f, Z) : At;
+            var otherAt = Turn == other.Turn ? new Vector3(other.X, 0f, other.Z) : other.At;
+            float reach = new Vector2(HalfLength, HalfWidth).magnitude + new Vector2(other.HalfLength, other.HalfWidth).magnitude;
+            if (new Vector2(at.x - otherAt.x, at.z - otherAt.z).magnitude > reach) return false;
+            // Tops and bottoms face up and down whatever the yaw.
+            if (Mathf.Abs(Top - other.Top) < Gap || Mathf.Abs(Bottom - other.Bottom) < Gap) return true;
+            // The pieces of one handful share its yaw, so their sides are parallel.
+            if (Turn != other.Turn || Bottom >= other.Top || other.Bottom >= Top) return false;
+            bool acrossX = X - HalfLength < other.X + other.HalfLength && other.X - other.HalfLength < X + HalfLength;
+            bool acrossZ = Z - HalfWidth < other.Z + other.HalfWidth && other.Z - other.HalfWidth < Z + HalfWidth;
+            if (acrossZ && (Mathf.Abs(X - HalfLength - (other.X - other.HalfLength)) < Gap || Mathf.Abs(X + HalfLength - (other.X + other.HalfLength)) < Gap)) return true;
+            return acrossX && (Mathf.Abs(Z - HalfWidth - (other.Z - other.HalfWidth)) < Gap || Mathf.Abs(Z + HalfWidth - (other.Z + other.HalfWidth)) < Gap);
         }
     }
 
@@ -354,37 +428,49 @@ public static class StorageWorld
         var units = BoundsOf(EastFront, UpperY, SouthEnd, EastWall, UnitTop, SouthUnitNorth);
         state.Rules.Add(Rule("south-skin", "Unit4", "Storage warehouse", ObjectEffect.Hide, units));
         var room = Rule("south-room", "Unit4", "Storage warehouse", ObjectEffect.Hollow, units);
-        room.Openings.Add(BoundsOf(EastFront - .1f, UpperY, SouthEnd + .01f, EastFront + .1f, LoftCeiling, SouthUnitNorth - .01f));
+        room.Openings.Add(BoundsOf(EastFront - .1f, UpperY, SouthEnd + .01f, EastFront + .1f, LoftCeiling + .02f, SouthUnitNorth - .01f));
         room.Bands.Add((0f, UnitSheet));
         room.CeilingMaterial = UnitSheet;
         room.FloorMaterial = FloorSheet;
         room.FrameMaterial = Metal;
         state.Rules.Add(room);
-        Face(geometry, "south-ceiling", UnitSheet, EastFront, LoftCeiling, SouthEnd, EastWall, LoftCeiling + .006f, SouthUnitNorth);
-        // The walkway stays open to the hall's roof; a steel beam carries the south edge of B's ceiling over it.
-        Face(geometry, "south-beam", Metal, UnitEast, LoftCeiling - .15f, UnitSouth - .07f, EastFront, UnitTop, UnitSouth + .07f);
+        Face(geometry, "south-ceiling", UnitSheet, EastFront + .006f, LoftCeiling, SouthEnd, EastWall - .012f, LoftCeiling + .006f, SouthUnitNorth);
+        // A steel beam over the room's open face to the walkway hides the top edge of the lining. Its ends lie inside
+        // the walls on the grid's lines.
+        Face(geometry, "south-room-beam", Metal, EastFront - .07f, LoftCeiling - .15f, SouthWall - .05f, EastFront + .07f, UnitTop - .012f, SouthRoomNorth + .005f);
+        // The walls on the grid's lines: across the walkway and Unit4 at the south end, up to the units' top, and in
+        // front of Unit4's north wall up to the room's ceiling. Their ends and feet reach into what they meet.
+        Solid(geometry, "south-end-wall", UnitSheet, KerbBack - .048f, UpperY, SouthEnd - .01f, EastWall - .005f, UnitTop - WallSkin, SouthWall);
+        Solid(geometry, "south-room-north-wall", UnitSheet, EastFront, UpperY - .006f, SouthRoomNorth, EastWall - .005f, LoftCeiling, SouthRoomNorth + .01f);
+        // The elevator's face boxed in from the walkway, flush with the rooms' open faces.
+        Solid(geometry, "elevator-box", UnitSheet, EastFront, UpperY, SouthRoomNorth + .01f, ElevatorWest - .004f, UnitTop - WallSkin, UnitSouth);
+        // The kerb in front of the walkway's railing, on both sides of the ladder's top.
+        Solid(geometry, "walkway-kerb-south", Metal, KerbBack, UpperY - .006f, SouthWall, KerbEdge, UpperY + KerbHeight, LadderSouth);
+        Solid(geometry, "walkway-kerb-north", Metal, KerbBack, UpperY - .006f, LadderNorth, KerbEdge, UpperY + KerbHeight, GalleryEdge - .01f);
     }
 
     // C, night 2: sheet metal clads the elevator's face to the walkway, lamps hang in the south room on Unit 1's
     // switch, and the floor belongs to the property.
     private static void SouthRoom(WorldStateDefinition state, CopyDefinition geometry)
     {
-        Face(geometry, "elevator-cladding", UnitSheet, ElevatorWest - .012f, UpperY, SouthUnitNorth, ElevatorWest - .004f, UnitTop, UnitSouth);
         foreach (var (id, z) in new[] { ("south-light-south", 96.0f), ("south-light-north", 99.4f) })
         {
             var light = Copy(id, LampModel, LampPivot, new Vector3(SouthLampX, LampY, z));
             light.LightsOn = true;
-            light.LightSwitch = RoomSwitch;
+            light.LightSwitch = "copy:" + SouthSwitch;
             light.LightRange = SouthLampRange;
             state.Copies.Add(light);
         }
+        // On the room's north wall beside the way in from the walkway, facing south into the room.
+        state.Copies.Add(WallSwitch(SouthSwitch, EastFront + .3f, SouthRoomNorth - SwitchProud, -90));
 
-        // Turned like the other grids: tile (x, y) covers world x 2.75-x/2 .. 3.25-x/2 and z 103.25-y/2 .. 103.75-y/2.
-        // The tiles end in front of the railing to the hall (x -1.75) and leave out the elevator and its shaft.
+        // Tile (x, y) covers world x 2.75-x/2 .. 3.25-x/2 and z 103.3-y/2 .. 103.8-y/2, from the east wall to the kerb
+        // (x -1.75) and from B's grid to the south end wall (z 94.3), without the elevator's box (x 0.25 .. 3.25,
+        // z 101.3 .. 103.8).
         var property = new PropertyExtensionDefinition
         {
             Id = SouthExtensionId, PropertyCode = "storageunit", GridIndex = 0,
-            GridOrigin = new Vector3(EastWall, UpperY, SouthGridZ),
+            GridOrigin = new Vector3(EastGridX, UpperY, SouthGridZ),
         };
         for (int x = 0; x <= 9; x++)
             for (int y = 0; y <= 18; y++)
@@ -401,25 +487,33 @@ public static class StorageWorld
             state.Rules.Add(Rule("loft-face-" + i, $"UnitFace ({i})", "Storage warehouse", ObjectEffect.Remove,
                 BoundsOf(FacesBack - .05f, UpperY - .05f, UnitSouth - .05f, UnitEast + .05f, UnitTop + .05f, UnitNorth + .05f)));
         // The loft's ceiling ends at the old wall; a steel beam carries its edge over the opening.
-        if (level < 5) Face(geometry, "walkway-beam", Metal, FacesBack, LoftCeiling - .15f, UnitSouth, UnitEast, UnitTop, UnitNorth);
+        if (level < 5) Face(geometry, "walkway-beam", Metal, FacesBack - .006f, LoftCeiling - .156f, UnitSouth + .006f, UnitEast, UnitTop - .02f, UnitNorth);
         if (level < 6) SiteWall(geometry);
+        // The linings of the loft and of Unit5 both end at the block's north face; a sheet closes the walkway between
+        // them, in front of the hall's brick.
+        Solid(geometry, "walkway-north-end", UnitSheet, UnitEast + .006f, UpperY, UnitNorth - .008f, EastFront - .006f, UnitTop - WallSkin, UnitNorth - .002f);
     }
 
     // A temporary wall closes the walkway to the south until C opens it: boards nailed to a timber frame, the frame on
-    // the side of the rooms.
+    // the side of the rooms and its face on the grid's line. It starts inside the corner post.
     private static void SiteWall(CopyDefinition geometry)
     {
-        const float back = UnitSouth + .04f, front = back + .1f, top = UpperY + SiteWallHeight;
-        Solid(geometry, "walkway-site-wall", Wood, FacesBack, UpperY, UnitSouth - .04f, EastFront, top, back);
-        Face(geometry, "walkway-site-wall-sole", Trim, FacesBack, UpperY, back, EastFront, UpperY + .1f, front);
-        Face(geometry, "walkway-site-wall-head", Trim, FacesBack, top - .1f, back, EastFront, top, front);
+        // The face stands a few millimetres behind the corner post's north face.
+        const float front = GalleryEdge - WallSkin - .006f, back = front - .1f, top = UpperY + SiteWallHeight, west = CornerPostEast - .02f;
+        Solid(geometry, "walkway-site-wall", Wood, west, UpperY, back - .04f, EastFront, top, back);
+        Face(geometry, "walkway-site-wall-sole", Trim, west, UpperY, back, EastFront, UpperY + .1f, front);
+        Face(geometry, "walkway-site-wall-head", Trim, west, top - .1f, back, EastFront, top, front);
         // The noggin lies a little behind the studs' faces, so the two never share a plane.
-        Face(geometry, "walkway-site-wall-noggin", Trim, FacesBack, UpperY + 1.2f, back, EastFront, UpperY + 1.3f, front - .02f);
+        Face(geometry, "walkway-site-wall-noggin", Trim, west, UpperY + 1.2f, back + .006f, EastFront, UpperY + 1.3f, front - .02f);
         for (int i = 0; i <= 4; i++)
         {
-            float x = Mathf.Lerp(FacesBack + .03f, EastFront - .03f, i / 4f);
+            // The last stud's east face stays clear of the gallery beam's end, which stops 6 mm short of Unit5's face.
+            float x = Mathf.Lerp(CornerPostEast + .03f, EastFront - .04f, i / 4f);
             Face(geometry, "walkway-site-wall-stud-" + i, Trim, x - .025f, UpperY + .1f, back, x + .025f, top - .1f, front);
         }
+        // The frame is drawn without a collider; an unseen wall over its depth ends on the grid's line, which the
+        // drawn faces stay a few millimetres behind.
+        Block(geometry, "walkway-site-wall-frame", west, UpperY, back, EastFront, top, GalleryEdge - WallSkin);
     }
 
     // B, night 2: the units east of the walkway (Unit5) become one room with the walkway and the loft, under one ceiling
@@ -433,34 +527,35 @@ public static class StorageWorld
         state.Rules.Add(Rule("east-skin", "Unit5", "Storage warehouse", ObjectEffect.Hide, units));
         var room = Rule("east-room", "Unit5", "Storage warehouse", ObjectEffect.Hollow, units);
         // The whole face to the walkway is open; the room keeps its east, north and south walls.
-        room.Openings.Add(BoundsOf(EastFront - .1f, UpperY, UnitSouth + .01f, EastFront + .1f, LoftCeiling, UnitNorth - .01f));
+        room.Openings.Add(BoundsOf(EastFront - .1f, UpperY, UnitSouth + .01f, EastFront + .1f, LoftCeiling + .02f, UnitNorth - .01f));
         room.Bands.Add((0f, UnitSheet));
         room.CeilingMaterial = UnitSheet;
         room.FloorMaterial = FloorSheet;
         room.FrameMaterial = Metal;
         state.Rules.Add(room);
-        // The roof's eaves dip below the blocks' tops at both walls; the loft's ceiling height runs on to the east wall.
-        Face(geometry, "east-ceiling", UnitSheet, UnitEast, LoftCeiling, UnitSouth, EastWall, LoftCeiling + .006f, UnitNorth);
 
         foreach (var (id, z) in new[] { ("east-light-south", 106.0f), ("east-light-middle", 108.8f), ("east-light-north", 111.6f) })
         {
             var light = Copy(id, LampModel, LampPivot, new Vector3(EastLampX, LampY, z));
             light.LightsOn = true;
-            light.LightSwitch = RoomSwitch;
+            light.LightSwitch = "copy:" + EastSwitch;
             // Within this reach the light ends before the outside of the east wall.
             light.LightRange = EastLampRange;
             state.Copies.Add(light);
         }
+        // On Unit 5's south wall at the corner where the walkway leads in, facing north into the room.
+        state.Copies.Add(WallSwitch(EastSwitch, EastFront + .3f, UnitSouth + LiningGap + SwitchProud, 90));
 
-        // The walkway and the east room on a grid of their own, turned like the loft's: tile (x, y) covers world
-        // x 2.75-x/2 .. 3.25-x/2 and z 113.25-y/2 .. 113.75-y/2, from the east wall to the loft's edge.
+        // The walkway and the east room on a grid of their own, on the loft's lines: tile (x, y) covers world
+        // x 2.75-x/2 .. 3.25-x/2 and z 113.3-y/2 .. 113.8-y/2, from the east wall to the loft's edge (x -2.25) and from
+        // the north wall to Unit5's south wall and the walkway's south end (z 103.8).
         var property = new PropertyExtensionDefinition
         {
             Id = EastExtensionId, PropertyCode = "storageunit", GridIndex = 0,
-            GridOrigin = new Vector3(EastWall, UpperY, LoftGridZ),
+            GridOrigin = new Vector3(EastGridX, UpperY, GridZ),
         };
         for (int x = 0; x <= 10; x++)
-            for (int y = 0; y <= 18; y++)
+            for (int y = 0; y <= 19; y++)
                 property.Tiles.Add(new GridCoordinate(x, y));
         property.Bounds.Add(BoundsOf(FacesBack, UpperY - .1f, UnitSouth - .2f, EastWall, LoftCeiling, UnitNorth));
         state.PropertyExtensions.Add(property);
@@ -470,30 +565,73 @@ public static class StorageWorld
     // can walk up the stair into the room.
     private static void Gallery(WorldStateDefinition state, CopyDefinition geometry, int level)
     {
-        // From B's second night the walkway and Unit5 join the volume; the hall below them is Unit 2's and keeps the
-        // world's walking map like Unit 1.
-        float east = level >= 5 ? EastWall : FacesBack;
-        // From C's first night the walkway south of B and Unit4 reach to the hall's south wall.
-        float south = level >= 6 ? SouthEnd - .05f : 95.4f;
         // The sign and the stain were painted on the wall that opens.
         state.Rules.Add(Rule("hall-logo", "Logo (1)", "Storage warehouse", ObjectEffect.Remove,
             BoundsOf(-4.85f, 3.85f, 103.7f, -2.5f, 6.2f, 103.85f)));
         state.Rules.Add(Rule("hall-stain", "Quad", "Decals 0004 (1)", ObjectEffect.Remove,
             BoundsOf(-8.85f, 3.15f, 103.7f, -4.5f, 6.25f, 103.85f)));
-        // A steel beam closes the opening under the block's top and hides the edge of the loft's ceiling.
-        Face(geometry, "gallery-beam", Metal, UnitWest, LoftCeiling - .15f, UnitSouth - .07f, UnitEast, UnitTop, UnitSouth + .07f);
+        // A steel beam closes the opening under the block's top and hides the edge of the loft's ceiling; from B's second
+        // night it runs on over the walkway to Unit5's face.
+        float beamEast = (level >= 5 ? EastFront : UnitEast) - .006f;
+        Face(geometry, "gallery-beam", Metal, UnitWest + .006f, LoftCeiling - .15f, UnitSouth - .07f, beamEast, UnitTop - .012f, UnitSouth + .07f);
+        // A steel cap covers the cut west wall at the opening's west end, 5 mm proud of the beam's sides.
+        Face(geometry, "gallery-west-cap", Metal, UnitWest - .26f, UpperY, UnitSouth - .075f, UnitWest + .02f, UnitTop, UnitSouth + .075f);
+        // A steel post stands at the corner where the opening meets the walkway. It takes in the end of the gallery's
+        // railing and the walkway railing's last post, and its north face lies on the grid's line. Its top stays inside
+        // the beam.
+        Face(geometry, "walkway-corner-post", Metal, UnitEast - .078f, UpperY - .013f, RailEnd.z - .03f, CornerPostEast, UnitTop - WallSkin, GalleryEdge - WallSkin);
         GalleryRail(state, geometry);
 
         foreach (var (id, z) in new[] { ("loft-light-south", 106.0f), ("loft-light-middle", 108.8f), ("loft-light-north", 111.6f) })
         {
             var light = Copy(id, LampModel, LampPivot, new Vector3(-5.5f, LampY, z));
             light.LightsOn = true;
-            light.LightSwitch = RoomSwitch;
+            light.LightSwitch = "copy:" + LoftSwitch;
             // Walls do not stop this light; within this reach it ends before the outside of the west and north walls.
             light.LightRange = LampRange;
             state.Copies.Add(light);
         }
+        // On the west wall just south of the door from the landing; the door swings open against the wall north of it.
+        state.Copies.Add(WallSwitch(LoftSwitch, UnitWest + LiningGap + SwitchProud, WindowSouth - .35f, 180));
 
+        // The loft belongs to the property, so employees reach what stands in it.
+        // Its own grid lies on the loft floor: tile (x, y) covers world x -2.75-x/2 .. -2.25-x/2 and
+        // z 113.3-y/2 .. 113.8-y/2. The tiles fill the loft from the west wall (x -8.75) to the walkway's faces
+        // (x -2.25) and from the north wall to the railing (z 103.8), without the corner the door swings through
+        // (x -8.75 .. -7.25, z 104.8 .. 106.3).
+        var property = new PropertyExtensionDefinition
+        {
+            Id = LoftExtensionId, PropertyCode = "storageunit", GridIndex = 0,
+            GridOrigin = new Vector3(LoftGridX, UpperY, GridZ),
+        };
+        for (int x = 0; x <= 12; x++)
+            for (int y = 0; y <= 19; y++)
+                if (!(x >= 10 && y >= 15 && y <= 17)) property.Tiles.Add(new GridCoordinate(x, y));
+        property.Bounds.Add(BoundsOf(UnitWest, UpperY - .1f, UnitSouth - .2f, FacesBack, LoftCeiling, UnitNorth));
+        state.PropertyExtensions.Add(property);
+    }
+
+    // The stair and the landing are one walking volume with the ground in front of the stair, so the fitter reaches the
+    // landing while the door is cut. From the door's night the loft behind the door joins it.
+    private static void Navigation(WorldStateDefinition state, int level)
+    {
+        if (level < 2)
+        {
+            // The loft is still a closed block; the volume ends at the west wall and holds only the stair and the landing.
+            state.NavigationBounds = BoundsOf(-10.9f, -.5f, 95.4f, UnitWest - .2f, UnitTop, UnitNorth);
+            state.NavigationAgents.AddRange(new[] { "Humanoid", "Ignore Costs", "Employee" });
+            state.NavigationExistingFloor.Add(BoundsOf(-10.9f, -.3f, 95.4f, UnitWest - .2f, .2f, UnitNorth));
+            state.NavigationProbes.Add(new Vector3(-9.84f, 0f, 98.4f));
+            state.NavigationProbes.Add(new Vector3(-9.84f, .91f, 100.5f));
+            state.NavigationProbes.Add(new Vector3(-9.6f, LandingTop, 105.5f));
+            return;
+        }
+        // From B's second night the walkway and Unit5 join the volume; the hall below them is Unit 2's and keeps the
+        // world's walking map like Unit 1.
+        // From B's first night the walkway in front of Unit5 joins it, so the crew reaches its stations there.
+        float east = level >= 5 ? EastWall : level >= 4 ? EastFront : FacesBack;
+        // From C's first night the walkway south of B and Unit4 reach to the hall's south wall.
+        float south = level >= 6 ? SouthEnd - .05f : 95.4f;
         // One volume from the ground in front of the stair to the loft. The stair stands outside the west wall. The
         // ground west of the unit and the hall with Unit 1 keep the world's walking map; ground baked a second time
         // would lie on top of the world's and never join it. The ground box ends below the stair's first step (0.25).
@@ -511,11 +649,8 @@ public static class StorageWorld
         state.NavigationProbes.Add(new Vector3(-3f, UpperY, 112.8f));
         state.NavigationProbes.Add(new Vector3(-5.5f, UpperY, 109f));
         // The walkway through the old wall, then the middle of the east room.
-        if (level >= 5)
-        {
-            state.NavigationProbes.Add(new Vector3(-.9f, UpperY, 109f));
-            state.NavigationProbes.Add(new Vector3(1.75f, UpperY, 109f));
-        }
+        if (level >= 4) state.NavigationProbes.Add(new Vector3(-.9f, UpperY, 109f));
+        if (level >= 5) state.NavigationProbes.Add(new Vector3(1.75f, UpperY, 109f));
         // The walkway beside the elevator, its south end, and the middle of the south room.
         if (level >= 6)
         {
@@ -523,81 +658,75 @@ public static class StorageWorld
             state.NavigationProbes.Add(new Vector3(-.9f, UpperY, 95f));
             state.NavigationProbes.Add(new Vector3(1.75f, UpperY, 97.75f));
         }
-
-        // The loft belongs to the property, so employees reach what stands in it.
-        // Its own grid lies on the loft floor, turned like the unit's grid (180°): tile (x, y) covers world
-        // x -3-x/2 .. -2.5-x/2 and z 113.25-y/2 .. 113.75-y/2. The tiles fill the loft from wall to wall and from the
-        // north wall to the railing, without the corner the door swings through.
-        var property = new PropertyExtensionDefinition
-        {
-            Id = LoftExtensionId, PropertyCode = "storageunit", GridIndex = 0,
-            GridOrigin = new Vector3(LoftGridX, UpperY, LoftGridZ),
-        };
-        for (int x = 0; x <= 11; x++)
-            for (int y = 0; y <= 18; y++)
-                if (!(x >= 10 && y >= 15 && y <= 17)) property.Tiles.Add(new GridCoordinate(x, y));
-        property.Bounds.Add(BoundsOf(UnitWest, UpperY - .1f, UnitSouth - .2f, FacesBack, LoftCeiling, UnitNorth));
-        state.PropertyExtensions.Add(property);
     }
 
-    // The walkway's railing continues along the opening and meets it at its last post. The vanilla piece is 1.9 m long
-    // with a post at each end; the run's last piece lies over the one before it, a few millimetres aside.
+    // The walkway's railing continues along the opening to the corner post. The vanilla piece is 1.9 m long with a post
+    // at each end; each piece after the first leaves out its first post, where the piece before ends, and the run's last
+    // piece lies over the one before it. Every second piece sits a few millimetres aside and above its neighbours, so
+    // the ends that meet or overlap never share a plane. Its unseen wall ends on the grid's line.
     private static void GalleryRail(WorldStateDefinition state, CopyDefinition geometry)
     {
-        const float piece = 1.9f, start = UnitWest + .05f;
-        float end = RailEnd.x, cross = RailEnd.z;
+        const float piece = 1.9f, start = UnitWest + .05f, cross = GalleryRailZ;
+        float end = RailEnd.x;
         int full = (int)((end - start + .001f) / piece);
         float rest = end - start - full * piece;
         bool overlaps = rest > .05f;
         int count = overlaps ? full + 1 : full;
         for (int i = 0; i < count; i++)
         {
-            bool last = i == count - 1;
+            bool last = i == count - 1, aside = i % 2 == 1;
             float from = last ? end - piece : start + i * piece;
-            float side = cross - (last && overlaps ? .004f : 0f);
-            var rail = Copy("gallery-rail-" + i, Fence, FencePost, new Vector3(from, UpperY, side), 90);
-            if (last && overlaps) rail.Exclude.Add("outdoorfence/Post");
-            // The walkway's railing already stands at the run's end.
+            var rail = Copy("gallery-rail-" + i, Fence, FencePost, new Vector3(from, UpperY + (aside ? RailLift : 0f), cross - (aside ? RailLift : 0f)), 90);
+            if (i > 0) rail.Exclude.Add("outdoorfence/Post");
+            // The corner post takes in the run's end.
             if (last) rail.Exclude.Add("outdoorfence/Post.001");
             state.Copies.Add(rail);
         }
         geometry.Boxes.Add(new BoxDefinition
         {
-            Id = "gallery-guard", Kind = BoxKind.Block, Box = BoundsOf(start, UpperY, cross - .07f, end, UpperY + 2.1f, cross + .07f)
+            Id = "gallery-guard", Kind = BoxKind.Block, Box = BoundsOf(start, UpperY, cross - .07f, end, UpperY + GuardHeight, GalleryEdge - WallSkin)
         });
     }
 
     // The ladder from the hall comes up through the walkway's railing over Unit 3. The vanilla piece above it,
-    // "OutdoorFence (1)" from z 99.89 to 101.79, loses its bars and keeps its posts. Two copies of the piece, a few
-    // millimetres behind the vanilla run, put a post beside each rail. A piece holds ten bar spaces of 0.19 m, and the
-    // copies are shifted by whole spaces (one south, five north), so their bars cover the vanilla bars and the opening
-    // runs from post to post at z 100.08 and 100.84. Steel brackets hold the rails to Unit 3's front.
-    private const float BarSpace = .19f, UnitThreeFront = -1.76f;
+    // "OutdoorFence (1)" from z 99.89 to 101.79, loses its bars and keeps its posts. The opening runs from the piece's
+    // south post at z 99.89 to the post of a copy a few millimetres behind the vanilla run, shifted four whole bar
+    // spaces of 0.19 m north so its bars cover the vanilla bars: 1.14 m to climb through. Steel brackets hold the
+    // rails to Unit 3's front and reach round behind them.
+    private const float BarSpace = .19f, UnitThreeFront = -1.76f, LadderSouth = 99.89f;
+    private static readonly float LadderNorth = FencePost.z - 4 * BarSpace;
+    // A copy laid over vanilla rails sits this far above them as well as aside, so their flat faces never share a plane.
+    // The fence's bar billboards lie 6 mm outside its crossbeams and a post's faces 13 mm outside them, so the step
+    // keeps clear of 0, 6 and 13 mm.
+    private const float RailLift = .020f;
     private static readonly float[] BracketHeights = { 1.0f, 2.3f };
 
     private static void LadderOpening(WorldStateDefinition state, CopyDefinition geometry)
     {
-        const float piece = 1.9f, vanillaSouth = 99.89f;
-        float x = FencePost.x + .004f, south = vanillaSouth + BarSpace, north = FencePost.z - 5 * BarSpace;
+        const float vanillaSouth = LadderSouth;
+        // The copy's bars line up with the vanilla piece north of it, which it overlaps; it also steps north, so the
+        // bars' sides never share a plane.
+        float x = FencePost.x + RailLift, north = LadderNorth + RailLift;
         state.Rules.Add(Rule("ladder-rail-bars", "OutdoorFence (1)", "Storage warehouse", ObjectEffect.Remove,
             BoundsOf(FencePost.x - .1f, UpperY + .05f, vanillaSouth + .07f, FencePost.x + .1f, UpperY + 2.1f, FencePost.z - .07f)));
-        // South of the opening the copy ends in its far post; north of it the copy starts with its own post.
-        var southRail = Copy("ladder-rail-south", Fence, FencePost, new Vector3(x, UpperY, south - piece));
-        southRail.Exclude.Add("outdoorfence/Post");
-        state.Copies.Add(southRail);
-        var northRail = Copy("ladder-rail-north", Fence, FencePost, new Vector3(x, UpperY, north));
+        // North of the opening the copy starts with its own post.
+        var northRail = Copy("ladder-rail-north", Fence, FencePost, new Vector3(x, UpperY + RailLift, north));
         northRail.Exclude.Add("outdoorfence/Post.001");
         state.Copies.Add(northRail);
-        // The copies carry no collider; unseen walls take the place of the vanilla bars beside the opening.
-        foreach (var (id, from, to) in new[] { ("ladder-rail-guard-south", vanillaSouth, south), ("ladder-rail-guard-north", north, FencePost.z) })
-            geometry.Boxes.Add(new BoxDefinition
-            {
-                Id = id, Kind = BoxKind.Block, Box = BoundsOf(FencePost.x - .07f, UpperY, from, FencePost.x + .07f, UpperY + 2.1f, to)
-            });
+        // The copy carries no collider; an unseen wall takes the place of the vanilla bars north of the opening.
+        geometry.Boxes.Add(new BoxDefinition
+        {
+            Id = "ladder-rail-guard-north", Kind = BoxKind.Block,
+            Box = BoundsOf(FencePost.x - .07f, UpperY, north, FencePost.x + .07f, UpperY + GuardHeight, FencePost.z)
+        });
         foreach (float z in new[] { StorageLadder.SouthRail, StorageLadder.NorthRail })
             foreach (float y in BracketHeights)
-                Face(geometry, "ladder-bracket-" + Mathf.RoundToInt(z * 100) + "-" + Mathf.RoundToInt(y * 10), Metal,
-                    StorageLadder.BackX - .02f, y, z - .02f, UnitThreeFront, y + .05f, z + .02f);
+            {
+                string id = Mathf.RoundToInt(z * 100) + "-" + Mathf.RoundToInt(y * 10);
+                Face(geometry, "ladder-bracket-" + id, Metal, StorageLadder.BackX - .22f, y - .006f, z - .02f, UnitThreeFront - .006f, y + .056f, z + .02f);
+                // A plate on Unit 3's front carries each bracket, so it reads as bolted to the wall.
+                Face(geometry, "ladder-bracket-plate-" + id, Metal, UnitThreeFront - .02f, y - .04f, z - .07f, UnitThreeFront, y + .09f, z + .07f);
+            }
     }
 
     // Night 2: a door breaks through the upper west wall onto the landing, and the four small units above Unit 1 become
@@ -616,9 +745,10 @@ public static class StorageWorld
         // (z 103.80) and in front of the lining (103.81).
         if (level < 3)
         {
-            Face(geometry, "unit-face-hall", UnitSheet, UnitWest, UpperY, UnitSouth + .002f, UnitEast, UnitTop, UnitSouth + .008f);
-            // The hidden skin carried a dark green band along the bottom of this face, under the hall sign.
-            Face(geometry, "unit-face-hall-band", "alum sheet dark green", UnitWest, UpperY, UnitSouth - .002f, UnitEast, UpperY + .7f, UnitSouth + .001f);
+            Face(geometry, "unit-face-hall", UnitSheet, UnitWest, UpperY, UnitSouth + .002f, UnitEast - .006f, UnitTop, UnitSouth + .008f);
+            // The hidden skin carried a dark green band along the bottom of this face, under the hall sign. It lies in
+            // front of the decals' plane.
+            Face(geometry, "unit-face-hall-band", "alum sheet dark green", UnitWest, UpperY, UnitSouth - .008f, UnitEast, UpperY + .7f, UnitSouth - .004f);
         }
         // The hall's roof trusses run through the block; inside it they would stand in the room. From B's second night
         // their braces at the east wall would stand in the east room. All trusses are one renderer, which a state cuts
@@ -633,9 +763,9 @@ public static class StorageWorld
         var room = Rule("unit-room", "Unit6", "Storage warehouse", ObjectEffect.Hollow, units);
         room.Openings.Add(DoorCut);
         // Night 3 opens the south wall from the floor to the loft's ceiling, between the west wall and the walkway's faces.
-        if (level >= 3) room.Openings.Add(BoundsOf(UnitWest + .01f, UpperY, UnitSouth - .1f, FacesBack, LoftCeiling, UnitSouth + .1f));
+        if (level >= 3) room.Openings.Add(BoundsOf(UnitWest + .01f, UpperY, UnitSouth - .1f, FacesBack, LoftCeiling + .02f, UnitSouth + .1f));
         // B's first night opens the east wall to the walkway along its whole length.
-        if (level >= 4) room.Openings.Add(BoundsOf(UnitEast - .1f, UpperY, UnitSouth + .01f, UnitEast + .1f, LoftCeiling, UnitNorth - .01f));
+        if (level >= 4) room.Openings.Add(BoundsOf(UnitEast - .1f, UpperY, UnitSouth + .01f, UnitEast + .1f, LoftCeiling + .02f, UnitNorth - .01f));
         room.Bands.Add((0f, UnitSheet));
         room.CeilingMaterial = UnitSheet;
         room.FloorMaterial = FloorSheet;
@@ -644,25 +774,44 @@ public static class StorageWorld
         state.Rules.Add(Rule("door-grate", "Grate (2)", "Storage warehouse", ObjectEffect.Remove,
             BoundsOf(-9.05f, 3.6f, 104.8f, -8.9f, 5.7f, 106.15f)));
         // The walkway's unit faces with their roller doors reach 0.2 m into the block; a sheet inside covers their backs.
-        if (level < 4) Face(geometry, "unit-face-walkway", UnitSheet, FacesBack - .006f, UpperY, UnitSouth, FacesBack - .002f, LoftCeiling, UnitNorth);
+        if (level < 4) Solid(geometry, "unit-face-walkway", UnitSheet, FacesBack - .006f, UpperY, UnitSouth + .012f, FacesBack - .002f, LoftCeiling, UnitNorth);
         // The roof's eave dips below the block's top at the west wall; a lower ceiling keeps it out of the room.
-        Face(geometry, "loft-ceiling", UnitSheet, UnitWest, LoftCeiling, UnitSouth, UnitEast, LoftCeiling + .006f, UnitNorth);
+        // From B's second night one panel runs on over the walkway and Unit5 to the east wall, without a seam. Its
+        // edges stop short of the walls' faces.
+        float ceilingEast = level >= 5 ? EastWall - .006f : UnitEast - .012f;
+        Face(geometry, "loft-ceiling", UnitSheet, UnitWest, LoftCeiling, UnitSouth + .01f, ceilingEast, LoftCeiling + .006f, UnitNorth - .01f);
         // Rust decals on Unit 1's walls below reach up through the loft floor; only the part above the floor goes.
         state.Rules.Add(Rule("rust-east", "Quad", "Big rust 2", ObjectEffect.Cut, BoundsOf(-3.8f, UpperY - .1f, 107.4f, -3.7f, 3.8f, 114.3f)));
         state.Rules.Add(Rule("rust-west", "Quad", "Big rust 1", ObjectEffect.Cut, BoundsOf(-8.8f, UpperY - .1f, 107.9f, -8.7f, 3.5f, 114.1f)));
 
         // Steel reveals line the cut through the brick, the inner leaf and the units' skin.
-        const float outside = -9.26f, inside = UnitWest + .01f;
-        Solid(geometry, "door-jamb-south", Metal, outside, DoorSill, WindowSouth - .02f, inside, DoorHead, DoorSouth);
-        Solid(geometry, "door-jamb-north", Metal, outside, DoorSill, DoorNorth, inside, DoorHead, WindowNorth + .02f);
-        Face(geometry, "door-head", Metal, outside, DoorHead, WindowSouth - .02f, inside, DoorHead + .02f, WindowNorth + .02f);
-        Face(geometry, "door-sill", Metal, outside, DoorSill - .02f, WindowSouth, inside, DoorSill, WindowNorth);
+        // The head and the sill reach a few millimetres over the jambs' ends and sides, the transom stops a few
+        // millimetres inside the jambs' faces and runs into them, and the jambs end inside the casing, so no two faces
+        // lie in one plane.
+        const float outside = -9.26f, inside = UnitWest + LiningGap + .005f;
+        // The jambs' feet sink into the sill, below the copied door's threshold at the sill's line.
+        Solid(geometry, "door-jamb-south", Metal, outside, DoorSill - .006f, WindowSouth - .02f, inside, DoorHead, DoorSouth);
+        Solid(geometry, "door-jamb-north", Metal, outside, DoorSill - .006f, DoorNorth, inside, DoorHead, WindowNorth + .02f);
+        Face(geometry, "door-head", Metal, outside - .006f, DoorHead - .006f, WindowSouth - .026f, inside + .006f, DoorHead + .02f, WindowNorth + .026f);
+        Face(geometry, "door-sill", Metal, outside - .006f, DoorSill - .02f, WindowSouth, inside + .006f, DoorSill + .003f, WindowNorth);
+        // The copied leaf is 2.10 m tall, the cut 2.34 m; a steel transom closes the gap above the leaf.
+        Solid(geometry, "door-transom", Metal, outside + .006f, DoorSill + DoorLeafHeight, DoorSouth - .006f, inside - .006f, DoorHead - .006f, DoorNorth + .006f);
+        // A steel casing, 6 cm wide, frames the opening on the face of the room and on the brick outside.
+        foreach (var (side, from, to) in new[] { ("inside", UnitWest + LiningGap + .002f, UnitWest + LiningGap + .022f), ("outside", outside - .02f, outside) })
+        {
+            Face(geometry, "door-casing-" + side + "-south", Metal, from, DoorSill, WindowSouth - .08f, to, DoorHead + .06f, WindowSouth - .02f);
+            Face(geometry, "door-casing-" + side + "-north", Metal, from, DoorSill, WindowNorth + .02f, to, DoorHead + .06f, WindowNorth + .08f);
+            Face(geometry, "door-casing-" + side + "-head", Metal, from, DoorHead, WindowSouth - .02f, to, DoorHead + .06f, WindowNorth + .02f);
+        }
 
-        // The Storage Unit's own green door leaf stands open into the room, hinged on the north jamb.
-        var hinge = new Vector3(UnitWest + .01f, UpperY + .01f, DoorNorth - .05f);
-        state.Copies.Add(Copy("door-leaf", DoorLeaf, DoorHinge, hinge));
-        state.Copies.Add(Copy("door-handle", DoorHandle, DoorHinge, hinge));
-        Block(geometry, "door-leaf-collision", hinge.x, UpperY, DoorNorth - .09f, hinge.x + 1.06f, UpperY + 2.11f, DoorNorth - .01f);
+        // A working copy of the Storage Unit's own green door, networked like the original so it opens for everyone.
+        // Its leaf stands in the middle of the wall, hinged at the north jamb; turned by 90° it runs south and its
+        // inside faces the loft. It stands on the sill; its 2 m frame sits inside the brick around the cut.
+        var hinge = new Vector3((outside + UnitWest) / 2f, DoorSill, DoorNorth - DoorGap);
+        var door = Copy("loft-door", DoorRoot, DoorHinge, hinge, 90);
+        door.VisualOnly = false;
+        door.IndependentMesh = false;
+        state.Copies.Add(door);
     }
 
     private static ObjectRule Rule(string id, string name, string parent, ObjectEffect effect, Bounds area) => new()
@@ -680,29 +829,38 @@ public static class StorageWorld
         var target = new Vector3(-9.84f, LandingTop - StairDrop, LandingSouth + StairInto);
         state.Copies.Add(Copy("west-stair", Stair, StairTop, target, StairYaw, StairScale));
         StairRail(state, geometry);
-        Solid(geometry, "landing", Metal, LandingWest, LandingBottom, LandingSouth, LandingEast, LandingTop, LandingNorth);
+        // The deck reaches into the brick, so its top never meets the wall's face in one edge. Its top lies 6 mm under the
+        // ledge's along the wall, which ends at the same height, and its bottom 6 mm under the posts' tops.
+        Solid(geometry, "landing", Metal, LandingWest, LandingBottom - .006f, LandingSouth, LandingEast + .06f, LandingDeck, LandingNorth);
         // The top tread ends 2.5 cm short of the landing, a riser's height below the deck. A kick plate between the
         // stringers closes that slit and the open riser up to the deck, for the eye and for the walking map, which the
         // slit would split.
         float tread = LandingTop - StairDrop - .242f;
         Solid(geometry, "landing-riser", Metal, -10.49f, tread - .01f, LandingSouth - .03f, -9.19f, LandingBottom, LandingSouth);
         // The docks stair stands on a raised floor: its lowest tread lies 0.40 above the grass, two of its 0.20 m rises.
-        // One more tread of the same size, a going of 0.29 in front of it, makes the step up from the ground even. It
-        // sits between the stringers' feet, which reach the grass at z 99.35.
-        Solid(geometry, "stair-first-tread", FloorSheet, -10.395f, FirstTread - .05f, 99.377f, -9.285f, FirstTread, 99.677f);
+        // One more tread, a going of 0.29 in front of it, makes the step up from the ground even. It is steel like the
+        // stair and spans from stringer to stringer, a few millimetres into each.
+        Solid(geometry, "stair-first-tread", Metal, -10.493f, FirstTread - .075f, 99.585f, -9.187f, FirstTread, 99.935f);
+        // The stringers' feet are cut on a slant and open at the cut. A steel shoe closes each foot down into the grass,
+        // a few millimetres wider than the stringer and just under the top of the cut.
+        Solid(geometry, "stair-stringer-foot-west", Metal, -10.595f, -.02f, 99.519f, -10.485f, .233f, 99.65f);
+        Solid(geometry, "stair-stringer-foot-east", Metal, -9.195f, -.02f, 99.519f, -9.085f, .233f, 99.65f);
         // Two posts carry the landing's open corners; the shipping container stands under its north half.
         Post(geometry, "landing-post-sw", LandingWest + .04f, LandingSouth + .04f, 0f, LandingBottom);
         Post(geometry, "landing-post-se", LandingEast - .06f, LandingSouth + .04f, 0f, LandingBottom);
         // A railing on the open west and north edges; the stair comes up on the south edge, the wall closes the east.
-        Railing(geometry, "landing-west", false, LandingWest + .03f, LandingSouth, LandingNorth);
-        Railing(geometry, "landing-north", true, LandingNorth - .03f, LandingWest, LandingEast);
+        // The west railing's last post stands on the north railing's line and its rails end inside the north rails;
+        // the north railing starts inside the west railing's rails, without a first post of its own. The west railing
+        // starts 1 cm north of the deck's south face, so its first post never shares that face's plane.
+        Railing(geometry, "landing-west", false, LandingRail, LandingSouth + .01f, LandingNorth - .005f, railEnd: .012f);
+        Railing(geometry, "landing-north", true, LandingNorth - .03f, LandingRail - .015f, LandingEast, firstPost: false);
     }
 
     // The game has no sloped railing at this pitch, so the landing's railing runs on down the stair's open west side:
     // upright posts, and rails in copies tilted to the slope of the nosings. They meet the landing's railing at its corner.
     private static void StairRail(WorldStateDefinition state, CopyDefinition geometry)
     {
-        const float half = .025f, cross = LandingWest + .03f, top = LandingSouth + StairInto, foot = top - StairRun;
+        const float half = .025f, cross = LandingRail, top = LandingSouth + StairInto, foot = top - StairRun;
         float Nosing(float z) => LandingTop - StairDrop - (top - z) * StairRise / StairRun;
         foreach (float z in new[] { foot + .05f, foot + 1.85f, foot + 3.65f })
             Face(geometry, "stair-rail-post-" + Mathf.RoundToInt(z * 10), Metal, cross - half, Nosing(z) - .3f, z - half, cross + half, Nosing(z) + 1.05f, z + half);
@@ -716,7 +874,8 @@ public static class StorageWorld
                 Id = "stair-rail-" + name, Template = Anchor, Frame = Anchor, OwnMesh = false, Obstacle = false,
                 At = new LocalPoint(new Vector3(cross, Nosing(foot) + above, foot), 0), Tilt = new Vector3(-slope, 0, 0)
             };
-            Face(rail, "bar", Metal, AnchorPoint.x - .02f, AnchorPoint.y - .02f, AnchorPoint.z, AnchorPoint.x + .02f, AnchorPoint.y + .02f, AnchorPoint.z + length);
+            // A little slimmer than the landing's rails, so where the two meet their sides never share a plane.
+            Face(rail, "bar", Metal, AnchorPoint.x - .015f, AnchorPoint.y - .015f, AnchorPoint.z, AnchorPoint.x + .015f, AnchorPoint.y + .015f, AnchorPoint.z + length);
             // The rails are drawn without colliders; an unseen wall along the top rail keeps a jump from carrying over it.
             if (name == "top")
                 rail.Boxes.Add(new BoxDefinition
@@ -738,19 +897,24 @@ public static class StorageWorld
         state.Copies.Add(soffit);
     }
 
-    private static void Railing(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end)
+    private static void Railing(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end, bool firstPost = true,
+        float railEnd = .005f)
     {
         const float half = .025f;
         int posts = Math.Max(2, (int)Math.Ceiling((end - start) / 1.2f) + 1);
-        for (int i = 0; i < posts; i++)
+        // The posts stand in the deck, whose top lies below the walking height.
+        for (int i = firstPost ? 0 : 1; i < posts; i++)
         {
             float at = Mathf.Lerp(start + half, end - half, i / (float)(posts - 1));
-            if (alongX) Face(geometry, id + "-post-" + i, Metal, at - half, LandingTop, cross - half, at + half, RailTop, cross + half);
-            else Face(geometry, id + "-post-" + i, Metal, cross - half, LandingTop, at - half, cross + half, RailTop, at + half);
+            if (alongX) Face(geometry, id + "-post-" + i, Metal, at - half, LandingTop - .02f, cross - half, at + half, RailTop - .005f, cross + half);
+            else Face(geometry, id + "-post-" + i, Metal, cross - half, LandingTop - .02f, at - half, cross + half, RailTop - .005f, at + half);
         }
-        foreach (var (name, y) in new[] { ("top", RailTop - .04f), ("middle", LandingTop + .5f) })
-            if (alongX) Face(geometry, id + "-rail-" + name, Metal, start, y, cross - .02f, end, y + .04f, cross + .02f);
-            else Face(geometry, id + "-rail-" + name, Metal, cross - .02f, y, start, cross + .02f, y + .04f, end);
+        // The rails end inside the end posts and stand over the posts' tops; where two railings meet at a corner, the
+        // one along x lies 6 mm higher, so their rails cross without sharing a face.
+        float lift = alongX ? .006f : 0f;
+        foreach (var (name, y) in new[] { ("top", RailTop - .04f + lift), ("middle", LandingTop + .5f + lift) })
+            if (alongX) Face(geometry, id + "-rail-" + name, Metal, start + railEnd, y, cross - .02f, end - railEnd, y + .04f, cross + .02f);
+            else Face(geometry, id + "-rail-" + name, Metal, cross - .02f, y, start + railEnd, cross + .02f, y + .04f, end - railEnd);
         // The railing is drawn without colliders; an invisible wall to head height keeps a jump from carrying over it.
         geometry.Boxes.Add(new BoxDefinition
         {
@@ -769,6 +933,18 @@ public static class StorageWorld
         At = new LocalPoint(targetPivot - Quaternion.Euler(0, yaw, 0) * Quaternion.Euler(tilt) * (scale * (sourcePivot - FramePivot)), yaw),
         IndependentMesh = true, VisualOnly = true, Obstacle = false
     };
+
+    // The vanilla switch's pivot is its plate's front face; Unit 1's plate stands 4 cm proud of the wall and reaches 1 cm
+    // into it. A copy stands a little closer to its wall, so the plate's back stays clear of the wall's back face.
+    private const float SwitchProud = .034f;
+
+    private static CopyDefinition WallSwitch(string id, float x, float z, float yaw)
+    {
+        var copy = Copy(id, RoomSwitch, SwitchPivot, new Vector3(x, UpperY + SwitchHeight, z), yaw);
+        copy.VisualOnly = false;
+        copy.IndependentMesh = false;
+        return copy;
+    }
 
     private static void Post(CopyDefinition copy, string id, float x, float z, float bottom, float top) =>
         Solid(copy, id, Metal, x - .06f, bottom, z - .06f, x + .06f, top, z + .06f);
