@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n>";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -180,6 +180,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     break;
                 case "fixtures":
                     Fixtures();
+                    break;
+                case "equip":
+                    EquippedHandlers();
                     break;
                 default:
                     throw new ArgumentException(ExampleUsage);
@@ -527,6 +530,41 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             }
         }
         Mod.Log("baseddiag walk: route finished.");
+    }
+
+    // Every equipped item handler in the scene with its user, data and network object. A handler whose synced user is
+    // null throws a NullReferenceException in its Update every frame on this peer.
+    private static void EquippedHandlers()
+    {
+        var handlers = UnityEngine.Object.FindObjectsOfType<Il2CppScheduleOne.Equipping.EquippedItemHandler>(true);
+        int missing = 0;
+        foreach (var handler in handlers)
+        {
+            string user, data, net;
+            try
+            {
+                var raw = handler._user;
+                var component = raw == null ? null : ((Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase)(object)raw).TryCast<Component>();
+                user = raw == null ? "null" : component != null ? PathOf(component.transform) : "not a component";
+                if (raw == null) missing++;
+            }
+            catch (Exception error) { user = "unreadable (" + error.GetType().Name + ")"; }
+            try { data = handler._equippableData == null ? "null" : handler._equippableData.name; }
+            catch (Exception error) { data = "unreadable (" + error.GetType().Name + ")"; }
+            try { net = "object " + handler.ObjectId + ", spawned " + handler.IsSpawned + ", server " + handler.IsServer; }
+            catch (Exception error) { net = "unreadable (" + error.GetType().Name + ")"; }
+            Mod.Log("baseddiag equip: '" + PathOf(handler.transform) + "' active " + handler.gameObject.activeInHierarchy
+                    + ", equipped " + handler.IsEquipped + ", user " + user + ", data " + data + ", " + net + ".");
+        }
+        Mod.Log("baseddiag equip: " + handlers.Length + " handler(s), " + missing + " without a user.");
+    }
+
+    private static string PathOf(Transform transform)
+    {
+        var parts = new List<string>();
+        for (var t = transform; t != null; t = t.parent) parts.Add(t.name);
+        parts.Reverse();
+        return string.Join("/", parts);
     }
 
     private static void LitterCounts(string? upgradeId)
