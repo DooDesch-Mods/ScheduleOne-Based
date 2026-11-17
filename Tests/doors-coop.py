@@ -54,9 +54,9 @@ def state(game, door, timeout=8):
         line = command(game, "baseddiag door %s state" % door[0], pattern, 5)
         m = re.search(pattern, line or "")
         if m and m.group(3):
-            is_open, value = m.group(1) == "open", float(m.group(8))
-            where = (float(m.group(4)), float(m.group(5)), float(m.group(6)))
-            if m.group(7) == "angle":
+            is_open, value = m.group(1) == "open", float(m.group(7))
+            where = (float(m.group(3)), float(m.group(4)), float(m.group(5)))
+            if m.group(6) == "angle":
                 settled = angle is not None and abs(value - angle) < 0.5
                 angle = value
                 progress = (1.0 if abs(value) > 1 else 0.0) if settled else 0.5

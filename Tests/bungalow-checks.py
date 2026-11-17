@@ -76,7 +76,16 @@ def wall_strip(line):
     """The sunroom's slab runs on from the west room's last grid line at x -176.5 to the house wall at -176.17, where the
     house's own grid has no tile; this strip under the wall is the one floor edge allowed off the lines."""
     return ("edge at (-176.500," in line and "out (1.000," in line and "based_bungalow_sunroom" in line
-            and "slab-collision" in line and "goes on past" in line)
+            and "slab-collision" in line and "goes on past" in line) or door_balcony(line)
+
+
+def door_balcony(line):
+    """The upper sliding door stands in the west wall between z 110.25 and 112.55; the west edge in that doorway sees
+    the closed door's glass 8 cm out, as the house's own door sits below, or with the door open the French balcony's
+    guard 18 cm outside the door, which is the edge a player walks out to."""
+    m = re.search(r"edge at \(-176\.000,[-\d.]+,([\d.]+)\) out \(-1\.000", line)
+    return bool(m) and 110.25 < float(m.group(1)) < 112.55 and (
+        "door-balcony-guard" in line or "Sliding Glass Door/Sliding glass door" in line)
 
 
 def grids(run, pick, label):

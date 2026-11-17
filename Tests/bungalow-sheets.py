@@ -60,8 +60,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--slot", default="mptest")
     ap.add_argument("--only", default="", help="comma-separated build letters, e.g. F or B,F")
+    ap.add_argument("--stage", default="", help="comma-separated stages to shoot, e.g. storey-roof; all when empty")
+    ap.add_argument("--views", default="", help="comma-separated views to shoot again; the sheet keeps the other views' "
+                                                 "earlier shots")
     a = ap.parse_args()
     only = [x for x in a.only.split(",") if x]
+    stages = [x for x in a.stage.split(",") if x]
     FINAL.mkdir(parents=True, exist_ok=True)
     failed = 0
     ok, out = console(a.slot, "baseddiag site=bungalow phase complete")
@@ -71,6 +75,9 @@ def main():
         if only and letter not in only:
             continue
         for step, phase in enumerate(phases):
+            # Each phase command sets the stage outright, so one stage can be shot again on its own.
+            if stages and phase not in stages:
+                continue
             if phase == "vanilla":
                 ok, out = console(a.slot, "baseddiag site=bungalow phase rights " + suffix)
             else:
@@ -96,7 +103,8 @@ def main():
                 for attempt in range(2):
                     close_dialogue(a.slot)
                     proc = subprocess.run([sys.executable, str(HERE / "bungalow-shots.py"), "--build", build, "--slot",
-                                           a.slot, "--label", label, "--time", hhmm], capture_output=True, text=True)
+                                           a.slot, "--label", label, "--time", hhmm] +
+                                          (["--views", a.views] if a.views else []), capture_output=True, text=True)
                     if not close_dialogue(a.slot):
                         break
                     print("NOTE %s %s: a customer dialogue covered the shots, attempt %d" % (letter, phase, attempt + 1))

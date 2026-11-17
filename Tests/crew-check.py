@@ -55,17 +55,28 @@ def diagnostics(slot, site):
     return out, workers
 
 
-def wait_for_work(slot, site, expected, want_tool, seconds=60):
-    """Polls until every expected worker is visible at its anchor and enough of them swing."""
+def wait_for_work(slot, site, expected, want_tool, seconds=60, standing=False):
+    """Polls until every expected worker is visible and enough of them swing. With standing, each visible worker is
+    judged by his latest reading at his station: workers who walk between two stations rarely all stand at once, so the
+    readings are gathered per worker, and a hammering one is kept over one that has just arrived."""
     deadline = time.time() + seconds
-    workers = []
+    workers, best = [], {}
     while time.time() < deadline:
         _, workers = diagnostics(slot, site)
         visible = [w for w in workers if w.get("visible")]
-        swinging = [w for w in workers if w.get("hammering")]
-        if len(visible) == expected and len(swinging) >= want_tool:
-            return workers
+        if not standing:
+            if len(visible) == expected and sum(1 for w in workers if w.get("hammering")) >= want_tool:
+                return workers
+        else:
+            for w in visible:
+                if w.get("atAnchor") is True and (w.get("hammering") or not best.get(w["id"], {}).get("hammering")):
+                    best[w["id"]] = w
+            ready = [best[w["id"]] for w in visible if w["id"] in best]
+            if len(visible) == expected and len(ready) == expected and sum(1 for w in ready if w.get("hammering")) >= want_tool:
+                return ready
         time.sleep(5)
+    if standing:
+        return [best.get(w["id"], w) for w in workers]
     return workers
 
 
@@ -119,7 +130,7 @@ def storey(slot):
         check(f"storey {name}", "ray.bungalow-storey" in out, out.strip()[-300:])
         code, out = s1(slot, "time", "1000")
         check("time 1000", code == 0, out.strip()[-200:])
-        workers = [w for w in wait_for_work(slot, "bungalow", expected, 1) if w.get("visible")]
+        workers = [w for w in wait_for_work(slot, "bungalow", expected, 1, seconds=90, standing=True) if w.get("visible")]
         ids = sorted(str(w.get("id", "")) for w in workers)
         check(f"{expected} workers on the storey {name}", len(workers) == expected, ", ".join(ids) or "none visible")
         check(f"storey {name} foreman on the job", any("foreman" in i for i in ids), ", ".join(ids))

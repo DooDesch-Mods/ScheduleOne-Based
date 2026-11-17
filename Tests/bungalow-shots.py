@@ -80,10 +80,27 @@ VIEWS = {
         "site": ["--eye", "-157.8", "-2.2", "112.5", "--target", "-162.2", "-3.4", "118.5"],
         # The timber stock and the barrels north of the house.
         "stock": ["--eye", "-159.2", "-2.4", "125.6", "--target", "-162.6", "-3.5", "122.4"],
-        # The fitter's two welds: the stair's foot post and the landing's south post.
-        "weld": ["--eye", "-164.5", "-2.3", "107.2", "--target", "-165.5", "-3", "111.4"],
+        # The fitter's weld at the stair's foot post from the pavement, away from a car parked on the loading dock.
+        # Tests/crew-shots.py photographs him at whichever post he works.
+        "weld": ["--eye", "-159.6", "-2.5", "110.2", "--target", "-162.4", "-3.2", "111.3"],
         # The balcony and its canopy from below, from the porch.
         "under-balcony": ["--eye", "-164.9", "-3.1", "114.6", "--target", "-167.5", "-0.9", "113.4"],
+        # The landing from below, west of the loading dock where a parked car would hide it.
+        "under-landing": ["--eye", "-168.3", "-3.3", "109.2", "--target", "-169.1", "-0.9", "112.1"],
+        # Upward from the upper west room and from the balcony: the ceiling, or the sky before the roof goes on.
+        "ceiling": ["--eye", "-173", "0.6", "113", "--target", "-173", "3.6", "116.5"],
+        "balcony-up": ["--eye", "-166.5", "0.5", "113.8", "--target", "-166.5", "3.5", "116"],
+        # Close views of the east and north fronts and the east corners from eye height on the ground: corner posts,
+        # windows and the band between the floors, where the far views above lose the house behind pines.
+        "east-front": ["--eye", "-156.5", "-1.2", "117.5", "--target", "-164", "-0.5", "117.5", "--fov", "70"],
+        "north-front": ["--eye", "-170", "-1.0", "125.5", "--target", "-170", "-0.3", "121.2", "--fov", "70"],
+        "corner-ne": ["--eye", "-158.5", "-1.2", "128", "--target", "-164.5", "-0.2", "121.2"],
+        "corner-se": ["--eye", "-158.5", "-1.2", "104.5", "--target", "-164.5", "-0.2", "109.6"],
+        # Pines stand around the west corners and close to the north wall, so the west front is shot between two
+        # pines from the gravel, and the north and west fronts once more from above the treetops.
+        "west-front": ["--eye", "-185", "-1.5", "109", "--target", "-175.5", "0.0", "114", "--fov", "70"],
+        "north-high": ["--eye", "-170", "6", "133", "--target", "-170", "-0.5", "118", "--fov", "70"],
+        "west-high": ["--eye", "-190", "6", "115", "--target", "-175", "-0.5", "115", "--fov", "70"],
     },
 }
 
@@ -126,7 +143,12 @@ def main():
     print(("PASS" if code == 0 else "FAIL") + f" time {a.time}" + ("" if code == 0 else ": " + out.strip()[-300:]))
     failed = code != 0
     for name in (a.views.split(",") if a.views else list(views)):
-        code, out = s1(a.slot, "cam", "shot", *views[name], "--hud", "hide", "--settle", "20")
+        # A hitch while the game streams the new view can outlast the bridge's wait; that shot is taken once more.
+        for attempt in range(2):
+            code, out = s1(a.slot, "cam", "shot", *views[name], "--hud", "hide", "--settle", "20")
+            if "did not finish" not in out:
+                break
+            print(f"NOTE {name}: the game did not answer in time, attempt {attempt + 1}")
         path = None
         try:
             path = json.loads(out[out.index("{"):]).get("path")
