@@ -1,0 +1,7 @@
+# Based-specific log lines that are expected in a test slot, on top of Workspace/tools/checks/logscan-allow.txt.
+# One regex per line; the comment above each says why it is harmless.
+
+# The debug delivery dock is a dev-only fixture; it gets its At once a delivery is ordered, which a test run never does.
+validate: 'based_debug_delivery_dock' .* has no At yet
+# Bungalow extension tiles sit beside the property's heatmap on purpose (the carport and the slope terrace).
+property extension: tile .* lies outside the heatmap of 'bungalow'
