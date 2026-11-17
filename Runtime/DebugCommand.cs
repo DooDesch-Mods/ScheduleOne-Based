@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate | gridedges [code] | zfight [filter] [x y z radius]";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -198,6 +198,17 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     break;
                 case "loadstate":
                     StaffTrack.LoadState();
+                    break;
+                case "gridedges":
+                    // gridedges <property code> = every outer grid edge against the walls and floor ends there
+                    BuildChecks.GridEdges(args.Count > 1 ? args[1] : _site.PropertyName.ToLowerInvariant());
+                    break;
+                case "zfight":
+                    // zfight <path filter> [x y z radius] = faces of two parts in one plane
+                    var at = args.Count > 5
+                        ? new Vector3(float.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture), float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture), float.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture))
+                        : new Vector3(-176f, -2f, 113f);
+                    BuildChecks.ZFight(args.Count > 1 ? args[1] : "based_", at, args.Count > 5 ? float.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) : 24f);
                     break;
                 default:
                     throw new ArgumentException(ExampleUsage);
