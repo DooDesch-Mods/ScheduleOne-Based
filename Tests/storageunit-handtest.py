@@ -14,6 +14,9 @@ Groups (--only, comma separated, default all):
   lights  level 7 at 23:00: every ceiling bar's spot light is on with at least the house bars' reach (6) and Unit 1's
           intensity (2) and goes out with its switch; each room's floor gains at least 70 % of the light Unit 1's own bar gives its floor (same camera,
           linear on/off ratio); the loft bars do not light Unit 1's floor through the loft floor.
+  leak    level 7 at 23:00: with all copy bars on against all off, the outside faces of the east, south, west and north
+          walls at the upper rooms' floor, Unit 2 and Unit 3 below the rooms and the hall floor in front of Unit 3 stay
+          as dark in the middle of each view (linear ratio, or under one 8-bit step).
   staff   rooms finished one by one: every place for an employee has a spot of its own.
 
 Prints PASS/FAIL per check and writes the views to OUT.
@@ -115,6 +118,25 @@ VANILLA_LIGHT = ("unit1", "-4.62 1.3 104.78", (-6.52, 107.23), 0.1, (-8.0, 0.1, 
 VANILLA_SHARE = .7
 # Unit 1's floor with its own bar off may get at most this much brighter from the loft bars above it.
 LEAK_RATIO = 1.15
+# Views of the rooms' outside faces and of the rooms below them (name, eye, target). The bars hang at y 6 and point
+# down, so their cone meets an outer wall lowest, at the upper rooms' floor (y 3.25 to 4); the views look there, at the
+# point of the wall nearest a bar. Outside: the east wall (x 3.51) of the east and south rooms, the south wall (z 93.5),
+# the loft's west wall (x -9.01), the north wall (z 114) of the loft and the east room. Below: Unit 2 under the east
+# room, Unit 3 under the south room, the hall floor in front of Unit 3.
+LEAK_VIEWS = [
+    ("east-wall-east-room", (8.5, 3.6, 108.8), (3.51, 3.6, 108.8)),
+    ("east-wall-south-room", (8.5, 3.6, 96.0), (3.51, 3.6, 96.0)),
+    ("south-wall", (1.1, 3.6, 88.5), (1.1, 3.6, 93.5)),
+    ("loft-west-wall", (-14.0, 3.6, 108.8), (-9.01, 3.6, 108.8)),
+    ("north-wall-loft", (-5.5, 3.6, 119.0), (-5.5, 3.6, 114.0)),
+    ("north-wall-east-room", (0.6, 3.6, 119.0), (0.6, 3.6, 114.0)),
+    ("unit2-floor", (-1.2, 1.75, 106.0), (1.75, 0.1, 108.8)),
+    ("unit3-floor", (-1.2, 1.75, 96.0), (1.75, 0.1, 98.5)),
+    ("hall-floor-at-unit3", (-5.5, 1.75, 97.0), (-1.8, 0.1, 98.5)),
+]
+# The middle of a view (the target point) may get at most this much brighter with the bars on, linear; below one 8-bit
+# step on average the change is not visible on these near-black faces, so that passes too.
+OUTSIDE_RATIO = 1.05
 
 failed = 0
 
@@ -548,6 +570,46 @@ def check_lights(slot, out):
     s1(slot, "time", "1300")
 
 
+def view_middle(path):
+    """Linear light and mean 8-bit value of the middle fifth of the image (40 to 60 % on both axes)."""
+    im = Image.open(path).convert("L")
+    w, h = im.size
+    px = list(im.crop((int(w * .4), int(h * .4), int(w * .6), int(h * .6))).getdata())
+    return sum((p / 255) ** 2.2 for p in px) / len(px), sum(px) / len(px)
+
+
+def check_leak(slot, out):
+    """The copy bars cast no shadows, so walls and floors do not stop their light. With all of them on against all off,
+    at night, the outside faces of the rooms and the rooms below must not change. Each view is shot twice and the
+    second shot counts, so the camera has come to rest; a second pass with the bars on shows the noise."""
+    if not phase(slot, "ray.storageunit-south:complete"):
+        return
+    lower_phone(slot)
+    s1(slot, "time", "2300")
+    s1(slot, "tp", *[str(v) for v in LIGHTS[0][5]])
+    lower_phone(slot)
+    shots = {}
+    for state in ("on", "off", "on-again"):
+        for _, _, position, _, _, _ in LIGHTS:
+            switch(slot, position, "off" if state == "off" else "on")
+        for name, eye, target in LEAK_VIEWS:
+            shot(slot, out, "leak-%s-settle" % name, eye, target)
+            shots.setdefault(name, {})[state] = shot(slot, out, "leak-%s-%s" % (name, state), eye, target)
+    for name, eye, target in LEAK_VIEWS:
+        got = shots[name]
+        if not all(got.get(k) for k in ("on", "off", "on-again")):
+            report(False, "no light through the walls: " + name, "no shots")
+            continue
+        (on, on8), (off, off8), (again, again8) = (view_middle(got[k]) for k in ("on", "off", "on-again"))
+        ratio = on / max(1e-9, off)
+        steps = on8 - off8
+        report(ratio <= OUTSIDE_RATIO or steps < 1, "no light through the walls: " + name,
+               "middle linear on/off %.3f (on %.5f, off %.5f, on again %.5f), 8-bit on-off %+.2f, on again-off %+.2f"
+               % (ratio, on, off, again, steps, again8 - off8))
+    s1(slot, "cam", "release")
+    s1(slot, "time", "1300")
+
+
 def check_staff(slot):
     """The employee limit rises with each finished room. After the rooms finish one by one, every place for an employee
     has a spot of its own."""
@@ -574,7 +636,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--slot", required=True)
     p.add_argument("--out", required=True)
-    p.add_argument("--only", default="props,nav,seams,hairlines,lights,staff")
+    p.add_argument("--only", default="props,nav,seams,hairlines,lights,leak,staff")
     a = p.parse_args()
     os.makedirs(a.out, exist_ok=True)
     only = set(a.only.split(","))
@@ -588,6 +650,8 @@ def main():
         check_hairlines(a.slot, a.out)
     if "lights" in only:
         check_lights(a.slot, a.out)
+    if "leak" in only:
+        check_leak(a.slot, a.out)
     if "staff" in only:
         check_staff(a.slot)
     print("RESULT %s: %d failed" % ("PASS" if failed == 0 else "FAIL", failed), flush=True)
