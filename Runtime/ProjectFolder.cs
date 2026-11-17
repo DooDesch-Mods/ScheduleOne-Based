@@ -183,9 +183,7 @@ internal static class ProjectFolder
 
     private static void Notify(SiteDefinition site, string line)
     {
-        var notifications = Singleton<NotificationsManager>.Instance;
-        if (notifications == null) { Mod.Warn("No notification shown: the notification manager is not ready."); return; }
-        notifications.SendNotification(DisplayName(site), line, _icon, 8f, false);
+        if (Notices.Send(DisplayName(site), line, _icon, 8f, false)) Mod.Log("Project folder notice shown: " + line);
     }
 
     // The ghost shows on a wall that takes the item, where the game's own click hangs it. Anywhere else the click reads it.
@@ -329,7 +327,59 @@ internal static class ProjectFolder
     internal static string DebugState(SiteDefinition site)
     {
         var hung = string.Join("; ", Hung(site).Select(i => i.transform.position.ToString()));
-        return site.Base.Id + ": holding=" + (HeldSite == site) + ", carried=" + Carried(site) + ", aimedAtWall=" + AimedAtWall() + ", hung=[" + hung + "]";
+        return site.Base.Id + ": holding=" + (HeldSite == site) + ", carried=" + Carried(site) + ", aimedAtWall=" + AimedAtWall()
+               + ", hotbar=[" + string.Join(",", HotbarNumbers(site)) + "], hung=[" + hung + "]";
+    }
+
+    private static List<int> HotbarNumbers(SiteDefinition site)
+    {
+        var numbers = new List<int>();
+        var inventory = PlayerSingleton<PlayerInventory>.Instance;
+        if (inventory == null) return numbers;
+        for (int i = 0; i < inventory.hotbarSlots.Count; i++)
+        {
+            var item = inventory.hotbarSlots[i]?.ItemInstance;
+            if (item != null && string.Equals(item.ID, site.FolderItemId, StringComparison.OrdinalIgnoreCase)) numbers.Add(i + 1);
+        }
+        return numbers;
+    }
+
+    // A test hand-over puts the folder in one known slot: other folders of the site go, and whatever sat in that
+    // slot moves to a free one.
+    internal static string DebugSlot(SiteDefinition site, int number)
+    {
+        var inventory = PlayerSingleton<PlayerInventory>.Instance ?? throw new InvalidOperationException("No player inventory.");
+        var definition = Of(site).Definition ?? throw new InvalidOperationException("The folder item of " + site.Base.Id + " is not registered.");
+        if (number < 1 || number > inventory.hotbarSlots.Count) throw new ArgumentException("Hotbar slot 1-" + inventory.hotbarSlots.Count + ".");
+        var target = inventory.hotbarSlots[number - 1];
+        int removed = 0;
+        for (int i = 0; i < inventory.hotbarSlots.Count; i++)
+        {
+            var slot = inventory.hotbarSlots[i];
+            if (i == number - 1 || slot?.ItemInstance == null || !string.Equals(slot.ItemInstance.ID, site.FolderItemId, StringComparison.OrdinalIgnoreCase)) continue;
+            slot.ClearStoredInstance();
+            removed++;
+        }
+        if (target.ItemInstance != null && string.Equals(target.ItemInstance.ID, site.FolderItemId, StringComparison.OrdinalIgnoreCase))
+            return "already there, " + removed + " other folder(s) removed";
+        var moved = target.ItemInstance;
+        if (moved != null) target.ClearStoredInstance();
+        target.SetStoredItem(definition.GetDefaultInstance(1));
+        string result = "placed, " + removed + " other folder(s) removed";
+        if (moved == null) return result;
+        if (inventory.CanItemFitInInventory(moved, moved.Quantity))
+        {
+            inventory.AddItemToInventory(moved);
+            return result + ", " + moved.Quantity + "x " + moved.ID + " moved to slot " + string.Join(",", Slots(inventory, moved.ID));
+        }
+        Mod.Warn("baseddiag: " + moved.Quantity + "x " + moved.ID + " from hotbar slot " + number + " found no free slot and is gone.");
+        return result + ", " + moved.ID + " lost (inventory full)";
+    }
+
+    private static IEnumerable<int> Slots(PlayerInventory inventory, string id)
+    {
+        for (int i = 0; i < inventory.hotbarSlots.Count; i++)
+            if (inventory.hotbarSlots[i]?.ItemInstance?.ID == id) yield return i + 1;
     }
 #endif
 

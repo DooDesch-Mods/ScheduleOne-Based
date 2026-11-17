@@ -44,7 +44,14 @@ internal static class ConstructionLitter
         float floor = FloorOf(site, upgradeId);
         if (float.IsNaN(floor)) { Mod.Warn("Construction litter for " + label + " not dropped: no floor height (follow-up Floor or a staff place)."); return; }
 
-        int count = CountFor(rooms);
+        int full = CountFor(rooms);
+        int count = Tips.LitterCount(site, upgradeId, full, out int tips, out int cap);
+        if (count == 0)
+        {
+            Mod.Log("Construction litter for " + label + " skipped: the crew got $" + tips + " of $" + cap + " in tips and cleaned up.");
+            return;
+        }
+        if (count < full) Mod.Log("Construction litter for " + label + ": " + count + " of " + full + " piece(s) after $" + tips + " of $" + cap + " in tips.");
         var random = new System.Random(Seed(label));
         var manager = NetworkSingleton<TrashManager>.Instance;
         int placed = 0, missed = 0;

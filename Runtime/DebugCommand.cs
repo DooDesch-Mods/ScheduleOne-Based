@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n>";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -56,7 +56,22 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     Mod.Log("baseddiag: conversation hold under the plan " + (Mod.DebugFreeConversation ? "off" : "on") + ".");
                     break;
                 case "folder":
-                    Folder(args.Count > 1 ? args[1] : "state");
+                    if (args.Count > 2 && args[1] == "slot")
+                        Mod.Log("baseddiag: folder in hotbar slot " + args[2] + ": " + ProjectFolder.DebugSlot(_site, int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture)) + ".");
+                    else Folder(args.Count > 1 ? args[1] : "state");
+                    break;
+                case "tip":
+                    // tip [state] = tips, limit and trash per build; tip cash <n> and tip product [i] pay like the
+                    // foreman's choices; tip set <n> = the running build's total (host), so each check starts known.
+                    string tipAction = args.Count > 1 ? args[1] : "state";
+                    int tipValue = args.Count > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 0;
+                    // tip wallet <n> = cash for this peer's player, also on a client.
+                    if (tipAction == "wallet") Tips.DebugWallet(tipValue);
+                    else if (tipAction == "cash") Tips.DebugCash(_site.Base.Id, tipValue);
+                    else if (tipAction == "product") Tips.DebugProduct(_site.Base.Id, tipValue);
+                    else if (tipAction == "set") Tips.DebugSet(_site.Base.Id, tipValue);
+                    else if (tipAction != "state") throw new ArgumentException("baseddiag tip [state|cash <n>|product [i]|set <n>|wallet <n>]");
+                    Mod.Log("baseddiag: tips " + Tips.Describe());
                     break;
                 case "heldby":
                     // heldby Small Storage Rack|Wall Clock = the hold names these items (host), heldby off clears it,

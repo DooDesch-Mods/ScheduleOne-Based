@@ -207,14 +207,8 @@ internal static class ConstructionJournal
 
     private static void Notify(Notice notice)
     {
-        var notifications = Singleton<NotificationsManager>.Instance;
-        if (notifications == null)
-        {
-            Mod.Warn("Construction notice not shown, the notification manager is not ready: " + notice.Title);
-            return;
-        }
         var icon = ConstructionQuest.Icon != null ? ConstructionQuest.Icon : PlayerSingleton<JournalApp>.Instance.AppIcon;
-        notifications.SendNotification(notice.Title, notice.Subtitle, icon, NoticeSeconds, true);
-        Mod.Log("Construction notice shown: " + notice.Title + " / " + notice.Subtitle);
+        if (Notices.Send(notice.Title, notice.Subtitle, icon, NoticeSeconds, true))
+            Mod.Log("Construction notice shown: " + notice.Title + " / " + notice.Subtitle);
     }
 }
