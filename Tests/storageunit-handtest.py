@@ -7,8 +7,9 @@ Groups (--only, comma separated, default all):
   nav     level 3: the ground under the stair is no navmesh any more, the paths to the loft door and into the loft are
           complete, and a hired employee sent to the loft door climbs the stair without a warp, and no NPC walks below its
           steps.
-  seams   level 7: no surface of ours flickers in one plane against another (mxcoplanar), and no dark slit (brick
-          showing between panels) in fixed wall views.
+  seams   level 7: no surface of ours flickers in one plane against another (mxcoplanar), every mesh of ours has
+          tangents, so the sheets' normal map draws clean ribs (mxtangents), and no dark slit (brick showing between
+          panels) in fixed wall views.
   hairlines  levels 3 and 7 at 23:00: no thin dark line at the loft's south-east corner, seen from the hall and the
           loft.
   lights  level 7 at 23:00: every ceiling bar's spot light is on with at least the house bars' reach (6) and Unit 1's
@@ -99,6 +100,9 @@ HAIRLINE_VIEWS = [
 SEAM_CLOSEUPS = [
     ("seam-south-truss-95", (2.2, 4.0, 95.95), (3.25, 4.0, 95.95)),
     ("seam-south-truss-100", (2.2, 4.0, 99.98), (3.25, 4.0, 99.98)),
+    # The east room's south and north walls face along z, where missing tangents fray the ribs.
+    ("ribs-east-south-wall", (-0.44, 5.0, 106.12), (1.48, 4.93, 103.8)),
+    ("ribs-east-north-wall", (1.75, 4.8, 106.5), (1.75, 4.6, 113.8)),
 ]
 COPLANAR = {
     "loft": "-8.8 3.2 103.7 -2.0 6.3 113.9",
@@ -446,6 +450,12 @@ def check_seams(slot, out):
         pairs = [l.split("mxcoplanar ")[1][:220] for l in text.splitlines() if "mxcoplanar ours" in l]
         report(bool(m) and m.group(2) == "0", room + " has no flickering surface of ours",
                (m.group(0) if m else text[-200:]) + ("; " + " | ".join(pairs[:3]) if pairs else ""))
+        # Without tangents the sheets' normal map frays the ribs of walls that face along z.
+        text = run(slot, r"mxtangents x .*not readable", "mxtangents " + box)
+        m = re.search(r"(\d+) renderers of ours, (\d+) without tangents", text)
+        bare = [l.split("mxtangents none ")[1][:160] for l in text.splitlines() if "mxtangents none" in l]
+        report(bool(m) and int(m.group(1)) > 0 and m.group(2) == "0", room + " has tangents on every mesh of ours",
+               (m.group(0) if m else text[-200:]) + ("; " + " | ".join(bare[:3]) if bare else ""))
     lower_phone(slot)
     s1(slot, "time", "1300")
     for name, eye, target, span in SEAM_VIEWS:
