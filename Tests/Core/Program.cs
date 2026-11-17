@@ -38,7 +38,8 @@ var checks = new (string Name, Action Run)[]
     ("an upgrade without a rights price is ordered directly after its prerequisite", DirectOrder),
     ("the real Ming definition passes DefinitionRegistry with its saved ids, prices and phases", MingThroughRegistry),
     ("a permit completes on its rights payment and unlocks a menu of builds, one at a time", PermitMenu),
-    ("definitions reject a permit with construction, phases or effects", PermitDefinitions)
+    ("definitions reject a permit with construction, phases or effects", PermitDefinitions),
+    ("a tip counts once, only during construction, only on the host, and survives save/load", Tips)
 };
 int failed = 0;
 foreach (var check in checks)
@@ -529,6 +530,36 @@ static void DirectOrder()
     Equal(2, engine.CompletedEffects("fixture").Count);
     engine = RoundTrip(engine, definition);
     Equal(UpgradeStage.Complete, engine.GetUpgrade("fixture", "dock").Stage);
+}
+static void Tips()
+{
+    var engine = Engine();
+    Equal("not-constructing", engine.AddTip("early", "fixture", "A", 50).Reason);
+    Order(engine, "A", "a");
+    Equal("invalid-amount", engine.AddTip("zero", "fixture", "A", 0).Reason);
+    Equal("invalid-amount", engine.AddTip("huge", "fixture", "A", 1_000_001).Reason);
+    Equal("invalid-amount", engine.AddTip("", "fixture", "A", 10).Reason);
+    Equal("unknown-upgrade", engine.AddTip("other", "fixture", "missing", 10).Reason);
+    var revision = engine.Revision;
+    Equal("tipped", engine.AddTip("t1", "fixture", "A", 30).Reason);
+    Equal(revision + 1, engine.Revision);
+    Equal("duplicate", engine.AddTip("t1", "fixture", "A", 30).Reason);
+    Equal("tipped", engine.AddTip("t2", "fixture", "A", 20).Reason);
+    Equal(50, engine.GetUpgrade("fixture", "A").Tips);
+    Equal("not-constructing", engine.AddTip("t3", "fixture", "B", 10).Reason);
+    engine = RoundTrip(engine);
+    Equal(50, engine.GetUpgrade("fixture", "A").Tips);
+    Equal("duplicate", engine.AddTip("t2", "fixture", "A", 20).Reason);
+    Equal("tips-set", engine.SetTips("fixture", "A", 7).Reason);
+    Equal(7, engine.GetUpgrade("fixture", "A").Tips);
+    Equal("invalid-amount", engine.SetTips("fixture", "A", -1).Reason);
+    engine.AdvanceSleep(1); engine.AdvanceSleep(2);
+    Equal(UpgradeStage.Complete, engine.GetUpgrade("fixture", "A").Stage);
+    Equal("not-constructing", engine.AddTip("late", "fixture", "A", 10).Reason);
+    Equal(7, engine.GetUpgrade("fixture", "A").Tips);
+    var client = Engine(host: false);
+    Equal("host-required", client.AddTip("c1", "fixture", "A", 10).Reason);
+    Equal("host-required", client.SetTips("fixture", "A", 10).Reason);
 }
 
 sealed class AuthorityFlag(bool canMutate) : IAuthority { public bool CanMutate => canMutate; }

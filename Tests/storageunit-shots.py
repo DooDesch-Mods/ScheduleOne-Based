@@ -38,7 +38,7 @@ VIEWS = {
     "stair-top-join": ((-12.5, 3.0, 103.6), (-9.8, 3.1, 104.6)),
     "stair-wall-gap": ((-11, 4.6, 99.6), (-9.1, 1.4, 102.5)),
     "stair-foot-side": ((-12.8, 0.7, 99.2), (-9.8, 0.2, 99.2)),
-    "stair-foot-front": ((-9.8, 1.3, 96.2), (-9.8, 0.2, 99.3)),
+    "stair-foot-front": ((-9.8, 1.3, 96.4), (-9.8, 0.2, 99.5)),
     "landing-wall": ((-12, 3.0, 104.2), (-9.0, 3.25, 105.4)),
     # The upper door: straight on from outside, from the landing, and the loft above Unit 1 from inside.
     "door-front": ((-14, 4.5, 105.5), (-9, 4.4, 105.5)),

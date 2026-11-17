@@ -24,7 +24,7 @@ PHASE = "ray.storageunit-bay:complete"
 # An item's position is its pivot, which can sit up to a metre above the floor it stands on (y 3.25 upstairs).
 ROOMS = {1: "loft", 2: "east room", 3: "south room"}
 FURNITURE = [("smallstoragerack", 1), ("smallstoragerack", 2), ("dryingrack", 2), ("smallstoragerack", 3), ("dryingrack", 3)]
-DOCKS = {0: (-7.20, 102.35), 1: (-3.95, 102.35)}
+DOCKS = {0: (-7.20, 102.35), 1: (-3.95, 101.95)}
 VEC = r"\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)"
 
 

@@ -19,7 +19,7 @@ SITE = "site=" + CODE
 PHASE = "ray.storageunit-bay:complete"
 # Dock roots after stage D, and the hall a parked van must stay inside: west wall x -8.75, Unit 3 front x -2.2, the
 # hall's north end z 103.9, and Geraldine's door, which ends at z 97.03 on the Unit 3 side.
-DOCKS = {0: (-7.20, 102.35), 1: (-3.95, 102.35)}
+DOCKS = {0: (-7.20, 102.35), 1: (-3.95, 101.95)}
 HALL_X = (-8.75, -2.2)
 HALL_NORTH = 103.9
 DOOR_Z = 97.03

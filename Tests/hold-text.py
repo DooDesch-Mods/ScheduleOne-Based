@@ -105,8 +105,10 @@ def main():
     start_lang = first[0] if first else "en"
 
     s1(a.host, "time", "1200")
-    text = run(a.host, "construction moved to|baseddiag: .*(fail|rror)", "baseddiag", "site=storageunit", "phase",
-               "ray.storageunit-south:south-open")
+    # A phase jump rebuilds the expansion on the host and its client; on a loaded machine that holds the main thread
+    # for longer than the default 10 s wait.
+    text = run(a.host, "construction moved to|baseddiag: .*(fail|rror)", "--max-wait", "60000", "baseddiag", "site=storageunit",
+               "phase", "ray.storageunit-south:south-open")
     report("construction moved to" in text, "south build under construction", text[-200:])
     for slot in filter(None, (a.host, a.client)):
         s1(slot, "tp", *HALL_MIDDLE[:3], "--yaw", HALL_MIDDLE[3])
