@@ -48,9 +48,14 @@ GRIDS = [
 # The 0.5 m lines: x on -169.85 + k/2 (the north-east room's grid), z on 115.35 + k/2 (the west room's grid).
 X_LINE, Z_LINE = -169.85, 115.35
 SURFACES = {"landing": "landing", "balcony": "balcony"}
-# Vanilla switches of the house (centre of their plate) and the copies 3 m above them.
+# Vanilla switches of the house (centre of their plate) and the copies: the storey's 3 m above them, the sunroom's on
+# the house's outer west wall beside the sliding door. Each copy: (where its plate is, what it is, how many lamps).
 HOUSE_SWITCHES = {"west": (-170.02, -2.5, 114.6), "east": (-169.83, -2.5, 117.75)}
-COPIES = {"storey-switch-west": ("west", 2), "storey-switch-east": ("east", 1)}
+COPIES = {
+    "storey-switch-west": ((-170.02, .5, 114.6), "3 m above the house's west switch", 2),
+    "storey-switch-east": ((-169.83, .5, 117.75), "3 m above the house's east switch", 1),
+    "sunroom-switch": ((-176.17, -2.5, 112.8), "on the house's wall beside the sunroom door", 2),
+}
 VEC = r"\((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)"
 
 
@@ -177,18 +182,14 @@ def lamp_lines(run, mark, copy_id, state):
 def switches(run, pick):
     run.cmd("settime 2200", wait=1.0)
     start = run.mark()
-    for copy_id, (side, lamps) in COPIES.items():
-        x, y, z = HOUSE_SWITCHES[side]
-        at = (x, y + 3.0, z)
+    for copy_id, (at, where, lamps) in COPIES.items():
         found, _ = switch_line(run, at)
-        run.check("switch '%s' stands 3 m above the house's %s switch, spawned" % (copy_id, side),
+        run.check("switch '%s' stands %s, spawned" % (copy_id, where),
                   len(found) == 1 and "spawned True" in found[0], found or "no active switch within 0.45 m of %s" % (at,))
         arrived = [l for l in run.lines((start[0], 0)) if "found the copied switch '%s'" % copy_id in l]
         run.check("lamps of '%s' found their switch" % copy_id, len(arrived) >= lamps, len(arrived))
-    for copy_id, (side, lamps) in COPIES.items():
-        x, y, z = HOUSE_SWITCHES[side]
-        at = (x, y + 3.0, z)
-        other = next(c for c in COPIES if c != copy_id)
+    for copy_id, (at, where, lamps) in COPIES.items():
+        others = [c for c in COPIES if c != copy_id]
         switch_line(run, at, action="on")
         house = house_state(run)
         mark = run.mark()
@@ -196,8 +197,8 @@ def switches(run, pick):
         time.sleep(1.0)
         run.check("'%s' off turns its %d lamps off" % (copy_id, lamps), lamp_lines(run, mark, copy_id, "off") >= lamps,
                   lamp_lines(run, mark, copy_id, "off"))
-        run.check("'%s' off leaves the other copy's lamps alone" % copy_id, lamp_lines(run, mark, other, "off") == 0,
-                  lamp_lines(run, mark, other, "off"))
+        moved = {c: lamp_lines(run, mark, c, "off") for c in others}
+        run.check("'%s' off leaves the other copies' lamps alone" % copy_id, not any(moved.values()), moved)
         after = house_state(run)
         run.check("'%s' off leaves the house's switches as they were" % copy_id, house == after and None not in house.values(), (house, after))
         mark = run.mark()
@@ -212,7 +213,7 @@ def switches(run, pick):
     switch_line(run, at, action="off")
     time.sleep(1.0)
     moved = sum(lamp_lines(run, mark, c, "off") for c in COPIES)
-    run.check("the house's switch off leaves the storey's lamps alone", moved == 0, moved)
+    run.check("the house's switch off leaves the storey's and the sunroom's lamps alone", moved == 0, moved)
     switch_line(run, at, action="on")
     run.cmd("settime 1200", wait=1.0)
 

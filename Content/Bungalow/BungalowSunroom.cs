@@ -60,6 +60,21 @@ public static class BungalowSunroom
     private const float RoofScale = (North - South) / (3 * FrameHeight);
     private const int PanesPerFrame = 6;
 
+    // Two of the house's ceiling lights under the roof's middle mullion, which runs along z at the fourth of the frames'
+    // seven bars from the house. They hang level with the house's own lamps in the west and north rooms, each between two
+    // of the roof's cross rails, turned to the roof's slope so the top lies flat against the bar.
+    private const string HouseLamp = Property + "/bungalow/FluroBar";
+    private static readonly Vector3 HouseLampTop = new(-173f, -.95f, 112.35f);
+    private const float LampMullionX = House - 3 * (FrameWidth * RoofScale) / PanesPerFrame;
+    private static readonly float[] LampZ = { 112.35f, 118.5f };
+    private const float LampRange = 3.6f;
+    // The house's west-room switch, copied onto the house's outer wall beside the sliding door, its plate on the
+    // cladding's face as the original sits on its wall. It switches the sunroom's two lamps and nothing else.
+    public const string SwitchId = "sunroom-switch";
+    private const string HouseSwitch = Property + "/bungalow/ModularSwitch";
+    private static readonly Vector3 HouseSwitchAt = new(-170f, -2.5f, 114.6f);
+    public static readonly Vector3 SwitchAt = new(-176.15f, -2.5f, 112.8f);
+
     private static bool _registered;
 
     public static void Register()
@@ -186,6 +201,26 @@ public static class BungalowSunroom
             state.NavigationProbes.Add(new Vector3(-182.5f, Floor, 109.8f));
             state.NavigationProbes.Add(new Vector3(-182.5f, Floor, 121.1f));
             state.NavigationProbes.Add(new Vector3(-177f, Floor, 121.1f));
+
+            // A networked copy, so the switch works and every peer sees the same state.
+            var wallSwitch = new CopyDefinition
+            {
+                Id = SwitchId, Template = HouseSwitch, Frame = Property,
+                At = new LocalPoint(SwitchAt - (HouseSwitchAt - PropertyPivot), PropertyYaw),
+                IndependentMesh = false, VisualOnly = false, Obstacle = false
+            };
+            state.Copies.Add(wallSwitch);
+            var slope = Quaternion.Euler(0f, 0f, Mathf.Atan(RoofSlope) * Mathf.Rad2Deg);
+            for (int i = 0; i < LampZ.Length; i++)
+            {
+                // 2 mm under the bar, so the lamp's top and the bar's underside never share a plane.
+                var at = new Vector3(LampMullionX, RoofUnderside(LampMullionX) - .002f, LampZ[i]);
+                var lamp = Tilted("sunroom-lamp-" + i, HouseLamp, HouseLampTop, at, slope, 1f);
+                lamp.LightsOn = true;
+                lamp.LightSwitch = "copy:" + SwitchId;
+                lamp.LightRange = LampRange;
+                state.Copies.Add(lamp);
+            }
         }
         state.Copies.Add(geometry);
         return state;
