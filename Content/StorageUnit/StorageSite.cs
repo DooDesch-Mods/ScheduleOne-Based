@@ -30,14 +30,18 @@ internal static class StorageSite
         {
             new(PlanRoomKind.Existing, -8.8f, 103.8f, -3.8f, 114f, "Storage Unit")
         },
-        // Along the north wall of Unit 1, away from the door and the roller door.
-        StaffPlaces = new UnityEngine.Vector3[]
+        // Outside in the yard west of the hall, where the loft's stair rises. The loft's pair stands at the fire barrel,
+        // the east room's pair on the grass in front of the stair's foot, the south room's one joins the fire. The
+        // barrel's ring keeps clear of the lamp post's base (x -12.5 .. -11.5, z 100.5 .. 101.5) and the bush north of
+        // it (from z 103.08); the stair's pair leaves the walk to the first step (x -9.84, z 98.4) between them and
+        // stands north of Geraldine's evening path (z 93.6 to 96.5) and the bus stop (to z 97.39).
+        StaffPlaces = new StaffPlace[]
         {
-            new(-8.2f, 0.1f, 113.4f),
-            new(-7.4f, 0.1f, 113.4f),
-            new(-6.6f, 0.1f, 113.4f),
-            new(-5.8f, 0.1f, 113.4f),
-            new(-5.0f, 0.1f, 113.4f)
+            new(new(-13.25f, 0.1f, 102.55f), StorageWorld.FireSpot),
+            new(new(-11.5f, 0.1f, 102.7f), StorageWorld.FireSpot),
+            new(new(-9.25f, 0.1f, 97.6f), new(-10.6f, 0.1f, 97.9f)),
+            new(new(-10.6f, 0.1f, 97.9f), new(-9.25f, 0.1f, 97.6f)),
+            new(new(-12.95f, 0.1f, 101.6f), StorageWorld.FireSpot)
         },
         RegisterWorld = StorageWorld.Register,
         Crew = StorageCrew.Instance,
