@@ -79,13 +79,13 @@ internal static class BungalowSite
             new(PlanRoomKind.Existing, -170f, 115.5f, -163.85f, 121.5f, "Bungalow")
         },
         // In the west room, clear of the carport bays south of the house.
-        StaffPlaces = new UnityEngine.Vector3[]
+        StaffPlaces = new StaffPlace[]
         {
-            new(-174.5f, -3.7f, 110.5f),
-            new(-173.5f, -3.7f, 110.5f),
-            new(-172.5f, -3.7f, 110.5f),
-            new(-174.5f, -3.7f, 111.5f),
-            new(-173.5f, -3.7f, 111.5f)
+            new UnityEngine.Vector3(-174.5f, -3.7f, 110.5f),
+            new UnityEngine.Vector3(-173.5f, -3.7f, 110.5f),
+            new UnityEngine.Vector3(-172.5f, -3.7f, 110.5f),
+            new UnityEngine.Vector3(-174.5f, -3.7f, 111.5f),
+            new UnityEngine.Vector3(-173.5f, -3.7f, 111.5f)
         },
         RegisterWorld = () =>
         {
