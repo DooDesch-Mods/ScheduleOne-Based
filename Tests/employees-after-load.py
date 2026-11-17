@@ -10,7 +10,10 @@ Needs a Debug build of Based (`baseddiag staff`) and a running test slot with a 
 has employees, for example template `mrmonkey-dock`:
 
     pwsh -File Workspace/tools/session/session.ps1 -Build MapExpansions,_wt-Based-<topic> -Template mrmonkey-dock -NoApp
-    python Based/Tests/employees-after-load.py [--slot mptest] [--loads 5] [--no-save]
+    python Based/Tests/employees-after-load.py [--slot mptest] [--loads 5] [--no-save] [--busy-wing]
+
+`--busy-wing` saves each time only while a worker runs a behaviour in the upper wing, for example a Botanist at a
+pot; run `botanist-pots.py` first so the wing has pots and two Botanists.
 """
 import argparse
 import os
@@ -36,6 +39,10 @@ EMPLOYEE = re.compile(r"baseddiag: employee (.+?) index (\d+) at (\(.+?\)).*?on 
                       r"active (\w+), agent enabled (\w+), building (.+?), behaviour (.+?)"
                       r"(?:, home (\w+), paid (\w+), end of day (\w+))?$")
 STAFF = re.compile(r"baseddiag: staff (\d+)/(\d+)")
+WAITS = re.compile(r"waits at (none|\([^)]*\))")
+WORK = re.compile(r"mxreach work: (\w+) at \(([-\d.]+), ([-\d.]+), ([-\d.]+)\), active ([^,]+)")
+# The Sweatshop's upper wing in world x and z (Based's state volume for 'based_ming_upper').
+WING = (-60.4, -53.5, 134.5, 145.5)
 
 
 class Run:
@@ -77,6 +84,22 @@ class Run:
         self.g.call("run_console_command", {"command": "baseddiag staff", "capture": False})
         time.sleep(2)
         return [l for l in self.since(mark) if "baseddiag" in l]
+
+    def busy_in_wing(self, timeout):
+        """Waits until a worker runs a behaviour inside the upper wing (MapExpansions' `mxreach work`). Returns its line or None."""
+        end = time.time() + timeout
+        while time.time() < end:
+            reply = self.g.run("mxreach work sweatshop", max_wait_ms=8000)
+            lines = [str(l.get("text", "")) for l in ((reply or {}).get("result") or {}).get("lines") or [] if isinstance(l, dict)]
+            for line in lines:
+                m = WORK.search(line)
+                if not m:
+                    continue
+                x, y, z = (float(v) for v in m.group(2, 3, 4))
+                if WING[0] <= x <= WING[1] and WING[2] <= z <= WING[3] and y > -1.5 and m.group(5) not in ("none", "Idle", "Wait ouside"):
+                    return line
+            time.sleep(4)
+        return None
 
     def reload(self, save_first):
         if save_first:
@@ -127,6 +150,9 @@ class Run:
             self.check(who + " is visible and active", m.group(6) == "True" and m.group(7) == "True", state)
             self.check(who + " stands on the NavMesh", m.group(4) == "True" and m.group(8) == "True", state)
             self.check(who + " is not hidden in a building", m.group(9).strip() == "none", state)
+            # An employee above the property's idle points is assigned with an exception and stands still when idle.
+            waits = WAITS.search(m.string)
+            self.check(who + " has an idle point", waits is not None and waits.group(1) != "none", waits.group(0) if waits else "no 'waits at'")
         return expected
 
 
@@ -137,6 +163,8 @@ def main():
     parser.add_argument("--loads", type=int, default=5, help="loads to check, the running one included")
     parser.add_argument("--settle", type=int, default=25, help="seconds after each load before the employees are read")
     parser.add_argument("--no-save", action="store_true", help="reload without saving first, so every load starts from the same file")
+    parser.add_argument("--busy-wing", action="store_true",
+                        help="save only while a worker runs a behaviour in the upper wing (needs MapExpansions' Debug `mxreach`)")
     args = parser.parse_args()
     run = Run(args.slot, args.save)
 
@@ -145,6 +173,10 @@ def main():
     for n in range(1, args.loads + 1):
         label = "load %d" % n
         if n > 1:
+            if args.busy_wing and not args.no_save:
+                busy = run.busy_in_wing(180)
+                run.check("%s: a worker is busy in the upper wing when the game saves" % label, busy is not None,
+                          busy.split("mxreach work: ", 1)[-1][:200] if busy else "nobody worked in the wing for 180 s")
             mark = run.offset()
             if not run.check("%s: the save loads again" % label, run.reload(not args.no_save)):
                 break

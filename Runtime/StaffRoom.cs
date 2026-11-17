@@ -33,17 +33,29 @@ internal static class StaffRoom
         // Employee.AssignProperty indexes the idle points without a check, so the places come before the limit.
         if (wanted > vanilla) AddPlaces(site, property, wanted);
         if (property.EmployeeCapacity == wanted) return;
+        // Within one session the limit only rises from the game's value, so a higher one comes from another mod
+        // (WorkerLimits and similar). Lowering it would drop the employees above Based's limit on the next load.
+        if (property.EmployeeCapacity > wanted)
+        {
+            AddPlaces(site, property, property.EmployeeCapacity);
+            Mod.Log("Employee limit of " + site.Base.PropertyId + " stays at " + property.EmployeeCapacity + ", set by another mod above Based's " + wanted + ".");
+            return;
+        }
         property.EmployeeCapacity = wanted;
         Mod.Log("Employee limit of " + site.Base.PropertyId + " is now " + wanted + " (game value " + vanilla + ").");
     }
 
-    // A joining client can receive an employee before the host's construction state, so its places exist regardless.
+    // Runs before every Employee.AssignProperty, on host and clients. A joining client can receive an employee before the
+    // host's construction state, and another mod can raise EmployeeCapacity after Based did. AssignProperty gives the
+    // new employee the index Employees.Count and reads that idle point without a check; without it the call throws, the
+    // employee keeps no idle point and stands wherever its last task ended.
     internal static void EnsurePlaces(Property property)
     {
         var site = Mod.Sites.FirstOrDefault(s => s.Base.PropertyId == property.PropertyCode);
         if (site == null) return;
-        int vanilla = VanillaLimit(property), most = site.MaxStaffLimit(vanilla);
-        if (most > vanilla) AddPlaces(site, property, most);
+        int vanilla = VanillaLimit(property);
+        int needed = Math.Max(Math.Max(site.MaxStaffLimit(vanilla), property.EmployeeCapacity), property.Employees.Count + 1);
+        if (needed > (property.EmployeeIdlePoints?.Length ?? 0)) AddPlaces(site, property, needed);
     }
 
     private static int VanillaLimit(Property property)

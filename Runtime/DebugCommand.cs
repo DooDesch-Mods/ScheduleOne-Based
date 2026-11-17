@@ -289,7 +289,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             // A worker that is there to the game but not to the player: hidden avatar, inside a building, or no behaviour.
             var behaviour = employee.Behaviour != null ? employee.Behaviour.activeBehaviour : null;
             string line = "baseddiag: employee " + employee.name + " index " + employee.EmployeeIndex + " at " + agent.transform.position
-                + ", waits at " + places[employee.EmployeeIndex].position + ", agent type " + agent.agentTypeID + ", on mesh " + agent.isOnNavMesh
+                + ", waits at " + (employee.WaitOutside?.IdlePoint != null ? employee.WaitOutside.IdlePoint.position.ToString() : "none") + ", agent type " + agent.agentTypeID + ", on mesh " + agent.isOnNavMesh
                 + ", route to the street " + (found ? street.status.ToString() : "none") + ", reaches the street " + reaches
                 + ", visible " + employee.isVisible + ", active " + employee.gameObject.activeInHierarchy + ", agent enabled " + agent.enabled
                 + ", building " + (employee.CurrentBuilding != null ? employee.CurrentBuilding.name : "none")
