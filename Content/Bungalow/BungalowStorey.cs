@@ -36,6 +36,8 @@ public static class BungalowStorey
     private const float WallCut = -.7f, CladdingCut = -1f;
     // The house's outline and the rooms inside it: the west rooms run the full depth, the north-east room fills the rest.
     private const float HouseWest = -176.17f, HouseEast = -163.75f, HouseSouth = 109.23f, HouseNorth = 121.63f;
+    // The outer face of the house's east wall (OuterWalls bounds), east of the cladding's edge at HouseEast.
+    private const float OuterEast = -163.70f;
     private const float InWest = -176.05f, InEast = -163.85f, InSouth = 109.35f, InNorth = 121.55f;
     private const float EastWall = -169.85f, NorthRoomSouth = 115.35f;
 
@@ -326,11 +328,16 @@ public static class BungalowStorey
     private static void Band(CopyDefinition geometry)
     {
         const float low = -.95f, high = -.62f, proud = .04f, sunk = .01f;
-        float w = HouseWest, e = HouseEast, s = HouseSouth, n = HouseNorth;
+        float w = HouseWest, s = HouseSouth, n = HouseNorth;
+        // The east wall's outer face stands 5 cm east of the cladding's edge, so the east band is set out from that face;
+        // the north band reaches 5 mm into it, so no end face lies in the east band's inner face.
+        float e = OuterEast;
         Face(geometry, "band-west", Timber, w - proud, low, s - proud, w + sunk, high, n + proud);
-        Face(geometry, "band-north", Timber, w + sunk, low, n - sunk, e - sunk, high, n + proud);
-        // Its south end stays 5 mm north of the cut cladding's end, so the two end faces do not lie in one plane.
-        Face(geometry, "band-east", Timber, e - sunk, low, NorthRoomSouth + .005f, e + proud, high, n + proud);
+        Face(geometry, "band-north", Timber, w + sunk, low, n - sunk, e - sunk + .005f, high, n + proud);
+        // Its south end stays 5 mm north of the cut cladding's end, so the two end faces do not lie in one plane; its north
+        // end stands 12 mm past the north band's face, where the north band reaches into it, and 7 mm past the corner
+        // post's north face at 121.675.
+        Face(geometry, "band-east", Timber, e - sunk, low, NorthRoomSouth + .005f, e + proud, high, n + proud + .012f);
         Face(geometry, "band-south", Timber, w + sunk, low, s - proud, EastWall + proud, high, s + sunk);
         Face(geometry, "band-landing", Timber, EastWall - sunk, low, s + sunk, EastWall + proud, high, LandingSouth);
     }
