@@ -203,6 +203,40 @@ public sealed class UpgradeEngine
         }
     }
 
+    // A tip counts only while its build runs. The id makes a resent tip count once.
+    public TransitionResult AddTip(string tipId, string baseId, string upgradeId, int amount)
+    {
+        lock (_gate)
+        {
+            if (!_authority.CanMutate) return new(false, "host-required", _state.Revision);
+            if (string.IsNullOrEmpty(tipId) || amount <= 0 || amount > MaxTip) return new(false, "invalid-amount", _state.Revision);
+            if (_state.TipIds.Contains(tipId)) return new(false, "duplicate", _state.Revision);
+            if (!_definitions.TryGetValue(baseId, out var b) || !b.Upgrades.Any(u => u.Id == upgradeId)) return new(false, "unknown-upgrade", _state.Revision);
+            var state = FindState(baseId, upgradeId);
+            if (state.Stage != UpgradeStage.Constructing) return new(false, "not-constructing", _state.Revision);
+            state.Tips = (int)Math.Min(int.MaxValue, (long)state.Tips + amount);
+            _state.TipIds.Add(tipId);
+            if (_state.TipIds.Count > MaxTipIds) _state.TipIds.RemoveRange(0, _state.TipIds.Count - MaxTipIds);
+            _state.Revision++;
+            return new(true, "tipped", _state.Revision);
+        }
+    }
+
+    // Debug checks start each case from a known total.
+    public TransitionResult SetTips(string baseId, string upgradeId, int total)
+    {
+        lock (_gate)
+        {
+            if (!_authority.CanMutate) return new(false, "host-required", _state.Revision);
+            if (total < 0) return new(false, "invalid-amount", _state.Revision);
+            FindState(baseId, upgradeId).Tips = total;
+            _state.Revision++;
+            return new(true, "tips-set", _state.Revision);
+        }
+    }
+
+    private const int MaxTip = 1_000_000, MaxTipIds = 64;
+
     public BasedState ExportState()
     {
         lock (_gate) return Copy(_state);
@@ -290,7 +324,8 @@ public sealed class UpgradeEngine
         return new BasedState
         {
             SchemaVersion = state.SchemaVersion, Revision = state.Revision, LastSleepCycle = state.LastSleepCycle,
-            Upgrades = state.Upgrades.Select(s => s.Copy()).ToList(), Purchases = state.Purchases.Select(p => p.Copy()).ToList()
+            Upgrades = state.Upgrades.Select(s => s.Copy()).ToList(), Purchases = state.Purchases.Select(p => p.Copy()).ToList(),
+            TipIds = (state.TipIds ?? new List<string>()).ToList()
         };
     }
 
@@ -311,7 +346,7 @@ public sealed class UpgradeEngine
             }
             var definition = FindDefinition(upgrade.BaseId, upgrade.UpgradeId);
             if (!Enum.IsDefined(typeof(UpgradeStage), upgrade.Stage) || upgrade.CompletedCycles < 0 ||
-                upgrade.RightsPaid < 0 || upgrade.ConstructionPaid < 0 || upgrade.LastSleepCycle < -1 || upgrade.LastSleepCycle > state.LastSleepCycle)
+                upgrade.RightsPaid < 0 || upgrade.ConstructionPaid < 0 || upgrade.Tips < 0 || upgrade.LastSleepCycle < -1 || upgrade.LastSleepCycle > state.LastSleepCycle)
                 throw new ArgumentException("Invalid saved upgrade values.");
             // Construction takes at least one cycle, so zero cannot come from a changed cycle count; a permit completes on payment.
             if (upgrade.Stage == UpgradeStage.Complete && upgrade.CompletedCycles == 0 && !definition.IsPermit ||

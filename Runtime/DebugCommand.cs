@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | walk <x> <z> [<x> <z> ...]";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -56,7 +56,48 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     Mod.Log("baseddiag: conversation hold under the plan " + (Mod.DebugFreeConversation ? "off" : "on") + ".");
                     break;
                 case "folder":
-                    Folder(args.Count > 1 ? args[1] : "state");
+                    if (args.Count > 2 && args[1] == "slot")
+                        Mod.Log("baseddiag: folder in hotbar slot " + args[2] + ": " + ProjectFolder.DebugSlot(_site, int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture)) + ".");
+                    else Folder(args.Count > 1 ? args[1] : "state");
+                    break;
+                case "tip":
+                    // tip [state] = tips, limit and trash per build; tip cash <n> and tip product [i] pay like the
+                    // foreman's choices; tip set <n> = the running build's total (host), so each check starts known.
+                    string tipAction = args.Count > 1 ? args[1] : "state";
+                    int tipValue = args.Count > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 0;
+                    // tip wallet <n> = cash for this peer's player, also on a client.
+                    if (tipAction == "wallet") Tips.DebugWallet(tipValue);
+                    else if (tipAction == "cash") Tips.DebugCash(_site.Base.Id, tipValue);
+                    else if (tipAction == "product") Tips.DebugProduct(_site.Base.Id, tipValue);
+                    else if (tipAction == "set") Tips.DebugSet(_site.Base.Id, tipValue);
+                    else if (tipAction != "state") throw new ArgumentException("baseddiag tip [state|cash <n>|product [i]|set <n>|wallet <n>]");
+                    Mod.Log("baseddiag: tips " + Tips.Describe());
+                    break;
+                case "heldby":
+                    // heldby Small Storage Rack|Wall Clock = the hold names these items (host), heldby off clears it,
+                    // heldby alone only reports. Logs the hold line and the order line in this peer's language.
+                    if (args.Count > 1) Mod.DebugHeld(args[1] == "off" ? "" : string.Join(" ", args.Skip(1)));
+                    Mod.Log("baseddiag held: language " + DooDesch.Localization.L10n.Language + "; names '" + Mod.HeldBy
+                        + "'; hold line '" + Text.T("On hold: move {0} off the red walls.", Text.Items(Mod.HeldBy))
+                        + "'; order line '" + Text.T("Move {0} off the red walls.", Text.Items(Mod.HeldBy)) + "'.");
+                    break;
+                case "lang":
+                    SetLanguage(args.Count > 1 ? args[1] : throw new ArgumentException("baseddiag lang <en|de>"));
+                    break;
+                case "vfx":
+                    // on = by stage and hour, off = none, force = the yard fire and the current stage's sparks at any hour.
+                    if (args.Count > 1)
+                    {
+                        Content.StorageUnit.StorageVfx.Current = args[1] switch
+                        {
+                            "on" => Content.StorageUnit.StorageVfx.Mode.Normal,
+                            "off" => Content.StorageUnit.StorageVfx.Mode.Off,
+                            "force" => Content.StorageUnit.StorageVfx.Mode.Force,
+                            _ => throw new ArgumentException("baseddiag vfx [on|off|force]")
+                        };
+                        Content.StorageUnit.StorageVfx.Refresh();
+                    }
+                    Mod.Log("baseddiag: storage effects " + Content.StorageUnit.StorageVfx.Describe());
                     break;
                 case "creator":
                     // A joining test client without saved looks starts in the character creator; finish it with the defaults.
@@ -81,7 +122,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     RoomProbe.Execute(_site, args.Skip(1).ToArray());
                     break;
                 case "dockroute":
-                    if (args.Count > 3 && args[1] == "deliver") DockDeliver(int.Parse(args[2]), args[3]);
+                    if (args.Count > 3 && args[1] == "deliver") DockDeliver(int.Parse(args[2]), args[3], args.Count > 4 ? int.Parse(args[4]) : 0);
                     else if (args.Count > 1 && args[1] == "route") SetDockRoute();
                     else if (args.Count > 1 && args[1] == "routes") DockRoutes();
                     else if (args.Count > 1 && args[1] == "work") DockWork();
@@ -124,6 +165,25 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "journal":
                     JournalDetails(args.Count < 2 || args[1] != "off");
                     break;
+                case "litter":
+                    // litter [<upgrade>] = trash in the build's rooms; litter drop <upgrade> = the drop of a finished
+                    // build again; litter pickup [n] = the equipped trash grabber takes the n nearest pieces.
+                    if (args.Count > 2 && args[1] == "drop") ConstructionLitter.Drop(_site, args[2]);
+                    else if (args.Count > 1 && args[1] == "pickup") Pickup(args.Count > 2 ? int.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 1);
+                    else LitterCounts(args.Count > 1 ? args[1] : null);
+                    break;
+                case "ladder":
+                    Mod.Log("baseddiag: storage " + Content.StorageUnit.StorageLadder.Describe());
+                    break;
+                case "climb":
+                    MelonLoader.MelonCoroutines.Start(Climb(args.Count > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 3f));
+                    break;
+                case "fixtures":
+                    Fixtures();
+                    break;
+                case "equip":
+                    EquippedHandlers();
+                    break;
                 default:
                     throw new ArgumentException(ExampleUsage);
             }
@@ -156,6 +216,8 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             if (dock == null) { Mod.Warn($"baseddiag: dockroute dock {d} is null"); continue; }
             var van = dock.DynamicOccupant;
             Mod.Log($"baseddiag: dockroute dock {d} guid {dock.GUID} at {dock.transform.position}, van {(van != null ? van.name : "none")}, output slots {dock.OutputSlots?.Count ?? 0}");
+            if (van != null)
+                Mod.Log($"baseddiag: dockroute dock {d} van at {van.transform.position} forward {van.transform.forward} size {van.BoundingBoxDimensions}");
             var points = dock.accessPoints;
             for (int i = 0; points != null && i < points.Length; i++)
                 if (points[i] != null) Reach($"access point {i}", points[i].position);
@@ -249,7 +311,13 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             case "hang": ProjectFolder.DebugHang(); break;
             case "wall": Mod.Log("baseddiag: folder hung on the " + ProjectFolder.DebugWall(_site) + "."); break;
             case "state": Mod.Log("baseddiag: folder " + ProjectFolder.DebugState(_site)); break;
-            default: throw new ArgumentException("baseddiag folder give|open|hang|wall|state");
+            case "hold": Mod.Log("baseddiag: folder in hand from hotbar " + ProjectFolder.DebugHold(_site) + "."); break;
+            case "drop": Mod.Log("baseddiag: hands free on hotbar " + ProjectFolder.DebugHold(_site, empty: true) + "."); break;
+            case "close":
+                Based.UI.BuildPlan.Close("console");
+                Mod.Log("baseddiag: folder plan closed.");
+                break;
+            default: throw new ArgumentException("baseddiag folder give|open|close|hang|wall|state|hold|drop");
         }
     }
 
@@ -293,6 +361,87 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         }
     }
 
+    // Every visible tube lamp the expansion adds against the ceiling above it: a ray up from both ends and the middle of
+    // the lamp's back. The ceiling is the lower of the first collider above and the lowest flat panel drawn over that
+    // point, since the expansion's ceiling panels have no collider. The gap is the distance from the back to the ceiling;
+    // a negative gap means that end lies inside it. PASS when every gap lies between -0.5 and 2 cm.
+    private static void Fixtures()
+    {
+        int pass = 0, fail = 0, vanilla = 0, hidden = 0;
+        var all = UnityEngine.Object.FindObjectsOfType<MeshRenderer>();
+        var panels = new List<MeshRenderer>();
+        foreach (var part in all)
+        {
+            Bounds b = part.bounds;
+            if (b.max.x < -12f || b.min.x > 4f || b.max.z < 92f || b.min.z > 115f || b.max.y < 1f) continue;
+            if (!part.enabled || !part.gameObject.activeInHierarchy) continue;
+            if (b.size.y > .2f || Mathf.Max(b.size.x, b.size.z) < 1f || Path(part.transform).Contains("FluroBar")) continue;
+            panels.Add(part);
+        }
+        foreach (var part in all)
+        {
+            Vector3 at = part.transform.position;
+            if (at.x < -12f || at.x > 4f || at.z < 92f || at.z > 115f || at.y < 1f) continue;
+            string path = Path(part.transform);
+            if (!path.Contains("FluroBar") || !path.Contains("/Body")) continue;
+            if (!path.Contains("based_storage"))
+            {
+                vanilla++;
+                continue;
+            }
+            if (!part.enabled || !part.gameObject.activeInHierarchy)
+            {
+                hidden++;
+                continue;
+            }
+            var filter = part.GetComponent<MeshFilter>();
+            if (filter == null || filter.sharedMesh == null)
+            {
+                Mod.Warn("baseddiag fixtures: " + path + " has no mesh, skipped.");
+                continue;
+            }
+            Bounds local = filter.sharedMesh.bounds;
+            bool alongX = local.extents.x >= local.extents.z;
+            Vector3 half = alongX ? new Vector3(local.extents.x - .02f, 0, 0) : new Vector3(0, 0, local.extents.z - .02f);
+            Vector3 top = new(local.center.x, local.max.y, local.center.z);
+            var gaps = new List<string>();
+            bool ok = true;
+            foreach (var (name, offset) in new[] { ("end-a", -half), ("middle", Vector3.zero), ("end-b", half) })
+            {
+                Vector3 back = part.transform.TransformPoint(top + offset);
+                // From well below the back, so a ceiling the end reaches into is still hit from its open side.
+                Vector3 from = back + Vector3.down * .3f;
+                float ceiling = float.MaxValue;
+                string by = null;
+                if (Physics.Raycast(from, Vector3.up, out RaycastHit hit, 3.5f, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    ceiling = hit.point.y;
+                    by = "collider " + hit.collider.name;
+                }
+                foreach (var panel in panels)
+                {
+                    Bounds b = panel.bounds;
+                    if (back.x < b.min.x || back.x > b.max.x || back.z < b.min.z || back.z > b.max.z) continue;
+                    if (b.min.y < from.y || b.min.y >= ceiling) continue;
+                    ceiling = b.min.y;
+                    by = "panel " + Path(panel.transform);
+                }
+                if (by == null)
+                {
+                    gaps.Add($"{name} ({back.x:F2},{back.y:F2},{back.z:F2}) no ceiling");
+                    ok = false;
+                    continue;
+                }
+                float gap = ceiling - back.y;
+                ok &= gap >= -.005f && gap < .02f;
+                gaps.Add($"{name} ({back.x:F2},{back.y:F2},{back.z:F2}) gap {gap * 100f:F1} cm to {by}");
+            }
+            if (ok) pass++; else fail++;
+            Mod.Log($"baseddiag fixtures: {(ok ? "PASS" : "FAIL")} {path} " + string.Join("; ", gaps));
+        }
+        Mod.Log($"baseddiag fixtures: {pass} pass, {fail} fail; {panels.Count} drawn panels checked; {vanilla} vanilla and {hidden} hidden lamp bodies not counted.");
+    }
+
     // Changes the two ceiling lights added by the upgrade live, so one run can compare reach and shadow settings.
     private static void LightSet(string what, float value)
     {
@@ -327,10 +476,22 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // Selects a hotbar slot like its number key, for checks of hand-held interactions.
+    // L10n resolves the language once per session; a test resets its cached choice to read both languages in one game.
+    private static void SetLanguage(string code)
+    {
+        const System.Reflection.BindingFlags Flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+        var type = typeof(DooDesch.Localization.L10n);
+        var lang = type.GetField("_lang", Flags) ?? throw new MissingFieldException(type.FullName, "_lang");
+        var active = type.GetField("_active", Flags) ?? throw new MissingFieldException(type.FullName, "_active");
+        lang.SetValue(null, code);
+        active.SetValue(null, null);
+        Mod.Log("baseddiag: language set to " + DooDesch.Localization.L10n.Language + "; reopen the plan to see it.");
+    }
+
     private static void Hold(int slot)
     {
         var inventory = Il2CppScheduleOne.PlayerScripts.PlayerInventory.Instance;
-        inventory.Equip(inventory.IndexAllSlots(slot));
+        ProjectFolder.EquipOnly(inventory, inventory.IndexAllSlots(slot));
         Mod.Log("baseddiag: hotbar slot " + slot + " selected, holding " + (inventory.IndexAllSlots(slot).ItemInstance?.Name ?? "nothing") + ".");
     }
 
@@ -369,6 +530,104 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             }
         }
         Mod.Log("baseddiag walk: route finished.");
+    }
+
+    // Every equipped item handler in the scene with its user, data and network object. A handler whose synced user is
+    // null throws a NullReferenceException in its Update every frame on this peer.
+    private static void EquippedHandlers()
+    {
+        var handlers = UnityEngine.Object.FindObjectsOfType<Il2CppScheduleOne.Equipping.EquippedItemHandler>(true);
+        int missing = 0;
+        foreach (var handler in handlers)
+        {
+            string user, data, net;
+            try
+            {
+                var raw = handler._user;
+                var component = raw == null ? null : ((Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase)(object)raw).TryCast<Component>();
+                user = raw == null ? "null" : component != null ? PathOf(component.transform) : "not a component";
+                if (raw == null) missing++;
+            }
+            catch (Exception error) { user = "unreadable (" + error.GetType().Name + ")"; }
+            try { data = handler._equippableData == null ? "null" : handler._equippableData.name; }
+            catch (Exception error) { data = "unreadable (" + error.GetType().Name + ")"; }
+            try { net = "object " + handler.ObjectId + ", spawned " + handler.IsSpawned + ", server " + handler.IsServer; }
+            catch (Exception error) { net = "unreadable (" + error.GetType().Name + ")"; }
+            Mod.Log("baseddiag equip: '" + PathOf(handler.transform) + "' active " + handler.gameObject.activeInHierarchy
+                    + ", equipped " + handler.IsEquipped + ", user " + user + ", data " + data + ", " + net + ".");
+        }
+        Mod.Log("baseddiag equip: " + handlers.Length + " handler(s), " + missing + " without a user.");
+    }
+
+    private static string PathOf(Transform transform)
+    {
+        var parts = new List<string>();
+        for (var t = transform; t != null; t = t.parent) parts.Add(t.name);
+        parts.Reverse();
+        return string.Join("/", parts);
+    }
+
+    private static void LitterCounts(string? upgradeId)
+    {
+        foreach (var id in _site.BuildIds.Distinct().Where(i => upgradeId == null || i == upgradeId))
+        {
+            var rooms = ConstructionLitter.RoomsOf(_site, id);
+            Mod.Log("baseddiag litter: " + id + " " + Mod.StageOf(_site, id) + ", " + rooms.Count + " room(s), planned "
+                    + (rooms.Count == 0 ? 0 : ConstructionLitter.CountFor(rooms)) + ", in the rooms now " + ConstructionLitter.CountIn(_site, id) + ".");
+        }
+        var manager = Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.Trash.TrashManager>.Instance;
+        Mod.Log("baseddiag litter: trash items in the world " + (manager == null || manager._trashItems == null ? -1 : manager._trashItems.Count) + ".");
+    }
+
+    // The game's own pickup of the equipped trash grabber, on the pieces nearest the player.
+    private static void Pickup(int count)
+    {
+        var grabber = UnityEngine.Object.FindObjectOfType<Il2CppScheduleOne.Equipping.Equippable_TrashGrabber>();
+        if (grabber == null) { Mod.Warn("baseddiag litter pickup: no trash grabber equipped."); return; }
+        var manager = Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.Trash.TrashManager>.Instance;
+        var here = Il2CppScheduleOne.PlayerScripts.Player.Local.transform.position;
+        var items = new List<Il2CppScheduleOne.Trash.TrashItem>();
+        foreach (var item in manager._trashItems) if (item != null) items.Add(item);
+        int before = items.Count, taken = 0;
+        foreach (var item in items.OrderBy(i => (i.transform.position - here).sqrMagnitude).Take(count))
+        {
+            if (grabber.GetCapacity() <= 0) { Mod.Warn("baseddiag litter pickup: the grabber is full."); break; }
+            Mod.Log("baseddiag litter pickup: " + item.ID + " at " + item.transform.position + ", " + Vector3.Distance(here, item.transform.position).ToString("F2") + " m away.");
+            grabber.PickupTrash(item);
+            taken++;
+        }
+        MelonLoader.MelonCoroutines.Start(AfterPickup(before, taken));
+    }
+
+    // The game destroys picked trash at the end of the frame, so the count is read a moment later.
+    private static System.Collections.IEnumerator AfterPickup(int before, int taken)
+    {
+        yield return new WaitForSeconds(.5f);
+        var manager = Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.Trash.TrashManager>.Instance;
+        Mod.Log("baseddiag litter pickup: took " + taken + "; trash items in the world " + before + " before, " + manager._trashItems.Count + " after.");
+        LitterCounts(null);
+    }
+
+    // Holds forward on the game's own move input for the given seconds, so the ladder climbs the way a player's key
+    // does, and reports where the player started, whether a ladder took them, and where they ended.
+    private static System.Collections.IEnumerator Climb(float seconds)
+    {
+        var movement = Il2CppScheduleOne.DevUtilities.PlayerSingleton<Il2CppScheduleOne.PlayerScripts.PlayerMovement>.Instance;
+        var start = movement.transform.position;
+        string mounted = "";
+        float end = Time.time + seconds, top = start.y;
+        Mod.Log($"baseddiag climb: start at ({start.x:F2},{start.y:F2},{start.z:F2}), on a ladder {movement.IsOnLadder}.");
+        while (Time.time < end)
+        {
+            Il2CppScheduleOne.GameInput.MotionAxis = new Vector2(0f, 1f);
+            if (movement.IsOnLadder && mounted.Length == 0) mounted = movement.CurrentLadder.name;
+            top = Mathf.Max(top, movement.transform.position.y);
+            yield return null;
+        }
+        Il2CppScheduleOne.GameInput.MotionAxis = Vector2.zero;
+        yield return new WaitForSeconds(.5f);
+        var stop = movement.transform.position;
+        Mod.Log($"baseddiag climb: end at ({stop.x:F2},{stop.y:F2},{stop.z:F2}), highest {top:F2}, ladder {(mounted.Length == 0 ? "none" : mounted)}, on a ladder now {movement.IsOnLadder}.");
     }
 
     // Names the NPCs whose scheduled walk stands still short of its target: the game retries those every frame.
@@ -455,21 +714,24 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         }
     }
 
-    // Gives every handler at the site one route from its loading dock, the setup a player makes in the clipboard.
+    // Gives every handler at the site one route from each loading dock, the setup a player makes in the clipboard.
     private static void SetDockRoute()
     {
         var property = SiteProperty();
         if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The " + _site.PropertyName + " has no loading dock.");
-        var dock = property.LoadingDocks[0];
         var shelf = FirstShelf(property);
         if (shelf == null) Mod.Warn("baseddiag: dockroute route: no storage shelf on the property; the route ends at the dock and moves nothing");
         int set = 0;
         foreach (var (packager, config) in Packagers())
         {
-            var source = new Il2CppScheduleOne.Management.ITransitEntity(dock.Pointer);
-            var destination = new Il2CppScheduleOne.Management.ITransitEntity(shelf != null ? shelf.Pointer : dock.Pointer);
-            config.Routes.AddItem(new Il2CppScheduleOne.Management.AdvancedTransitRoute(source, destination));
-            Mod.Log($"baseddiag: dockroute route: {packager.FirstName} gets a route from dock {dock.GUID} to {(shelf != null ? "shelf " + shelf.GUID + " at " + shelf.transform.position : "the dock")}");
+            for (int d = 0; d < property.LoadingDocks.Length; d++)
+            {
+                var dock = property.LoadingDocks[d];
+                var source = new Il2CppScheduleOne.Management.ITransitEntity(dock.Pointer);
+                var destination = new Il2CppScheduleOne.Management.ITransitEntity(shelf != null ? shelf.Pointer : dock.Pointer);
+                config.Routes.AddItem(new Il2CppScheduleOne.Management.AdvancedTransitRoute(source, destination));
+                Mod.Log($"baseddiag: dockroute route: {packager.FirstName} gets a route from dock {d} {dock.GUID} to {(shelf != null ? "shelf " + shelf.GUID + " at " + shelf.transform.position : "the dock")}");
+            }
             set++;
         }
         if (set == 0) Mod.Warn("baseddiag: dockroute route: no handler works at the " + _site.PropertyName + "; add one with 'addemployee handler " + _site.Base.PropertyId + "'");
@@ -552,36 +814,42 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // Sends one item from a shop to the site's dock through the game's own delivery, arriving in a minute.
-    private static void DockDeliver(int shopIndex, string itemId)
+    private static void DockDeliver(int shopIndex, string itemId, int dockIndex)
     {
         var property = SiteProperty();
-        if (property.LoadingDocks == null || property.LoadingDocks.Length == 0) throw new InvalidOperationException("The " + _site.PropertyName + " has no loading dock.");
+        int docks = property.LoadingDocks?.Length ?? 0;
+        if (dockIndex < 0 || dockIndex >= docks) throw new InvalidOperationException($"The {_site.PropertyName} has {docks} loading docks; dock {dockIndex} does not exist.");
         var shop = Il2CppScheduleOne.UI.Shop.ShopInterface.AllShops[shopIndex];
         if (shop?.DeliveryVehicle?.Vehicle == null) throw new InvalidOperationException("That shop has no delivery vehicle.");
         if (Il2CppScheduleOne.Registry.GetItem(itemId) == null) throw new ArgumentException("Unknown item: " + itemId);
         var items = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<Il2CppScheduleOne.DevUtilities.StringIntPair>(
             new[] { new Il2CppScheduleOne.DevUtilities.StringIntPair(itemId, 5) });
-        var delivery = new Il2CppScheduleOne.Delivery.DeliveryInstance(Guid.NewGuid().ToString(), shop.ShopName, property.PropertyCode, 0, items,
+        var delivery = new Il2CppScheduleOne.Delivery.DeliveryInstance(Guid.NewGuid().ToString(), shop.ShopName, property.PropertyCode, dockIndex, items,
             Il2CppScheduleOne.Delivery.EDeliveryStatus.InTransit, 1);
         Il2CppScheduleOne.Delivery.DeliveryManager.Instance.SendDelivery(delivery);
-        Mod.Log($"baseddiag: dockroute deliver: 5 {itemId} from '{shop.ShopName}' to {property.PropertyCode} dock 0 in 1 minute");
+        Mod.Log($"baseddiag: dockroute deliver: 5 {itemId} from '{shop.ShopName}' to {property.PropertyCode} dock {dockIndex} in 1 minute");
     }
 
     private static void DockRoutes()
     {
         var property = SiteProperty();
-        var dock = property.LoadingDocks != null && property.LoadingDocks.Length > 0 ? property.LoadingDocks[0] : null;
+        var docks = property.LoadingDocks?.ToArray() ?? Array.Empty<Il2CppScheduleOne.Delivery.LoadingDock>();
         int handlers = 0;
         foreach (var (packager, config) in Packagers())
         {
             handlers++;
             var routes = config.Routes.Routes;
-            Mod.Log($"baseddiag: dockroute routes: {packager.FirstName} has {routes.Count} routes; dock {(dock == null ? "missing" : dock.GUID.ToString())}");
+            Mod.Log($"baseddiag: dockroute routes: {packager.FirstName} has {routes.Count} routes; docks {(docks.Length == 0 ? "missing" : string.Join(", ", docks.Select(d => d.GUID.ToString())))}");
             for (int i = 0; i < routes.Count; i++)
             {
                 var route = routes[i];
-                string Side(Il2CppScheduleOne.Management.ITransitEntity? e) =>
-                    e == null ? "none" : e.Pointer == dock?.Pointer ? "the loading dock" : e.Name;
+                // Dock 0 keeps the name the Sweatshop test looks for; a further dock carries its index.
+                string Side(Il2CppScheduleOne.Management.ITransitEntity? e)
+                {
+                    if (e == null) return "none";
+                    int d = Array.FindIndex(docks, k => k.Pointer == e.Pointer);
+                    return d < 0 ? e.Name : d == 0 ? "the loading dock" : "the loading dock " + d;
+                }
                 Mod.Log($"baseddiag: dockroute routes:   {i}: from {Side(route.Source)} to {Side(route.Destination)}");
             }
         }
@@ -589,12 +857,45 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // Moves the upgrade straight to a stage, so one run can look at every construction state.
-    private static void JumpToPhase(string phase)
+    // "phase <phase>" moves the site's first upgrade; "phase <upgradeId>:<phase>" moves a follow-up. A follow-up finishes
+    // everything it needs first and resets the site's other builds, since the engine allows one construction per base.
+    private static void JumpToPhase(string argument)
     {
         if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host can change the construction state.");
+        int colon = argument.LastIndexOf(':');
+        string upgradeId = colon > 0 ? argument.Substring(0, colon) : _site.UpgradeId;
+        string phase = colon > 0 ? argument.Substring(colon + 1) : argument;
+        if (!_site.BuildIds.Contains(upgradeId))
+            throw new ArgumentException("baseddiag phase [upgradeId:]phase; " + _site.Base.Id + " builds " + string.Join(", ", _site.BuildIds));
         var state = Mod.Engine.ExportState();
-        var upgrade = state.Upgrades.First(u => u.BaseId == _site.Base.Id && u.UpgradeId == _site.UpgradeId);
-        var definition = _site.Upgrade;
+        var upgrade = state.Upgrades.First(u => u.BaseId == _site.Base.Id && u.UpgradeId == upgradeId);
+        var definition = _site.UpgradeOf(upgradeId);
+        if (upgradeId != _site.UpgradeId)
+        {
+            var needed = new HashSet<string>();
+            void Need(string id)
+            {
+                foreach (var p in _site.UpgradeOf(id).Prerequisites)
+                    if (needed.Add(p)) Need(p);
+            }
+            Need(upgradeId);
+            foreach (var other in state.Upgrades.Where(u => u.BaseId == _site.Base.Id && u.UpgradeId != upgradeId))
+            {
+                if (needed.Contains(other.UpgradeId))
+                {
+                    other.Stage = UpgradeStage.Complete;
+                    other.CompletedCycles = _site.UpgradeOf(other.UpgradeId).ConstructionCycles;
+                }
+                else
+                {
+                    other.Stage = UpgradeStage.RightsMissing;
+                    other.CompletedCycles = 0;
+                    other.RightsPaid = 0;
+                    other.ConstructionPaid = 0;
+                }
+            }
+            Mod.Log("baseddiag: phase: " + upgradeId + " needs " + (needed.Count == 0 ? "nothing" : string.Join(", ", needed)) + "; those are complete, the other builds reset.");
+        }
         // The named stages around the construction, and each phase at the night it starts.
         var stages = new List<(string Id, UpgradeStage Stage, int Cycles)>
         {
@@ -615,7 +916,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         Mod.DebugClearFailure();
         Mod.Engine.RestoreState(state);
         Mod.Changed();
-        Mod.Log("baseddiag: construction moved to " + phase + " at " + _site.Base.Id + "; revision " + state.Revision + ".");
+        Mod.Log("baseddiag: construction moved to " + phase + " at " + _site.Base.Id + "/" + upgradeId + "; revision " + state.Revision + ".");
     }
 
     // Clears the walls item by item, as a player does, so the hold's list can be seen shrinking.

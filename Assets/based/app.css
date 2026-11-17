@@ -18,11 +18,13 @@ body { height:100%; font-family:game-hand, "Segoe Print", cursive; color:#2b2b2b
 
 .board { width:860px; height:500px; padding:30px 24px 22px; }
 /* An img is tinted with its colour, which it would inherit from the text. */
-.layer-board, .layer-sheets, .layer-paper, .layer-clip, .layer-pencil, .layer-tape { color:#fff; }
+.layer-board, .layer-sheets, .layer-paper, .layer-clip, .layer-pencil, .layer-pencil-shadow, .layer-tape { color:#fff; }
 .layer-board { position:absolute; left:0; top:0; width:860px; height:500px; }
 .layer-sheets { position:absolute; left:10px; top:14px; width:840px; height:476px; }
 .layer-paper { position:absolute; left:0; top:0; width:812px; height:448px; }
 .layer-clip { position:absolute; left:335px; top:-12px; width:190px; height:56px; }
+/* The shadow is the pencil's own outline, blurred and offset down-right, so the pencil reads as lying on the board. */
+.layer-pencil-shadow { position:absolute; left:39px; top:437px; width:194px; height:47px; transform:rotate(-3deg); }
 .layer-pencil { position:absolute; left:48px; top:444px; width:170px; height:23px; transform:rotate(-3deg); }
 .layer-tape { position:absolute; left:770px; top:438px; width:84px; height:21px; transform:rotate(-38deg); }
 .paper { flex:1; min-height:0; padding:20px 30px 18px; gap:12px; }

@@ -16,7 +16,7 @@ internal static class BuildPlan
 {
     internal const string SurfaceId = "based-plan";
     private const float PushInterval = .25f;
-    private const float PixelsPerMetre = 30f;
+    private const float PixelsPerMetre = 30f, MaxDrawingWidth = 260f, MaxDrawingHeight = 300f;
     private const float WallPixels = 4f;
     private static GameObject? _root;
     private static SurfaceHandle? _surface;
@@ -247,10 +247,45 @@ internal static class BuildPlan
             take = !wall && ProjectFolder.Offered(site) ? Text.T("Take the project folder") : "",
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
                 : !owned ? Text.T(site.BuyFirst)
-                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Mod.HeldBy)
+                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Text.Items(Mod.HeldBy))
                 : _noticeUpgrade.Length == 0 ? _notice : "",
-            drawing = Drawing(site.Plan, UpgradeStage.Complete)
+            drawing = Drawing(BuiltPlan(site), UpgradeStage.Complete)
         });
+    }
+
+    // What stands now, for the page that lists every build: the site's own drawing until a follow-up with a drawing of
+    // its own is finished, then the new rooms of every finished one, drawn as built and named by their build. A new
+    // floor above the old rooms covers them in a view from above, so the old rooms drop out once one exists.
+    // A named room counts the unnamed rooms of its kind that join it, directly or through each other (the sweatshop's
+    // side strips). A part standing apart, like the loft's outside stair, keeps the number the same in every state.
+    private static float LabelArea(PlanRoom named, IReadOnlyList<PlanRoom> rooms)
+    {
+        const float Touch = .05f;
+        var joined = new List<PlanRoom> { named };
+        var open = rooms.Where(o => o.Kind == named.Kind && o.Label == null).ToList();
+        for (bool grew = true; grew;)
+        {
+            grew = false;
+            for (int i = open.Count - 1; i >= 0; i--)
+            {
+                var o = open[i];
+                if (!joined.Any(j => o.MinX <= j.MaxX + Touch && j.MinX <= o.MaxX + Touch && o.MinZ <= j.MaxZ + Touch && j.MinZ <= o.MaxZ + Touch)) continue;
+                joined.Add(o);
+                open.RemoveAt(i);
+                grew = true;
+            }
+        }
+        return joined.Sum(o => (o.MaxX - o.MinX) * (o.MaxZ - o.MinZ));
+    }
+
+    private static IReadOnlyList<PlanRoom> BuiltPlan(SiteDefinition site)
+    {
+        var built = site.FollowUps
+            .Where(f => f.Plan.Count > 0 && Mod.StageOf(site, f.UpgradeId) == UpgradeStage.Complete)
+            .SelectMany(f => f.Plan.Where(r => r.Kind == PlanRoomKind.New)
+                .Select(r => r with { Kind = PlanRoomKind.Existing, Label = r.Label == "Expansion" ? f.ListName : r.Label }))
+            .ToList();
+        return built.Count > 0 ? built : site.Plan;
     }
 
     private static string State(SiteDefinition site, bool readOnly, bool wall)
@@ -310,7 +345,7 @@ internal static class BuildPlan
             notes = Notes(site, followUp, upgrade, state.Stage),
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
                 : !owned ? Text.T(site.BuyFirst)
-                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Mod.HeldBy)
+                : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Text.Items(Mod.HeldBy))
                 : reason.Length > 0 && ordering && !wall ? reason
                 : locked && !wall && ordering && !permit ? Text.T(site.OrderEntry)
                 : state.Stage == _noticeStage && upgradeId == _noticeUpgrade ? _notice : "",
@@ -349,16 +384,18 @@ internal static class BuildPlan
         var solid = plan.Where(r => r.Kind != PlanRoomKind.Opening).ToArray();
         float minX = solid.Min(r => r.MinX), maxX = solid.Max(r => r.MaxX);
         float minZ = solid.Min(r => r.MinZ), maxZ = solid.Max(r => r.MaxZ);
+        // A large site shrinks to the space left of the text instead of running off the paper.
+        float scale = Mathf.Min(PixelsPerMetre, MaxDrawingWidth / (maxX - minX), MaxDrawingHeight / (maxZ - minZ));
         Box Place(float x0, float z0, float x1, float z1) => new(
-            (x0 - minX) * PixelsPerMetre,
-            (maxZ - z1) * PixelsPerMetre,
-            (x1 - x0) * PixelsPerMetre,
-            (z1 - z0) * PixelsPerMetre);
+            (x0 - minX) * scale,
+            (maxZ - z1) * scale,
+            (x1 - x0) * scale,
+            (z1 - z0) * scale);
         var cuts = stage == UpgradeStage.Complete ? Array.Empty<PlanRoom>() : plan.Where(r => r.Kind == PlanRoomKind.Opening).ToArray();
         return new
         {
-            width = Mathf.Ceil((maxX - minX) * PixelsPerMetre),
-            height = Mathf.Ceil((maxZ - minZ) * PixelsPerMetre),
+            width = Mathf.Ceil((maxX - minX) * scale),
+            height = Mathf.Ceil((maxZ - minZ) * scale),
             fills = solid.Select(r =>
             {
                 // A pixel of overlap keeps the paper from showing between two rooms of one colour.
@@ -370,7 +407,7 @@ internal static class BuildPlan
             labels = solid.Where(r => r.Label != null).Select(r =>
             {
                 var box = Place(r.MinX, r.MinZ, r.MaxX, r.MaxZ);
-                float area = solid.Where(o => o.Kind == r.Kind).Sum(o => (o.MaxX - o.MinX) * (o.MaxZ - o.MinZ));
+                float area = LabelArea(r, solid);
                 return new
                 {
                     box.left,

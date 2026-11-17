@@ -36,14 +36,14 @@ public sealed class Mod : MelonMod
 {
     private const string Wire = "BASED-STATE1:";
     private const float VendorWarnAfter = 30f;
-    private const float RequestInterval = 5f;
+    private const float RequestInterval = 5f, ProgressInterval = 2f;
     private const float PlanRequestTimeout = 3f;
     private const float HoldCheckInterval = 1f;
 
     // Built on first use, not in the type initializer: the site types need S1API, and the missing-mods check has to
     // run first so a missing S1API still reaches the player.
     private static IReadOnlyList<SiteDefinition>? _sites;
-    internal static IReadOnlyList<SiteDefinition> Sites => _sites ??= new[] { MingSite.Create() };
+    internal static IReadOnlyList<SiteDefinition> Sites => _sites ??= new[] { MingSite.Create(), Content.StorageUnit.StorageSite.Create() };
     // The vendors that name missing mods, without building the sites.
     private static readonly (string NpcId, string ContainerId, string Choice)[] NoticeVendors =
         { (MingSite.VendorNpcId, MingSite.VendorContainerId, MingSite.RequestChoice) };
@@ -69,7 +69,7 @@ public sealed class Mod : MelonMod
     private static readonly HashSet<string> ContainedErrors = new();
     private static readonly HashSet<string> NoticeBound = new(), NoticeMissing = new();
     private static SiteDefinition? _planRequest;
-    private static float _planRequestedAt, _nextBind, _nextRequest, _nextHoldCheck, _loadedAt = -1;
+    private static float _planRequestedAt, _nextBind, _nextRequest, _nextProgress, _nextHoldCheck, _loadedAt = -1;
     private static bool _main, _snapshotReceived, _worldDirty = true, _initialized, _waitingNetwork, _saveWarningShown;
     private static string _lastWorld = "", _lastAck = "";
 
@@ -115,6 +115,7 @@ public sealed class Mod : MelonMod
         Payments.ValidatePurchase = ValidatePurchase;
         NativeBus.HostReceived += ReceiveHost;
         NativeBus.ClientReceived += ReceiveClient;
+        Tips.Listen();
         MapExpansionsApi.PeerWorldStateRequested += SendSnapshot;
         S1API.GameTime.TimeManager.OnSleepEnd += SleepEnded;
         foreach (var site in Sites) site.Crew?.Initialize(Log, Warn);
@@ -149,6 +150,9 @@ public sealed class Mod : MelonMod
             ConstructionJournal.Reset();
             ProjectFolder.Reset();
             PlanCopies.Reset();
+            Tips.Reset();
+            Content.StorageUnit.StorageVfx.Reset();
+            Content.StorageUnit.StorageLadder.Reset();
             RayMenu.Reset();
             StaffRoom.Reset();
             foreach (var site in Sites) site.Crew?.Cleanup();
@@ -164,7 +168,7 @@ public sealed class Mod : MelonMod
             _planRequest = null;
             _lastWorld = _lastAck = Failure = HeldBy = "";
             _snapshotReceived = _saveWarningShown = false;
-            _nextRequest = 0;
+            _nextRequest = _nextProgress = 0;
             _loadedAt = -1;
             _worldDirty = true;
         }
@@ -242,6 +246,8 @@ public sealed class Mod : MelonMod
             if (_waitingNetwork) { Log("Game network session connected; construction sync resumed."); _waitingNetwork = false; }
             if (NativeBus.IsHost && BasedSave.SaveIdKnown) Payments.SetSession(BasedSave.SaveId);
             Payments.Tick();
+            try { Tips.Tick(); }
+            catch (Exception error) { Contain("tips", error); }
             TickClientSync();
             if (_worldDirty) ApplyWorld();
             if (Failure.Length > 0) return;
@@ -258,16 +264,30 @@ public sealed class Mod : MelonMod
                 catch (Exception error) { Contain("expansion menu at Ray", error); }
             }
             foreach (var site in Sites) TickCrew(site);
+            TickStorageEffects();
             TickHold();
             TickJournal();
         }
         catch (Exception error) { Contain("runtime update", error); }
     }
 
+    private static void TickStorageEffects()
+    {
+        var site = Sites.FirstOrDefault(s => s.Base.Id == Content.StorageUnit.StorageDefinition.BaseId);
+        if (site == null) return;
+        try { Content.StorageUnit.StorageVfx.Tick(Constructing(site) != null); }
+        catch (Exception error) { Contain("storage site effects", error); }
+        try { Content.StorageUnit.StorageLadder.Tick(); }
+        catch (Exception error) { Contain("storage ladder", error); }
+    }
+
     // The quest names what still stands on the walls, so the list shrinks while the player clears them.
     private static void TickHold()
     {
         if (!NativeBus.IsHost || HeldBy.Length == 0 || Time.unscaledTime < _nextHoldCheck) return;
+#if DEBUG
+        if (DebugHoldPinned) return;
+#endif
         _nextHoldCheck = Time.unscaledTime + HoldCheckInterval;
         var site = Sites.FirstOrDefault(s => Constructing(s) != null);
         SetHeld(site == null ? "" : BlockerNames(BlockingItems(site, Constructing(site)!)));
@@ -276,6 +296,10 @@ public sealed class Mod : MelonMod
     internal static UpgradeStage StageOf(SiteDefinition site, string upgradeId) => Engine.GetUpgrade(site.Base.Id, upgradeId).Stage;
 
     internal static string? Constructing(SiteDefinition site) => site.ConstructingId(id => StageOf(site, id));
+
+    // Every build of every site that is complete, permits included.
+    private static List<(SiteDefinition Site, string UpgradeId)> Finished() =>
+        Sites.SelectMany(site => site.BuildIds.Distinct().Where(id => StageOf(site, id) == UpgradeStage.Complete).Select(id => (site, id))).ToList();
 
     private static void TickFolder()
     {
@@ -299,7 +323,17 @@ public sealed class Mod : MelonMod
             _nextRequest = Time.unscaledTime + RequestInterval;
             NativeBus.SendToHost(Wire + JsonConvert.SerializeObject(new StatePacket { Kind = "request" }));
         }
-        if (!_snapshotReceived || !WorldApplied()) return;
+        if (!_snapshotReceived) return;
+        if (!WorldApplied())
+        {
+            // Applying a finished expansion can hold the main thread for many seconds; the host keeps the join while
+            // these reports come.
+            if (Time.unscaledTime < _nextProgress) return;
+            _nextProgress = Time.unscaledTime + ProgressInterval;
+            NativeBus.SendToHost(Wire + JsonConvert.SerializeObject(new StatePacket
+                { Kind = "progress", SaveId = BasedSave.SaveId, Revision = Engine.Revision }));
+            return;
+        }
         string key = BasedSave.SaveId + ":" + Engine.Revision;
         if (_lastAck == key) return;
         NativeBus.SendToHost(Wire + JsonConvert.SerializeObject(new StatePacket
@@ -511,9 +545,11 @@ public sealed class Mod : MelonMod
     }
 
     // The outlines end with the plan, so the text names every blocker at once.
-    private static string BlockedText(BuildableItem[] items) => Text.T("Move {0} off the red walls.", BlockerNames(items));
+    private static string BlockedText(BuildableItem[] items) => Text.T("Move {0} off the red walls.", Text.Items(BlockerNames(items)));
 
-    private static string BlockerNames(BuildableItem[] items) => string.Join(", ", items.Select(i => i.GetManagementName()).Distinct());
+    // The game's own item names, unchanged, joined with Text.ItemSeparator. HeldBy carries this raw list to the clients,
+    // so each peer quotes and joins it in its own language.
+    private static string BlockerNames(BuildableItem[] items) => string.Join(Text.ItemSeparator, items.Select(i => i.GetManagementName()).Distinct());
 
     internal static BuildableItem[] BlockingItems(SiteDefinition site) => BlockingItems(site, site.UpgradeId);
 
@@ -568,6 +604,9 @@ public sealed class Mod : MelonMod
     {
         PlanShows(site, upgradeId);
         // The hold only names last night's blocker, so it ends as soon as the player has moved the item.
+#if DEBUG
+        if (DebugHoldPinned) return;
+#endif
         if (NativeBus.IsHost && HeldBy.Length > 0 && Outlined.Count == 0) SetHeld("");
     }
 
@@ -590,6 +629,16 @@ public sealed class Mod : MelonMod
 #if DEBUG
     // Lets a test see the conversation end the plan, as it does without the hold.
     internal static bool DebugFreeConversation;
+
+    // A test names the hold itself, so the hold check and the plan leave the names alone until it is cleared.
+    internal static bool DebugHoldPinned;
+
+    internal static void DebugHeld(string names)
+    {
+        if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host names the construction hold.");
+        DebugHoldPinned = names.Length > 0;
+        SetHeld(names);
+    }
 
     internal static void DebugBlockers(SiteDefinition site)
     {
@@ -656,6 +705,7 @@ public sealed class Mod : MelonMod
         }
         SetHeld("");
         var before = Engine.ExportState();
+        var finishedBefore = Finished();
         var result = Engine.AdvanceSleep(cycle);
         if (!result.Applied) { Log("Sleep skipped: " + result.Reason); return; }
         _worldDirty = true;
@@ -666,6 +716,12 @@ public sealed class Mod : MelonMod
         }
         Changed();
         Log("Construction sleep cycle " + cycle + " applied; revision " + Engine.Revision + ".");
+        // A stage that finished in this sleep leaves the crew's trash behind, once, on the host.
+        foreach (var (site, upgradeId) in Finished().Except(finishedBefore))
+        {
+            try { ConstructionLitter.Drop(site, upgradeId); }
+            catch (Exception error) { Contain("construction litter for " + upgradeId, error); }
+        }
     }
 
     internal static void Changed()
@@ -764,6 +820,19 @@ public sealed class Mod : MelonMod
             var packet = JsonConvert.DeserializeObject<StatePacket>(payload.Substring(Wire.Length))
                 ?? throw new InvalidOperationException("Empty state packet.");
             if (packet.Kind == "request") SendSnapshot(peer);
+            else if (packet.Kind == "progress")
+            {
+                string current = packet.SaveId + ":" + packet.Revision;
+                if (!PeerSnapshots.TryGetValue(peer, out string? sent) || sent != current)
+                {
+                    Log("Snapshot progress ignored: peer " + peer + " reports " + current + ", sent " + (sent ?? "nothing") + ".");
+                    return;
+                }
+                if (!JoinProgress.Available)
+                    Log("Snapshot progress of peer " + peer + " not passed on: this MapExpansions has no join progress.");
+                else if (!JoinProgress.Report(peer, packet.Revision))
+                    Log("Snapshot progress of peer " + peer + " for revision " + packet.Revision + " not taken by MapExpansions.");
+            }
             else if (packet.Kind == "ack")
             {
                 // One purchase sends several revisions, so an answer to an earlier one can arrive after the next went out.
@@ -822,16 +891,14 @@ public sealed class Mod : MelonMod
         _saveWarningShown = true;
         try
         {
-            var notifications = Singleton<NotificationsManager>.Instance;
-            if (notifications != null)
-                notifications.SendNotification("Based", Text.T("Saving is off: the expansion could not be applied."), null, 8f, false);
-            else Warn("No notification shown: the notification manager is not ready.");
+            Notices.Send("Based", Text.T("Saving is off: the expansion could not be applied."), null, 8f, false);
         }
         catch (Exception error) { Warn("Save warning could not be shown: " + error.Message); }
     }
 
     internal static void Log(string message) => Instance.LoggerInstance.Msg("[Based] " + message);
     internal static void Warn(string message) => Instance.LoggerInstance.Warning("[Based] " + message);
+    internal static void Error(string message) => Instance.LoggerInstance.Error("[Based] " + message);
 
     // An error in the crew or the plan costs that feature, not the player's ability to save.
     private static void Contain(string operation, Exception error)
@@ -857,6 +924,26 @@ internal static class KeepConversationUnderPlan
         Mod.Log("Click under the construction plan ignored; the conversation stays open.");
         return false;
     }
+}
+
+// The join keepalive came with a later MapExpansions than Based's minimum. Only Report names the new member, so a method
+// that calls it is never compiled against an older MapExpansions, and the host's message handler keeps working there.
+internal static class JoinProgress
+{
+    private static bool? _available;
+
+    internal static bool Available => _available ??= Detect();
+
+    private static bool Detect()
+    {
+        bool found = typeof(MapExpansionsApi).GetMethod("ReportPeerWorldStateProgress", new[] { typeof(int), typeof(long) }) != null;
+        Mod.Log(found ? "MapExpansions takes join progress; a slow join is kept alive."
+                      : "This MapExpansions has no join progress; a slow join can run into its time limit.");
+        return found;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal static bool Report(int peer, long revision) => MapExpansionsApi.ReportPeerWorldStateProgress(peer, revision);
 }
 
 // The game saves through both overloads, and the short one can be inlined into its callers.

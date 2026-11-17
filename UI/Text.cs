@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using DooDesch.Localization;
 
 namespace Based.UI;
@@ -6,6 +7,17 @@ namespace Based.UI;
 internal static class Text
 {
     internal static string T(string value, params object[] arguments) => L10n.T(value, arguments);
+
+    internal const string ItemSeparator = "|";
+
+    // Item names stay as the game spells them, in quotes, joined the way the language lists things: "A" and "B",
+    // "A", "B" and "C".
+    internal static string Items(string names)
+    {
+        var quoted = names.Split(new[] { ItemSeparator }, System.StringSplitOptions.RemoveEmptyEntries).Select(n => "\"" + n + "\"").ToArray();
+        if (quoted.Length <= 1) return quoted.Length == 0 ? "" : quoted[0];
+        return T("{0} and {1}", string.Join(", ", quoted.Take(quoted.Length - 1)), quoted[quoted.Length - 1]);
+    }
     internal static void Register() => L10n.Register("de", new Dictionary<string, string>
     {
         ["Expansion: Sweatshop"] = "Ausbau: Sweatshop",
@@ -14,6 +26,7 @@ internal static class Text
         ["How is the construction going?"] = "Wie läuft der Ausbau?",
         ["Buy the Sweatshop first."] = "Kauf zuerst den Sweatshop.",
         ["Waiting for the host's construction plan."] = "Warte auf den Bauplan des Hosts.",
+        ["{0} and {1}"] = "{0} und {1}",
         ["Move {0} off the red walls."] = "Räum {0} von den roten Wänden weg.",
         ["On hold: move {0} off the red walls."] = "Baustopp: Räum {0} von den roten Wänden weg.",
         ["Keep the red walls clear."] = "Halte die roten Wände frei.",
@@ -51,6 +64,11 @@ internal static class Text
         ["Talk to Mrs. Ming about the expansion."] = "Sprich mit Mrs. Ming über den Ausbau.",
         ["Just the last few fittings. Mind the tools."] = "Nur noch die letzten Handgriffe. Pass auf das Werkzeug auf.",
         ["Keep the site clear, please."] = "Halt die Baustelle bitte frei.",
+        ["We're cutting the door today."] = "Heute schneiden wir die Tür aus.",
+        ["We're opening the loft to the hall today."] = "Heute öffnen wir den Dachboden zur Halle.",
+        ["We're opening the east room today."] = "Heute öffnen wir den Ostraum.",
+        ["We're finishing the south room today."] = "Heute machen wir den Südraum fertig.",
+        ["Talk to Ray about the expansion."] = "Sprich mit Ray über den Ausbau.",
         ["The payment journal is unavailable."] = "Das Zahlungsjournal ist nicht verfügbar.",
         ["A payment could not be confirmed."] = "Eine Zahlung konnte nicht bestätigt werden.",
         ["An unconfirmed payment is being retried."] = "Eine unbestätigte Zahlung wird erneut versucht.",
@@ -85,6 +103,15 @@ internal static class Text
         ["Make some room in your pockets first."] = "Mach erst mal Platz in deinen Taschen.",
         ["Lost your plans? I keep a copy of every deed. {0} a set, cash."] = "Pläne verloren? Ich habe von jeder Urkunde eine Kopie. {0} pro Satz, bar.",
         ["Never mind."] = "Schon gut.",
+        ["Give a tip"] = "Trinkgeld geben",
+        ["What did you have in mind?"] = "Woran hast du gedacht?",
+        ["Come back when you have some cash."] = "Komm wieder, wenn du etwas Bargeld hast.",
+        ["${0} in cash"] = "${0} bar",
+        ["Some product"] = "Etwas Ware",
+        ["What have you got?"] = "Was hast du dabei?",
+        ["{0}x {1} (worth ${2})"] = "{0}x {1} (Wert ${2})",
+        ["Thanks. We'll tidy up a bit."] = "Danke. Wir räumen ein bisschen auf.",
+        ["Thanks. We'll leave the place clean."] = "Danke. Wir hinterlassen alles sauber.",
         ["Here you go. Keep them somewhere safe this time."] = "Bitte schön. Pass diesmal besser darauf auf.",
         ["I want to expand one of my properties."] = "Ich will eine meiner Immobilien ausbauen.",
         ["Which one?"] = "Welche denn?",
@@ -99,5 +126,28 @@ internal static class Text
         ["+{0} staff"] = "+{0} Mitarbeiter",
         ["Finished"] = "Fertig",
         ["Under construction"] = "Im Bau",
+        ["Expansion: Storage Unit"] = "Ausbau: Storage Unit",
+        ["Sure. The whole upper floor is empty, nobody rents it."] = "Klar. Das ganze Obergeschoss steht leer, das mietet keiner.",
+        ["Buy the Storage Unit first."] = "Kauf zuerst die Storage Unit.",
+        ["Steel stairs"] = "Stahltreppe",
+        ["Door and partitions"] = "Tür und Trennwände",
+        ["Opening to the walkway"] = "Durchbruch zum Laufgang",
+        ["Opening to the south"] = "Durchbruch nach Süden",
+        ["Loft: Storage Unit"] = "Obergeschoss: Storage Unit",
+        ["East units: Storage Unit"] = "Ostabteile: Storage Unit",
+        ["South units: Storage Unit"] = "Südabteile: Storage Unit",
+        ["Second loading bay: Storage Unit"] = "Zweite Laderampe: Storage Unit",
+        ["Two more employees can work here."] = "Hier können zwei Mitarbeiter mehr arbeiten.",
+        ["One more employee can work here."] = "Hier kann ein Mitarbeiter mehr arbeiten.",
+        ["An outside steel stair leads up."] = "Eine Stahltreppe führt außen hinauf.",
+        ["A second delivery spot in the hall."] = "Ein zweiter Lieferplatz in der Halle.",
+        ["Loft above the unit"] = "Obergeschoss über dem Abteil",
+        ["East units"] = "Ostabteile",
+        ["South units"] = "Südabteile",
+        ["Second loading bay"] = "Zweite Laderampe",
+        ["Order the loft from Ray"] = "Beauftrage das Obergeschoss bei Ray",
+        ["Order the east units from Ray"] = "Beauftrage die Ostabteile bei Ray",
+        ["Order the south units from Ray"] = "Beauftrage die Südabteile bei Ray",
+        ["Loft"] = "Obergeschoss",
     });
 }

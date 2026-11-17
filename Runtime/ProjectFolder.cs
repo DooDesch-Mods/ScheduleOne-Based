@@ -183,9 +183,7 @@ internal static class ProjectFolder
 
     private static void Notify(SiteDefinition site, string line)
     {
-        var notifications = Singleton<NotificationsManager>.Instance;
-        if (notifications == null) { Mod.Warn("No notification shown: the notification manager is not ready."); return; }
-        notifications.SendNotification(DisplayName(site), line, _icon, 8f, false);
+        if (Notices.Send(DisplayName(site), line, _icon, 8f, false)) Mod.Log("Project folder notice shown: " + line);
     }
 
     // The ghost shows on a wall that takes the item, where the game's own click hangs it. Anywhere else the click reads it.
@@ -227,6 +225,43 @@ internal static class ProjectFolder
         Mod.Log("baseddiag: project folder placed through the game's placement.");
     }
 
+    // Takes the folder into the hand from the hotbar, as the number key would.
+    // Equips the hotbar slot that holds the site's folder, or with empty set the first empty slot, so the hands are free.
+    internal static int DebugHold(SiteDefinition site, bool empty = false)
+    {
+        var inventory = PlayerSingleton<PlayerInventory>.Instance ?? throw new InvalidOperationException("No player inventory.");
+        for (int i = 0; i < inventory.hotbarSlots.Count; i++)
+        {
+            var slot = inventory.hotbarSlots[i];
+            if (slot == null) continue;
+            if (empty)
+            {
+                if (slot.ItemInstance != null) continue;
+                EquipOnly(inventory, slot);
+                return i + 1;
+            }
+            if (slot.ItemInstance == null || !string.Equals(slot.ItemInstance.ID, site.FolderItemId, StringComparison.OrdinalIgnoreCase)) continue;
+            EquipOnly(inventory, slot);
+            return i + 1;
+        }
+        throw new InvalidOperationException(empty ? "No empty hotbar slot." : "The project folder of " + site.Base.Id + " is not on the hotbar; give it first.");
+    }
+
+    // Equip alone selects the slot without letting go of the one in hand; the number key deselects that one first.
+    // Selecting a selected slot again spawns a second hand model and loses the first, so a selected slot stays as it is.
+    internal static void EquipOnly(PlayerInventory inventory, HotbarSlot target)
+    {
+        for (int i = 0; i < inventory.hotbarSlots.Count; i++)
+        {
+            var slot = inventory.hotbarSlots[i];
+            if (slot == null || slot.Pointer == target.Pointer || !slot.IsSelected) continue;
+            slot.Deselect();
+            Mod.Log("baseddiag: hotbar slot " + (i + 1) + " let go.");
+        }
+        if (target.IsSelected) { Mod.Log("baseddiag: the hotbar slot is already in hand."); return; }
+        inventory.Equip(target);
+    }
+
     // Hangs a folder on the wall nearest to the player through the game's own spawn, as a placement would.
     // A co-op join test needs one on a wall: its spawn data carries the item to a joining client.
     internal static string DebugWall(SiteDefinition site)
@@ -242,20 +277,48 @@ internal static class ProjectFolder
         Surface? best = null;
         Vector3 point = default;
         float bestDistance = float.MaxValue;
-        foreach (var surface in UnityEngine.Object.FindObjectsOfType<Surface>())
+        var walls = UnityEngine.Object.FindObjectsOfType<Surface>()
+            .Where(s => s.SurfaceType == Surface.ESurfaceType.Wall && s.ParentProperty != null).ToList();
+        // A neighbouring property's wall box can enclose the player; the site's own walls come first.
+        var own = walls.Where(s => string.Equals(s.ParentProperty.PropertyName, site.PropertyName, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (own.Count > 0) walls = own;
+        else Mod.Warn("baseddiag: no wall surface of " + site.PropertyName + " loaded; the nearest wall of any property is used.");
+        // A wall that reaches the player's chest height comes first, so the folder hangs where a player would put it;
+        // a low or high strip of wall is the fallback.
+        for (int pass = 0; pass < 2 && best == null; pass++)
         {
-            if (surface.SurfaceType != Surface.ESurfaceType.Wall || surface.ParentProperty == null) continue;
-            var collider = surface.GetComponentInChildren<Collider>();
-            if (collider == null) continue;
-            Vector3 closest = collider.ClosestPoint(from);
-            float distance = Vector3.Distance(closest, from);
-            if (distance >= bestDistance) continue;
-            best = surface;
-            point = closest;
-            bestDistance = distance;
+            foreach (var surface in walls)
+            {
+                var collider = surface.GetComponentInChildren<Collider>();
+                if (collider == null) continue;
+                Vector3 closest = collider.ClosestPoint(from);
+                if (pass == 0 && Mathf.Abs(closest.y - from.y) > 0.3f) continue;
+                float distance = Vector3.Distance(closest, from);
+                if (distance >= bestDistance) continue;
+                best = surface;
+                point = closest;
+                bestDistance = distance;
+            }
+            if (pass == 0 && best == null) Mod.Warn("baseddiag: no wall at chest height near the player; the nearest wall at any height is used.");
         }
         if (best == null) throw new InvalidOperationException("No wall surface in the loaded world.");
-        var item = manager.CreateSurfaceItem(definition.GetDefaultInstance(1), best, best.GetRelativePosition(point), Quaternion.identity);
+        // Same pose as the placement ghost (BuildUpdate_Surface.PositionObjectInFrontOfPlayer): the item's BuildPoint
+        // sits on the wall point and looks along the wall normal, which points back toward the player.
+        Vector3 normal = from - point;
+        normal.y = 0f;
+        normal = normal.sqrMagnitude > 0.0001f ? normal.normalized : -best.transform.forward;
+        Quaternion rotation = Quaternion.LookRotation(normal, Vector3.up);
+        Vector3 position = point;
+        var built = definition.BuiltItem;
+        var buildPoint = built != null ? built.BuildPoint : null;
+        if (buildPoint != null)
+        {
+            Quaternion localRotation = Quaternion.Inverse(built!.transform.rotation) * buildPoint.rotation;
+            rotation *= Quaternion.Inverse(localRotation);
+            position = point - rotation * built.transform.InverseTransformPoint(buildPoint.position);
+        }
+        else Mod.Warn("baseddiag: the folder item has no BuildPoint; it hangs by its root and may sit in the wall.");
+        var item = manager.CreateSurfaceItem(definition.GetDefaultInstance(1), best, best.GetRelativePosition(position), best.GetRelativeRotation(rotation));
         string where = best.ParentProperty.PropertyName + " wall " + best.name + " at " + point + " (" + bestDistance.ToString("0.0") + " m away)";
         if (item == null) throw new InvalidOperationException("The game did not create the folder on " + where + ".");
         return where;
@@ -264,7 +327,59 @@ internal static class ProjectFolder
     internal static string DebugState(SiteDefinition site)
     {
         var hung = string.Join("; ", Hung(site).Select(i => i.transform.position.ToString()));
-        return site.Base.Id + ": holding=" + (HeldSite == site) + ", carried=" + Carried(site) + ", aimedAtWall=" + AimedAtWall() + ", hung=[" + hung + "]";
+        return site.Base.Id + ": holding=" + (HeldSite == site) + ", carried=" + Carried(site) + ", aimedAtWall=" + AimedAtWall()
+               + ", hotbar=[" + string.Join(",", HotbarNumbers(site)) + "], hung=[" + hung + "]";
+    }
+
+    private static List<int> HotbarNumbers(SiteDefinition site)
+    {
+        var numbers = new List<int>();
+        var inventory = PlayerSingleton<PlayerInventory>.Instance;
+        if (inventory == null) return numbers;
+        for (int i = 0; i < inventory.hotbarSlots.Count; i++)
+        {
+            var item = inventory.hotbarSlots[i]?.ItemInstance;
+            if (item != null && string.Equals(item.ID, site.FolderItemId, StringComparison.OrdinalIgnoreCase)) numbers.Add(i + 1);
+        }
+        return numbers;
+    }
+
+    // A test hand-over puts the folder in one known slot: other folders of the site go, and whatever sat in that
+    // slot moves to a free one.
+    internal static string DebugSlot(SiteDefinition site, int number)
+    {
+        var inventory = PlayerSingleton<PlayerInventory>.Instance ?? throw new InvalidOperationException("No player inventory.");
+        var definition = Of(site).Definition ?? throw new InvalidOperationException("The folder item of " + site.Base.Id + " is not registered.");
+        if (number < 1 || number > inventory.hotbarSlots.Count) throw new ArgumentException("Hotbar slot 1-" + inventory.hotbarSlots.Count + ".");
+        var target = inventory.hotbarSlots[number - 1];
+        int removed = 0;
+        for (int i = 0; i < inventory.hotbarSlots.Count; i++)
+        {
+            var slot = inventory.hotbarSlots[i];
+            if (i == number - 1 || slot?.ItemInstance == null || !string.Equals(slot.ItemInstance.ID, site.FolderItemId, StringComparison.OrdinalIgnoreCase)) continue;
+            slot.ClearStoredInstance();
+            removed++;
+        }
+        if (target.ItemInstance != null && string.Equals(target.ItemInstance.ID, site.FolderItemId, StringComparison.OrdinalIgnoreCase))
+            return "already there, " + removed + " other folder(s) removed";
+        var moved = target.ItemInstance;
+        if (moved != null) target.ClearStoredInstance();
+        target.SetStoredItem(definition.GetDefaultInstance(1));
+        string result = "placed, " + removed + " other folder(s) removed";
+        if (moved == null) return result;
+        if (inventory.CanItemFitInInventory(moved, moved.Quantity))
+        {
+            inventory.AddItemToInventory(moved);
+            return result + ", " + moved.Quantity + "x " + moved.ID + " moved to slot " + string.Join(",", Slots(inventory, moved.ID));
+        }
+        Mod.Warn("baseddiag: " + moved.Quantity + "x " + moved.ID + " from hotbar slot " + number + " found no free slot and is gone.");
+        return result + ", " + moved.ID + " lost (inventory full)";
+    }
+
+    private static IEnumerable<int> Slots(PlayerInventory inventory, string id)
+    {
+        for (int i = 0; i < inventory.hotbarSlots.Count; i++)
+            if (inventory.hotbarSlots[i]?.ItemInstance?.ID == id) yield return i + 1;
     }
 #endif
 

@@ -25,6 +25,8 @@ public sealed class BasedState
     public long LastSleepCycle { get; set; } = -1;
     public List<UpgradeState> Upgrades { get; set; } = new();
     public List<PurchaseRecord> Purchases { get; set; } = new();
+    // The ids of the latest tips, so a tip a client sends again after a lost answer counts once.
+    public List<string> TipIds { get; set; } = new();
 }
 
 public sealed class UpgradeState
@@ -36,6 +38,8 @@ public sealed class UpgradeState
     public int RightsPaid { get; set; }
     public int ConstructionPaid { get; set; }
     public long LastSleepCycle { get; set; } = -1;
+    // Dollars the crew got as tips during this build, cash and product value together.
+    public int Tips { get; set; }
     public UpgradeState Copy() => (UpgradeState)MemberwiseClone();
 }
 
