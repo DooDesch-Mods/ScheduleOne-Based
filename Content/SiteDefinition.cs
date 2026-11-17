@@ -26,6 +26,13 @@ internal sealed record SiteFollowUp(string UpgradeId, string Title, string Done,
     public string ListName => Name.Length > 0 ? Name : Title;
 }
 
+// Where one employee waits outside work, in world metres, and the point the employee turns to once there: the fire,
+// a colleague, the wall. Without a point to face, the place faces the middle of the site's places.
+internal readonly record struct StaffPlace(Vector3 At, Vector3? Faces = null)
+{
+    public static implicit operator StaffPlace(Vector3 at) => new(at);
+}
+
 // One journal page: the upgrade it follows, the saved quest class and its two fixed texts.
 internal sealed record SiteQuest(string UpgradeId, Type QuestType, string Title, string OrderEntry);
 
@@ -76,7 +83,7 @@ internal sealed class SiteDefinition
     public IReadOnlyList<Bounds> KeepClear { get; init; } = Array.Empty<Bounds>();
     public IReadOnlyList<PlanRoom> Plan { get; init; } = Array.Empty<PlanRoom>();
     // Where the additional employees of the finished room wait, in world metres.
-    public IReadOnlyList<Vector3> StaffPlaces { get; init; } = Array.Empty<Vector3>();
+    public IReadOnlyList<StaffPlace> StaffPlaces { get; init; } = Array.Empty<StaffPlace>();
     public Action RegisterWorld { get; init; } = () => { };
     public ISiteCrew? Crew { get; init; }
 #if DEBUG

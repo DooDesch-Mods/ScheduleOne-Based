@@ -77,7 +77,7 @@ internal static class StaffRoom
             Mod.Warn(site.Base.Id + " has " + site.StaffPlaces.Count + " places for " + (wanted - first) + " employees; some share one.");
 
         var center = Vector3.zero;
-        foreach (var spot in site.StaffPlaces) center += spot / site.StaffPlaces.Count;
+        foreach (var spot in site.StaffPlaces) center += spot.At / site.StaffPlaces.Count;
         var places = new Transform[wanted];
         for (int i = 0; i < have; i++) places[i] = known![i];
         for (int i = have; i < wanted; i++)
@@ -85,9 +85,12 @@ internal static class StaffRoom
             var spot = site.StaffPlaces[(i - first) % site.StaffPlaces.Count];
             var place = new GameObject("Place " + i).transform;
             place.SetParent(holder, false);
-            place.position = spot;
-            var inward = new Vector3(center.x - spot.x, 0f, center.z - spot.z);
-            if (inward.sqrMagnitude > .01f) place.rotation = Quaternion.LookRotation(inward);
+            place.position = spot.At;
+            // IdleBehaviour turns the employee to the place's forward once there.
+            var faces = spot.Faces ?? center;
+            var look = new Vector3(faces.x - spot.At.x, 0f, faces.z - spot.At.z);
+            if (look.sqrMagnitude > .01f) place.rotation = Quaternion.LookRotation(look);
+            else Mod.Warn(site.Base.Id + " place " + i + " faces its own spot; it keeps the holder's rotation.");
             places[i] = place;
         }
         property.EmployeeIdlePoints = places;

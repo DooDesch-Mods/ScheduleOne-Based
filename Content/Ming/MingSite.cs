@@ -48,10 +48,10 @@ internal static class MingSite
         },
         // Beside the game's own waiting place at the foot of the outside stairs, in the yard. Inside the room the
         // player's furniture stands wherever there is floor, and employees waiting there stand in the way.
-        StaffPlaces = new UnityEngine.Vector3[]
+        StaffPlaces = new StaffPlace[]
         {
-            new(-62.9f, -4f, 144.7f),
-            new(-63.9f, -4f, 144.3f)
+            new UnityEngine.Vector3(-62.9f, -4f, 144.7f),
+            new UnityEngine.Vector3(-63.9f, -4f, 144.3f)
         },
         RegisterWorld = () =>
         {

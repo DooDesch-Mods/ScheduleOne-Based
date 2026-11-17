@@ -275,7 +275,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             var path = new UnityEngine.AI.NavMeshPath();
             bool found = UnityEngine.AI.NavMesh.CalculatePath(property.NPCSpawnPoint.position, hit.position, filter, path);
             string line = "baseddiag: place " + i + " at " + at + " route " + (found ? path.status.ToString() : "none")
-                + ", mesh " + Vector3.Distance(hit.position, at).ToString("0.00") + " m away";
+                + ", mesh " + Vector3.Distance(hit.position, at).ToString("0.00") + " m away, faces " + places[i].forward.ToString("F2");
             if (found && path.status == UnityEngine.AI.NavMeshPathStatus.PathComplete) Mod.Log(line); else Mod.Warn(line);
         }
         for (int i = 0; i < property.Employees.Count; i++)

@@ -93,7 +93,7 @@ internal static class ConstructionLitter
     {
         var followUp = site.FollowUps.FirstOrDefault(f => f.UpgradeId == upgradeId);
         if (followUp != null && !float.IsNaN(followUp.Floor)) return followUp.Floor;
-        return site.StaffPlaces.Count > 0 ? site.StaffPlaces[0].y : float.NaN;
+        return site.StaffPlaces.Count > 0 ? site.StaffPlaces[0].At.y : float.NaN;
     }
 
     internal static int CountFor(IReadOnlyList<PlanRoom> rooms)
