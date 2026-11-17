@@ -91,11 +91,7 @@ internal static class ConstructionJournal
                 break;
             default:
                 // Only a save whose two halves disagree or a debug jump gets here.
-                if (quest != null)
-                {
-                    Mod.Warn("Construction quest of " + name + " cancelled: nothing ordered behind it.");
-                    quest.Cancel();
-                }
+                if (quest != null) Cancel(page, name);
                 break;
         }
     }
@@ -139,6 +135,26 @@ internal static class ConstructionJournal
     private static void SetState(QuestEntry entry, QuestState state)
     {
         if (entry.State != state) entry.SetState(state);
+    }
+
+    // Every peer reconciles the quest from the same synced state, so each cancels its own copy without the network.
+    // The game's Cancel has no state check: a networked cancel comes back to the client that sent it, ends the quest a
+    // second time there and destroys its HUD twice (NullReferenceException in QuestHUDUI.Destroy).
+    private static void Cancel(SiteQuest page, string name)
+    {
+        var game = Il2CppScheduleOne.Quests.Quest.GetQuest(Text.T(page.Title));
+        if (game == null)
+        {
+            Mod.Warn("Construction quest of " + name + " not cancelled: the game has no quest titled '" + Text.T(page.Title) + "'.");
+            return;
+        }
+        if (game.State is not (Il2CppScheduleOne.Quests.EQuestState.Active or Il2CppScheduleOne.Quests.EQuestState.Inactive))
+        {
+            Mod.Log("Construction quest of " + name + " already ended as " + game.State + ".");
+            return;
+        }
+        Mod.Warn("Construction quest of " + name + " cancelled: nothing ordered behind it.");
+        game.Cancel(false);
     }
 
     private static void Finish(SiteQuest page, Quest quest, string name)
