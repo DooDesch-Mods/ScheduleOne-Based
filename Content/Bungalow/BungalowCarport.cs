@@ -89,6 +89,8 @@ public static class BungalowCarport
         var blocks = new CopyDefinition
         {
             Id = "carport-blocks", Template = Post, Frame = Property, OwnMesh = false, Obstacle = false,
+            // The post only anchors the boxes; its collider child would stand as an unseen beam where the anchor lands.
+            Exclude = { "Colliders" },
             At = new LocalPoint(PropertyPivot, PropertyYaw)
         };
         float centreY = (PostBottom + PostTop) * .5f;

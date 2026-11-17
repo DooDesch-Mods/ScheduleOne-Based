@@ -113,6 +113,8 @@ public static class BungalowSunroom
         var geometry = new CopyDefinition
         {
             Id = "sunroom-shell", Template = Anchor, Frame = Property, OwnMesh = false, Obstacle = false,
+            // The post only anchors the boxes; its collider child would stand as an unseen beam where the anchor lands.
+            Exclude = { "Colliders" },
             At = new LocalPoint(PropertyPivot, PropertyYaw)
         };
         Solid(geometry, "slab", Concrete, SlabWest, SlabBottom, SlabSouth, SlabEast, Floor, SlabNorth);

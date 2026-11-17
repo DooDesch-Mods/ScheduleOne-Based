@@ -130,6 +130,8 @@ public static class BungalowStorey
         var geometry = new CopyDefinition
         {
             Id = "storey-build", Template = Anchor, Frame = Property, OwnMesh = false, Obstacle = false,
+            // The post only anchors the boxes; its collider child would stand as an unseen beam where the anchor lands.
+            Exclude = { "Colliders" },
             At = new LocalPoint(PropertyPivot, PropertyYaw)
         };
         // The boards end 2 cm inside the walls they run under, so their ends never lie in a wall's face.
@@ -154,9 +156,10 @@ public static class BungalowStorey
             Edge(geometry, "site-west", rails, false, HouseWest + i, HouseSouth + i, HouseNorth - i);
             // The north run leaves the corner post to the west run.
             Edge(geometry, "site-north", rails, true, HouseNorth - i, HouseWest + i, HouseEast - i, firstPost: false);
-            Edge(geometry, "site-east", rails, false, HouseEast - i, NorthRoomSouth, HouseNorth - i);
+            // The east run leaves the north-east corner post to the north run, the south run the south-west one to the west run.
+            Edge(geometry, "site-east", rails, false, HouseEast - i, NorthRoomSouth, HouseNorth - i, lastPost: false);
             Edge(geometry, "site-south-east", rails, true, NorthRoomSouth + i, BalconyEast, HouseEast - i);
-            Edge(geometry, "site-south", rails, true, HouseSouth + i, HouseWest + i, EastWall);
+            Edge(geometry, "site-south", rails, true, HouseSouth + i, HouseWest + i, EastWall, firstPost: false);
             Edge(geometry, "site-landing", rails, false, EastWall - i, HouseSouth + i, LandingSouth);
         }
         if (level == 2) Frame(geometry);
@@ -225,16 +228,31 @@ public static class BungalowStorey
         StudWall(geometry, "frame-east", false, -163.8f, NorthRoomSouth, HouseNorth - .1f);
         StudWall(geometry, "frame-south", true, 109.29f, HouseWest + .1f, EastWall);
         StudWall(geometry, "frame-west-room", false, -169.93f, HouseSouth + .1f, NorthRoomSouth, (113.2f, 114.45f, door));
-        StudWall(geometry, "frame-south-east", true, 115.42f, EastWall + .1f, HouseEast - .1f);
+        // The frame ends 5 mm short of the inner east face, where the north-east boards end, so the two end faces differ.
+        StudWall(geometry, "frame-south-east", true, 115.42f, EastWall + .1f, HouseEast - .105f);
         StudWall(geometry, "frame-partition", true, 115.43f, HouseWest + .1f, -170.05f);
         StudWall(geometry, "frame-hall", false, -169.93f, 115.5f, HouseNorth - .1f, (117.97f, 119.03f, door));
     }
 
+    // The plate level of each wall; two walls that meet never share one. The soles of levels 1 and 2 lie within 2 mm of
+    // the top of the house's partition wall below, so the two walls standing on it take levels 3 and 4.
+    private static readonly Dictionary<string, int> PlateLevels = new()
+    {
+        ["frame-west"] = 0, ["frame-north"] = 1, ["frame-east"] = 2, ["frame-south"] = 3,
+        ["frame-west-room"] = 0, ["frame-south-east"] = 4, ["frame-partition"] = 3, ["frame-hall"] = 2
+    };
+
     private static void StudWall(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end,
         params (float From, float To, float Sill)[] openings)
     {
-        const float half = .025f, depth = .05f, plate = .05f, plateDepth = .055f;
-        float bottom = BoardsTop, sole = bottom + plate, top = FrameTop, head = top - .08f;
+        // Plates are 11 cm deep. The two walls standing on the house's partition wall get 12 cm plates, so their sides
+        // stand 5 mm clear of that 10 cm wall's faces; the others keep 11 cm, so plate ends at corners stay 5 mm apart.
+        const float half = .025f, depth = .05f, plate = .05f;
+        float plateDepth = id == "frame-partition" || id == "frame-south-east" ? .06f : .055f;
+        // Plates of walls that meet overlap at the joint; each wall's plates sit on their own level, 3 mm apart, so no two
+        // of them share a top or bottom face. The soles sink into the boards, the top plates rise.
+        float step = .003f * PlateLevels[id];
+        float bottom = BoardsTop - step, sole = bottom + plate, top = FrameTop + step, head = top - .08f;
         void Piece(string name, float a1, float y1, float a2, float y2, float d)
         {
             if (alongX) Face(geometry, id + "-" + name, Timber, a1, y1, cross - d, a2, y2, cross + d);
@@ -257,14 +275,16 @@ public static class BungalowStorey
         }
         Piece("sole-" + Mathf.RoundToInt(from * 10), from, bottom, end, sole, plateDepth);
 
-        // Studs stand evenly from end to end, with a jamb stud on each side of every opening.
+        // Studs stand evenly from end to end, with a jamb stud on each side of every opening. The end studs stand 5 mm in
+        // from the plate ends, so their outer faces do not lie in the plates' end faces; the jamb studs stand 5 mm back
+        // from a door's opening for the same reason, against the ends of the soles beside it.
         var at = new List<float>();
         int count = Math.Max(1, (int)Math.Ceiling((end - start) / StudSpacing));
-        for (int i = 0; i <= count; i++) at.Add(Mathf.Lerp(start + half, end - half, i / (float)count));
+        for (int i = 0; i <= count; i++) at.Add(Mathf.Lerp(start + half + .005f, end - half - .005f, i / (float)count));
         foreach (var opening in openings)
         {
-            at.Add(opening.From - half);
-            at.Add(opening.To + half);
+            at.Add(opening.From - half - .005f);
+            at.Add(opening.To + half + .005f);
         }
         at.Sort();
         float last = float.NegativeInfinity;
@@ -289,11 +309,12 @@ public static class BungalowStorey
     }
 
     // A railing on the first night; on the second the frame stands there and only the railing's unseen wall stays.
-    private static void Edge(CopyDefinition geometry, string id, bool rails, bool alongX, float cross, float start, float end, bool firstPost = true)
+    private static void Edge(CopyDefinition geometry, string id, bool rails, bool alongX, float cross, float start, float end,
+        bool firstPost = true, bool lastPost = true)
     {
         if (rails)
         {
-            Railing(geometry, id, alongX, cross, start, end, firstPost);
+            Railing(geometry, id, alongX, cross, start, end, firstPost, lastPost);
             return;
         }
         Block(geometry, id + "-guard", alongX ? start : cross - .05f, UpperFloor, alongX ? cross - .05f : start,
@@ -308,7 +329,8 @@ public static class BungalowStorey
         float w = HouseWest, e = HouseEast, s = HouseSouth, n = HouseNorth;
         Face(geometry, "band-west", Timber, w - proud, low, s - proud, w + sunk, high, n + proud);
         Face(geometry, "band-north", Timber, w + sunk, low, n - sunk, e - sunk, high, n + proud);
-        Face(geometry, "band-east", Timber, e - sunk, low, NorthRoomSouth, e + proud, high, n + proud);
+        // Its south end stays 5 mm north of the cut cladding's end, so the two end faces do not lie in one plane.
+        Face(geometry, "band-east", Timber, e - sunk, low, NorthRoomSouth + .005f, e + proud, high, n + proud);
         Face(geometry, "band-south", Timber, w + sunk, low, s - proud, EastWall + proud, high, s + sunk);
         Face(geometry, "band-landing", Timber, EastWall - sunk, low, s + sunk, EastWall + proud, high, LandingSouth);
     }
@@ -346,6 +368,7 @@ public static class BungalowStorey
             var rail = Tilted("stair-" + side + "-rail-" + name, Anchor, source, new Vector3(StairFoot, Nosing(StairFoot) + above, z),
                 Quaternion.Euler(0f, 0f, -slope));
             rail.OwnMesh = false;
+            rail.Exclude.Add("Colliders");
             Face(rail, "bar", Metal, source.x - length, source.y - .02f, source.z - .02f, source.x, source.y + .02f, source.z + .02f);
             // The rails are drawn without colliders; an unseen wall along the top rail keeps a jump from carrying over it.
             if (name == "top")
@@ -401,19 +424,21 @@ public static class BungalowStorey
 
     // Posts and two rails of dark steel, with an unseen wall to head height that keeps a jump from carrying over them.
     // The rails end inside the end posts and stop 1 cm under the posts' tops, so no rail face lies in a post's face.
-    // Without its first post the run starts in a post another run sets; its rails then start clear of that run's rails.
-    private static void Railing(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end, bool firstPost = true)
+    // Without its first or last post the run starts or ends in a post another run sets; its rails then stop clear of that
+    // run's rails.
+    private static void Railing(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end,
+        bool firstPost = true, bool lastPost = true)
     {
         const float half = .025f;
         float top = UpperFloor + RailHeight;
         int posts = Math.Max(2, (int)Math.Ceiling((end - start) / 1.2f) + 1);
-        for (int i = firstPost ? 0 : 1; i < posts; i++)
+        for (int i = firstPost ? 0 : 1; i < (lastPost ? posts : posts - 1); i++)
         {
             float at = Mathf.Lerp(start + half, end - half, i / (float)(posts - 1));
             if (alongX) Face(geometry, id + "-post-" + i, Metal, at - half, UpperFloor, cross - half, at + half, top, cross + half);
             else Face(geometry, id + "-post-" + i, Metal, cross - half, UpperFloor, at - half, cross + half, top, at + half);
         }
-        float from = start + half + (firstPost ? 0f : .02f), to = end - half;
+        float from = start + half + (firstPost ? 0f : .02f), to = end - half - (lastPost ? 0f : .02f);
         foreach (var (name, y) in new[] { ("top", top - .05f), ("middle", UpperFloor + .5f) })
             if (alongX) Face(geometry, id + "-rail-" + name, Metal, from, y, cross - .02f, to, y + .04f, cross + .02f);
             else Face(geometry, id + "-rail-" + name, Metal, cross - .02f, y, from, cross + .02f, y + .04f, to);

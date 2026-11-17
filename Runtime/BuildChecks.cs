@@ -154,7 +154,9 @@ internal static class BuildChecks
             var filterComponent = renderers[i].GetComponent<MeshFilter>();
             var mesh = filterComponent != null ? filterComponent.sharedMesh : null;
             if (mesh == null) continue;
-            var m = renderers[i].transform.localToWorldMatrix;
+            // Points are taken relative to the check's centre: a plane's distance from the world origin, 200 m away, carries
+            // the float error of a small face's normal times that lever and would merge faces several millimetres apart.
+            var m = Matrix4x4.Translate(-centre) * renderers[i].transform.localToWorldMatrix;
             if (mesh.isReadable)
             {
                 readable++;
@@ -205,6 +207,10 @@ internal static class BuildChecks
                         if (Vector3.Dot(fa.Normal, fb.Normal) < .999f || Mathf.Abs(fa.Distance - fb.Distance) > planeTolerance) continue;
                         float area = Overlap(fa, fb, out var at);
                         if (area < minArea) continue;
+                        // Plane distances are taken at the check's centre, metres away. Two faces leaning by a fraction of a
+                        // degree to each other can match there while they lie centimetres apart where they overlap, so the
+                        // gap is measured again at the shared area's centre.
+                        if (Mathf.Abs(Vector3.Dot(fb.Normal, at) - fb.Distance) > planeTolerance) continue;
                         var key = fa.Owner < fb.Owner ? (fa.Owner, fb.Owner) : (fb.Owner, fa.Owner);
                         pairs.TryGetValue(key, out var sum);
                         pairs[key] = (sum.Area + area, sum.Area > 0 ? sum.At : at, fa.Normal);
@@ -216,7 +222,7 @@ internal static class BuildChecks
             if (shown++ >= 60) break;
             // [box] marks a side whose mesh could not be read and stands in as its bounds; such a pair may be no real overlap.
             string Kind(int owner) => isBox[owner] ? "[box]" : "[mesh]";
-            Mod.Log($"baseddiag zfight: FAIL {paths[pair.Key.Item1]} {Kind(pair.Key.Item1)} | {paths[pair.Key.Item2]} {Kind(pair.Key.Item2)}: {pair.Value.Area * 1e4f:0} cm² in one plane, facing {F(pair.Value.Normal)}, at {F(pair.Value.At)}");
+            Mod.Log($"baseddiag zfight: FAIL {paths[pair.Key.Item1]} {Kind(pair.Key.Item1)} | {paths[pair.Key.Item2]} {Kind(pair.Key.Item2)}: {pair.Value.Area * 1e4f:0} cm² in one plane, facing {F(pair.Value.Normal)}, at {F(pair.Value.At + centre)}");
         }
         Mod.Log($"baseddiag zfight done: {pairs.Count} pairs over {renderers.Count} renderers ({readable} meshes, {boxes} boxes), {faces.Count} faces, filter '{filter}', within {radius:0} m of {F(centre)}");
     }

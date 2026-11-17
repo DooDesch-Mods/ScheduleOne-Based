@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using MapExpansions;
 using UnityEngine;
 
@@ -56,15 +58,17 @@ internal static class BungalowSiteProps
 
     internal static readonly (Vector3 At, Vector3 Face) TableFront = (new(-161.75f, -3.98f, 115.5f), new(-162.75f, -3.25f, 115.5f));
     internal static readonly (Vector3 At, Vector3 Face) TableSide = (new(-162.75f, -3.92f, 117.2f), new(-162.75f, -3.25f, 116.3f));
-    internal static readonly (Vector3 At, Vector3 Face) StockFront = (new(-161.4f, -3.97f, 122.75f), new(-162.6f, -3.6f, 122.75f));
-    internal static readonly (Vector3 At, Vector3 Face) StockSide = (new(-162.75f, -3.9f, 121.55f), new(-162.75f, -3.6f, 122.4f));
+    // A worker hammers only at a contact point within 0.35 m of his hip (0.9 m above his feet), so each Face sits at
+    // that height above the work: the top of the stack, the post, the wall.
+    internal static readonly (Vector3 At, Vector3 Face) StockFront = (new(-161.4f, -3.97f, 122.75f), new(-162.1f, -3.2f, 122.75f));
+    internal static readonly (Vector3 At, Vector3 Face) StockSide = (new(-162.75f, -3.9f, 121.55f), new(-162.75f, -3.15f, 122.3f));
 
     // On the order day the roof is still on and the site not yet set up: the foreman looks the house over, the carpenter
     // checks the porch post and the east wall.
     private static readonly (Vector3 At, Vector3 Face) SurveyRoof = (new(-162.3f, -3.98f, 116.2f), new(-163.75f, -1f, 116.2f));
     private static readonly (Vector3 At, Vector3 Face) SurveyPorch = (new(-162.3f, -3.95f, 114.0f), new(-164.3f, -1.2f, 113.6f));
-    private static readonly (Vector3 At, Vector3 Face) PorchPost = (new(-166.4f, -3.85f, 113.6f), new(-167.2f, -2.6f, 112.85f));
-    private static readonly (Vector3 At, Vector3 Face) EastWallCheck = (new(-162.6f, -3.92f, 119.0f), new(-163.75f, -2.6f, 119.0f));
+    private static readonly (Vector3 At, Vector3 Face) PorchPost = (new(-166.7f, -3.85f, 113.35f), new(-167.2f, -2.9f, 112.85f));
+    private static readonly (Vector3 At, Vector3 Face) EastWallCheck = (new(-163.0f, -3.92f, 119.0f), new(-163.75f, -2.95f, 119.0f));
 
     // 1 for the floor, 2 the frame, 3 the walls, 4 the roof: the state that stands, from the quest's phase or the world
     // state's id. Anything else is 0.
@@ -101,6 +105,8 @@ internal static class BungalowSiteProps
         var site = new CopyDefinition
         {
             Id = "storey-site", Template = Anchor, Frame = Property, OwnMesh = false, Obstacle = false,
+            // The post only anchors the boxes; its collider child would stand as an unseen beam where the anchor lands.
+            Exclude = { "Colliders" },
             At = new LocalPoint(PropertyPivot, PropertyYaw)
         };
         if (level <= 4) Site(state, site, level);
@@ -188,9 +194,14 @@ internal static class BungalowSiteProps
         state.Copies.Add(Copy("site-pallet", Pallet, PalletPivot, at, 0));
         Block(site, "site-pallet-block", at.x - .78f, at.y, at.z - .78f, at.x + .78f, at.y + .55f, at.z + .78f);
         float[] shift = { .015f, -.025f, .005f, -.01f, .03f, -.015f, .01f, -.03f, .02f, 0f, -.02f, .025f };
+        // Planks side by side touch at their edges, so each of a layer lies 5 mm above the one before and no two tops share
+        // a plane; the mesh leans by about 1 mm across its width, which a smaller step would not clear. The first layer lies 2 mm above the pallet deck and each further layer 2 mm above the one below, so no
+        // plank's underside lies in the face it rests on.
         for (int i = 0; i < planks; i++)
             state.Copies.Add(Copy("site-plank-" + i, Plank, PlankPivot,
-                new Vector3(at.x + shift[i], at.y + PalletDeck + PlankThickness * (.5f + i / 4), at.z + ((i % 4) - 1.5f) * .125f), 90));
+                new Vector3(at.x + shift[i],
+                    at.y + PalletDeck + .002f + PlankThickness * (.5f + i / 4) + (i / 4) * .002f + (i % 4) * .005f,
+                    at.z + ((i % 4) - 1.5f) * .125f), 90));
     }
 
     private static void Cinderblock(WorldStateDefinition state, string id, float x, float floor, float z, float yaw) =>
@@ -205,28 +216,48 @@ internal static class BungalowSiteProps
         float Between(float from, float to) => from + (float)random.NextDouble() * (to - from);
         var centre = new Vector3(x, floor, z);
         int pieces = Math.Max(2, (int)(radius * 14f));
+        // The three handfuls overlap, so tops and bottoms are kept apart across the whole heap.
+        var levels = (Bottoms: new List<float>(), Tops: new List<float>());
+        float start = Between(0f, 180f);
         for (int turn = 0; turn < 3; turn++)
         {
-            float yaw = Between(0f, 180f);
+            // The handfuls turn 60 degrees apart, give or take 10, so no two of them lie nearly parallel or square to each
+            // other, where the sides of their pieces could meet in one plane.
+            float yaw = start + turn * 60f + Between(-10f, 10f);
             var handful = new CopyDefinition
             {
                 Id = id + "-" + turn, Template = Anchor, Frame = Property, OwnMesh = false, Obstacle = false,
+                // The post only anchors the boxes; its collider child would stand as an unseen beam where the anchor lands.
+                Exclude = { "Colliders" },
                 At = new LocalPoint(centre - Quaternion.Euler(0, yaw, 0) * (centre - PropertyPivot), yaw + PropertyYaw)
             };
+            // Pieces of one handful share its yaw, so their ends and sides are kept apart the same way.
+            var sides = (X: new List<float>(), Z: new List<float>());
             for (int i = 0; i < pieces; i++)
             {
                 float angle = Between(0f, Mathf.PI * 2f), distance = radius * Mathf.Sqrt(Between(0f, 1f));
                 float px = x + Mathf.Cos(angle) * distance, pz = z + Mathf.Sin(angle) * distance;
                 bool board = random.Next(3) == 0;
                 float halfLength = Between(.07f, .22f), halfWidth = board ? Between(.05f, .09f) : Between(.022f, .035f);
-                float bottom = floor - .008f - turn * .0011f - i * .0003f;
                 float lift = Between(0f, (1f - distance / radius) * .06f);
                 float tall = board ? Between(.016f, .022f) : Between(.04f, .055f);
-                Face(handful, "piece-" + i, board ? Boards : Timber, px - halfLength, bottom + lift, pz - halfWidth,
-                    px + halfLength, bottom + lift + tall + .008f, pz + halfWidth);
+                // The flicker check counts faces within 2 mm as one plane: each bottom and each top moves 3 mm until
+                // no other piece on this spot has one that close.
+                float low = Apart(levels.Bottoms, floor - .008f + lift, -.003f);
+                float high = Apart(levels.Tops, floor + lift + tall, .003f);
+                float west = Apart(sides.X, px - halfLength, -.003f), east = Apart(sides.X, px + halfLength, .003f);
+                float south = Apart(sides.Z, pz - halfWidth, -.003f), north = Apart(sides.Z, pz + halfWidth, .003f);
+                Face(handful, "piece-" + i, board ? Boards : Timber, west, low, south, east, high, north);
             }
             state.Copies.Add(handful);
         }
+    }
+
+    private static float Apart(List<float> used, float value, float step)
+    {
+        while (used.Any(u => Math.Abs(u - value) < .0025f)) value += step;
+        used.Add(value);
+        return value;
     }
 
     // Places a copy so that the source point lands on the target, turned by yaw and scaled around it. The frame is the

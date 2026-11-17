@@ -83,6 +83,8 @@ public static class BungalowDeck
         var geometry = new CopyDefinition
         {
             Id = "deck-timber", Template = Anchor, Frame = Property, OwnMesh = false, Obstacle = false,
+            // The post only anchors the boxes; its collider child would stand as an unseen beam where the anchor lands.
+            Exclude = { "Colliders" },
             At = new LocalPoint(PropertyPivot, PropertyYaw)
         };
         float beamTop = Top - BoardThickness, beamBottom = beamTop - BeamDepth;
