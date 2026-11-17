@@ -59,7 +59,10 @@ VIEWS = {
         # The whole house from the south-east gravel, stair and balcony in front.
         "southeast": ["--eye", "-152", "1.5", "99", "--target", "-169", "0", "115"],
         # The south front with the upper sliding door and its railing at the west end.
-        "south": ["--eye", "-171", "0.5", "96", "--target", "-171", "0", "115"],
+        "south": ["--eye", "-160", "-1.6", "104", "--target", "-170", "-0.3", "114", "--fov", "70"],
+        # The stair's top step against the landing's east edge: from the south below it and from above.
+        "stair-joint": ["--eye", "-166.6", "-0.3", "110.4", "--target", "-168.35", "-0.8", "112.1"],
+        "stair-joint-top": ["--eye", "-167.2", "0.5", "112.1", "--target", "-168.5", "-0.75", "112.1"],
         "north": ["--eye", "-166", "1.5", "136", "--target", "-170", "0", "115"],
         # Along the stair from its foot, and down it from the landing.
         "stair-foot": ["--eye", "-160.5", "-2.4", "107.6", "--target", "-166.5", "-2.2", "112"],
