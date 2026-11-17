@@ -1,11 +1,11 @@
 <#
 In-game check: Based needs the MapExpansions version in thunderstore/manifest.json as a hard minimum. With
--TooOldCase it starts once on the last release below it (1.2.0): Based must stay off, name MapExpansions as too old
+-TooOldCase it starts once on the last release below it (1.3.0): Based must stay off, name MapExpansions as too old
 and never reach for a member that release lacks.
 
 For each release in -Versions it puts that release's MapExpansions.dll into the slot, starts the game with
 -KeepSlot and reads MelonLoader/Latest.log: Based must initialize and every manifest minimum must pass. The
-default is empty until 1.3.0 is released. Build the slot once before, with this worktree's Based (-Build takes the
+default is empty until 1.4.0 is released. Build the slot once before, with this worktree's Based (-Build takes the
 folder name under the workspace root, not a path):
 
     pwsh -File Workspace/tools/session/session.ps1 -Slot mptest -Build _wt-Based-<topic> -Profile main -NoApp
@@ -14,7 +14,7 @@ folder name under the workspace root, not a path):
 param(
     [string]$Slot = 'mptest',
     [string[]]$Versions = @(),
-    # Also start once on MapExpansions 1.2.0, which lacks CopyDefinition.Tilt.
+    # Also start once on MapExpansions 1.3.0, which lacks the copied room switches and the join progress.
     [switch]$TooOldCase,
     # Also start once without Personnel: Based must stay off and name the missing mod.
     [switch]$MissingCase,
@@ -58,7 +58,7 @@ function Use-MapExpansions([string]$v) {
 }
 
 if ($TooOldCase) {
-    $tooOld = '1.2.0'
+    $tooOld = '1.3.0'
     Use-MapExpansions $tooOld
     pwsh -File (Join-Path $root 'Workspace\tools\session\session.ps1') -Slot $Slot -KeepSlot -NoApp
     if ($LASTEXITCODE -ne 0) { Check "MapExpansions ${tooOld}: game ready" $false "session.ps1 exit $LASTEXITCODE" }
@@ -68,7 +68,7 @@ if ($TooOldCase) {
         $off | ForEach-Object { Write-Host "  $_" }
         Check "MapExpansions ${tooOld}: Based stays off and names it" ([bool]($off | Where-Object { $_ -match "MapExpansions $([regex]::Escape($tooOld)) (is too old|ist zu alt)" })) ($off -join ' | ')
         Check "MapExpansions ${tooOld}: Based did not initialize" (-not ($lines | Where-Object { $_ -match 'Based initialized' })) 'Based initialized anyway'
-        $missing = $lines | Where-Object { $_ -match 'Tilt|MissingField.*MapExpansions|MissingMethod.*MapExpansions' }
+        $missing = $lines | Where-Object { $_ -match 'Tilt|ReportPeerWorldStateProgress|MissingField.*MapExpansions|MissingMethod.*MapExpansions' }
         Check "MapExpansions ${tooOld}: no missing-member error" (-not $missing) ($missing -join ' | ')
     }
 }
