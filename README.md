@@ -55,9 +55,23 @@ own light switch.
 Until the last night the foreman takes a tip in cash or product. The more you tip, the less construction trash is
 left after each night; at 10% of the build price none is left.
 
+## Bungalow
+
+Own the Bungalow and talk to Ray at Ray's Realty. The permit comes first, then one build at a time:
+
+| Build | Price | Nights | What you get |
+|---|---|---|---|
+| Permit | $1,500 | - | The plans and a project folder |
+| Second storey | $6,000 | 6 | A balcony, an outside steel stair, a sliding door and two light switches |
+| Sunroom | $4,000 | 3 | Glass walls on the west side, a sliding door, two ceiling lamps and a light switch |
+| Slope deck | $2,000 | 2 | A deck on stilts down the slope; the west room's floor continues onto it |
+| Double carport | $1,500 | 2 | A roof over the drive and a second loading bay that keeps the rain out |
+
+A crew you can watch builds every stage. This site has no foreman to tip.
+
 ## You pick the next base
 
-The Sweatshop and the Storage Unit are done. The Discord votes on which property comes next:
+The Sweatshop, the Storage Unit and the Bungalow are done. The Discord votes on which property comes next:
 [mods.doodesch.de](https://mods.doodesch.de).
 
 ## Co-op
@@ -71,6 +85,14 @@ Pick up what stands in the new rooms first. It disappears with the mod, and the 
 Wait until no delivery is on its way to the Sweatshop, since the dock goes with the mod.
 
 ## Screenshots
+
+| | |
+|---|---|
+| ![The Bungalow with its second storey and carport](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/bungalow-storey.jpg) | ![The crew on the storey frame](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/bungalow-crew.jpg) |
+| ![The sunroom](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/bungalow-sunroom.jpg) | ![The deck on the slope](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/bungalow-deck.jpg) |
+| ![The balcony on the second storey](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/bungalow-balcony.jpg) | |
+
+### Sweatshop and Storage Unit
 
 | | |
 |---|---|
