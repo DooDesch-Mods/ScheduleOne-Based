@@ -105,11 +105,10 @@ internal static class RayMenu
     // Called for the choice list of every conversation node; only the first menu of Ray's agent conversation gets the entry.
     internal static void AddChoice(DialogueController controller, string nodeLabel, Il2CppSystem.Collections.Generic.List<DialogueChoiceData> choices)
     {
-        if (_controller == null || controller.Pointer != _controller.Pointer || nodeLabel != "ENTRY") return;
-        if (DialogueHandler.ActiveDialogue?.name != PlanCopies.AgentConversation) return;
+        if (!RayAgentMenu.Accepts("Expansion entry", _controller, controller, nodeLabel)) return;
         if (!_offered) { Mod.Log("Ray's menu stays as it is: no property to expand."); return; }
         for (int i = 0; i < choices.Count; i++)
-            if (choices[i]?.ChoiceLabel == OfferLabel) return;
+            if (choices[i]?.ChoiceLabel == OfferLabel) { Mod.Log("Ray's menu already lists the expansion entry."); return; }
         var entry = new DialogueChoiceData { Guid = Guid.NewGuid().ToString(), ChoiceLabel = OfferLabel, ChoiceText = Text.T(Entry) };
         // Before the farewell, which vanilla keeps last.
         choices.Insert(Math.Max(0, choices.Count - 1), entry);
