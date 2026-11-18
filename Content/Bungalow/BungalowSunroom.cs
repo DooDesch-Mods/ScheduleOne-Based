@@ -67,8 +67,10 @@ public static class BungalowSunroom
     private const string HouseLamp = Property + "/bungalow/FluroBar";
     private static readonly Vector3 HouseLampTop = new(-173f, -.95f, 112.35f);
     private const float LampMullionX = House - 3 * (FrameWidth * RoofScale) / PanesPerFrame;
+    // The lamps keep the house's own range and brightness, so the room is lit like the rooms behind the door.
     private static readonly float[] LampZ = { 112.35f, 118.5f };
-    private const float LampRange = 3.6f;
+    // Where the garden table stands after its move: the middle of its bounds.
+    private static readonly Vector3 TableAt = new(-185.63f, -4f, 114.43f);
     // The house's west-room switch, copied onto the house's outer wall beside the sliding door, its plate on the
     // cladding's face as the original sits on its wall. It switches the sunroom's two lamps and nothing else.
     public const string SwitchId = "sunroom-switch";
@@ -107,7 +109,32 @@ public static class BungalowSunroom
         // The garden table stood where the slab goes; it moves onto the gravel west of the room, north of the door and
         // clear of the trees south of the house.
         state.Moves.Add(new ObjectMoveDefinition { Id = "table", Path = Property + "/Round Outdoor Set", Offset = new Vector3(-4.12f, 0f, .08f) });
-        if (stage < 2) BungalowSiteProps.WestKit(state, "sunroom-kit", stage == 0 ? 8 : 4, 101 + stage);
+        // The garden table keeps the gravel bed it stood on: the grass under its new place goes and the ground shows gravel,
+        // fading out at the edge.
+        var bed = BoundsOf(TableAt.x - 1.75f, -20f, TableAt.z - 1.5f, TableAt.x + 1.75f, 20f, TableAt.z + 1.5f);
+        state.Rules.Add(new ObjectRule
+        {
+            Id = "table-gravel", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
+            PaintLayer = "Terrain_Gravel", PaintStrength = 1f, Area = bed
+        });
+        // From the sunroom's door step a trodden strip runs to the gravel bed of the garden table.
+        state.Rules.Add(new ObjectRule
+        {
+            Id = "seating-path", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,
+            Area = BoundsOf(-184.95f, -20f, 111.0f, West - StepDepth, 20f, 113.0f)
+        });
+        var seating = new ObjectRule
+        {
+            Id = "seating-path-dirt", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
+            PaintLayer = "Terrain_Dirt", PaintStrength = 1f, PaintWidth = 1f
+        };
+        seating.PaintPath.AddRange(new[] { new Vector2(West - StepDepth, 111.4f), new Vector2(-184.0f, 112.15f), new Vector2(-184.55f, 113.05f) });
+        state.Rules.Add(seating);
+        var bedGrass = BoundsOf(TableAt.x - 1.45f, -20f, TableAt.z - 1.25f, TableAt.x + 1.45f, 20f, TableAt.z + 1.25f);
+        state.Rules.Add(new ObjectRule { Id = "table-grass", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails, Area = bedGrass });
+        // The kit stands outside while the slab sets and moves onto the slab once the frames stand.
+        if (stage == 0) BungalowSiteProps.WestKit(state, "sunroom-kit", 8, 101);
+        else if (stage == 1) BungalowSiteProps.InsideKit(state, "sunroom-kit", 4, 102);
         // Terrain grass would grow through the slab; a tuft rooted just outside its edge leans over it, hence the margin.
         var grass = new Bounds();
         grass.SetMinMax(new Vector3(SlabWest - .3f, -20f, SlabSouth - .3f), new Vector3(House, 20f, SlabNorth + .3f));
@@ -175,6 +202,7 @@ public static class BungalowSunroom
             Gable(geometry, "south", South, Floor + endHeight, glazed);
             Gable(geometry, "north", North, Floor + endHeight, glazed);
             state.Copies.Add(GableRails());
+            Flashing(state, geometry);
 
             // The frames are visual copies without colliders; invisible walls stand in their planes.
             Block(geometry, "west-wall-south", West - .05f, Floor, South - .05f, West + .05f, Floor + westHeight, DoorSouth);
@@ -229,7 +257,6 @@ public static class BungalowSunroom
                 var lamp = Tilted("sunroom-lamp-" + i, HouseLamp, HouseLampTop, at, slope, 1f);
                 lamp.LightsOn = true;
                 lamp.LightSwitch = "copy:" + SwitchId;
-                lamp.LightRange = LampRange;
                 state.Copies.Add(lamp);
             }
         }
@@ -298,6 +325,21 @@ public static class BungalowSunroom
         foreach (var (id, z) in new[] { ("south", South), ("north", North) })
             Face(rails, id, Metal, House - length, pivot.y - GableRail, z - .035f, House, pivot.y - .002f, z + .035f);
         return rails;
+    }
+
+    // A strip of sheet metal closes the joint where the roof meets the house: an upstand on the wall from inside the roof
+    // up under the eave, and a lip turned down onto the roof's top, which follows the slope.
+    private static void Flashing(WorldStateDefinition state, CopyDefinition geometry)
+    {
+        Face(geometry, "flashing-upstand", Metal, House - .03f, RoofAtHouse - .02f, South - .02f, House + .005f, -.705f, North + .02f);
+        var pivot = new Vector3(House, RoofAtHouse, South);
+        var slope = Quaternion.Euler(0f, 0f, Mathf.Atan(RoofSlope) * Mathf.Rad2Deg);
+        var lip = Tilted("flashing-lip", Anchor, pivot, pivot, slope, 1f);
+        lip.OwnMesh = false;
+        lip.Exclude.Add("Colliders");
+        // Laid out level from the pivot, 3 mm over the roof's top; it ends inside the upstand.
+        Face(lip, "lip", Metal, House - .3f, pivot.y + .003f, South - .025f, House + .002f, pivot.y + .013f, North + .025f);
+        state.Copies.Add(lip);
     }
 
     // A fixed light beside the door: a metal border and a middle rail like Ray's frames, one pane above and one below.

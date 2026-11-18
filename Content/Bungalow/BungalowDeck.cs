@@ -73,6 +73,7 @@ public static class BungalowDeck
         });
         MapTrees.Remove(state, "pine", Tree.x, Tree.y);
         if (!finished) BungalowSiteProps.WestKit(state, "deck-kit", 8, 107);
+        GardenPath(state);
         // North of the step the slope rises to the boards, and its terrain grass would grow through them.
         if (finished)
             state.Rules.Add(new ObjectRule
@@ -198,6 +199,32 @@ public static class BungalowDeck
         At = new LocalPoint(target - Quaternion.Euler(0, yaw, 0) * (source - PropertyPivot), yaw + PropertyYaw),
         IndependentMesh = true, VisualOnly = true, Obstacle = false
     };
+
+    // A trodden strip from the deck's step to the sliding door of the house, bending round the trunk south of the
+    // sunroom's door. With the sunroom built, its slab covers the part east of the sunroom's door and the strip ends at
+    // that door's step; the garden table's gravel bed meets the deck's step north of it.
+    private const float PathWidth = 1.2f;
+    private static readonly Vector2[] PathLine =
+    {
+        new(East + StepOut - .05f, 111.6f), new(-186.4f, 111.45f), new(-185.2f, 111.55f), new(-184.2f, 111.35f),
+        new(-183.1f, 111.45f), new(-179.5f, 111.35f), new(-176.4f, 111.4f)
+    };
+
+    private static void GardenPath(WorldStateDefinition state)
+    {
+        state.Rules.Add(new ObjectRule
+        {
+            Id = "garden-path", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,
+            Area = BoundsOf(PathLine[0].x, -20f, 111.35f - PathWidth * .5f, PathLine[PathLine.Length - 1].x, 20f, 111.6f + PathWidth * .5f)
+        });
+        var dirt = new ObjectRule
+        {
+            Id = "garden-path-dirt", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
+            PaintLayer = "Terrain_Dirt", PaintStrength = 1f, PaintWidth = PathWidth
+        };
+        dirt.PaintPath.AddRange(PathLine);
+        state.Rules.Add(dirt);
+    }
 
     private static Bounds BoundsOf(float x1, float y1, float z1, float x2, float y2, float z2)
     {

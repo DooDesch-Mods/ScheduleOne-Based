@@ -62,13 +62,16 @@ public static class BungalowStorey
     // deep and six wide, and its steel frame ends above -0.85, where the sunroom's glass roof meets the house; the roof
     // falls away westward, so the gap below the terrace only widens toward its edge.
     private const float DoorPlane = -176.08f, DoorSouth = 110.25f, DoorNorth = 112.55f;
-    private const float TerraceWest = -177.5f, TerraceSouth = 109.85f, TerraceNorth = 112.85f, TerraceEast = -176.2f;
+    // The terrace's grid ends on the south room's grid lines; its boards reach 8 cm past them on the three open sides, so
+    // the railing's unseen wall, 5 cm either side of the posts, has its inner face on those lines.
+    private const float TerraceGridWest = -177.5f, TerraceGridSouth = 109.85f, TerraceGridNorth = 112.85f;
+    private const float TerraceWest = TerraceGridWest - .08f, TerraceSouth = TerraceGridSouth - .08f,
+        TerraceNorth = TerraceGridNorth + .08f, TerraceEast = -176.2f;
     private const float TerraceFrameBottom = -.8f;
     private const string TerraceGridId = "bungalow-storey-terrace";
 
     // The house's three ceiling lights, copied 3 m up: each hangs under the upper ceiling where its original hangs under
-    // the lower one, turned the same way.
-    private const float LampRange = 3.6f;
+    // the lower one, turned the same way, with the same range and brightness.
     private static readonly string[] Lamps = { "FluroBar", "FluroBar (1)", "FluroBar (2)" };
     // The house's two wall switches, copied 3 m up onto the same walls: the one beside the door from the landing switches
     // the west room's two lamps, the one on the partition the east room's lamp. Each is a circuit of its own, apart from
@@ -196,7 +199,6 @@ public static class BungalowStorey
                     var lamp = Copy("lamp-" + i, House + "/" + Lamps[i], PropertyPivot, PropertyPivot + new Vector3(0f, Lift, 0f), 0);
                     lamp.LightsOn = true;
                     lamp.LightSwitch = "copy:" + switchId;
-                    lamp.LightRange = LampRange;
                     state.Copies.Add(lamp);
                 }
             }
@@ -248,27 +250,33 @@ public static class BungalowStorey
         {
             westSlope.Add((new Vector3(RoofRidgeX - atRidge, Line(atRidge), z), new Vector3(RoofRidgeX - RafterRun, Line(RafterRun), z)));
             // The east slope of the west wing ends at the valley, which starts over the porch corner at 115.43.
+            // Its rafters sit beside the west slope's, 7 cm north, as on the north wing.
             if (z < 115.2f)
-                eastSlope.Add((new Vector3(RoofRidgeX + atRidge, Line(atRidge), z), new Vector3(RoofRidgeX + RafterRun, Line(RafterRun), z)));
+                eastSlope.Add((new Vector3(RoofRidgeX + atRidge, Line(atRidge), z + .07f), new Vector3(RoofRidgeX + RafterRun, Line(RafterRun), z + .07f)));
         }
         var northSlope = new List<(Vector3, Vector3)>();
         var southSlope = new List<(Vector3, Vector3)>();
         for (float x = -163.6f; x > -172.5f; x -= 1.2f)
         {
             northSlope.Add((new Vector3(x, Line(atRidge), RoofRidgeZ + atRidge), new Vector3(x, Line(RafterRun), RoofRidgeZ + RafterRun)));
-            // West of the valley the north wing's south slope is the west wing's roof.
+            // West of the valley the north wing's south slope is the west wing's roof. Its rafters sit beside the north
+            // slope's, 7 cm east, since at the ridge their top ends reach past each other and would share their sides.
             if (x > -169.8f)
-                southSlope.Add((new Vector3(x, Line(atRidge), RoofRidgeZ - atRidge), new Vector3(x, Line(RafterRun), RoofRidgeZ - RafterRun)));
+                southSlope.Add((new Vector3(x + .07f, Line(atRidge), RoofRidgeZ - atRidge), new Vector3(x + .07f, Line(RafterRun), RoofRidgeZ - RafterRun)));
         }
         Timbers(state, "rafters-west", westSlope);
         Timbers(state, "rafters-east", eastSlope);
         Timbers(state, "rafters-north", northSlope);
         Timbers(state, "rafters-south", southSlope);
-        var meet = new Vector3(RoofRidgeX, Line(0f), RoofRidgeZ);
-        Timbers(state, "rafters-hip", new List<(Vector3, Vector3)> { (meet, new Vector3(RoofRidgeX - RafterRun, Line(RafterRun), RoofRidgeZ + RafterRun)) });
+        // The hip and the valley rafter lie on one line through the ridges' meeting point; each starts 6 cm from it along
+        // its own run, so their top ends stay apart and their sides, which lie in one plane, share no area.
+        const float fromMeet = .06f;
+        Timbers(state, "rafters-hip", new List<(Vector3, Vector3)> {
+            (new Vector3(RoofRidgeX - fromMeet, Line(fromMeet), RoofRidgeZ + fromMeet), new Vector3(RoofRidgeX - RafterRun, Line(RafterRun), RoofRidgeZ + RafterRun)) });
         // The valley rafter runs down to the corner where the west wing's east wall meets the north room's south wall.
         float valleyRun = RoofRidgeZ - NorthRoomSouth;
-        Timbers(state, "rafters-valley", new List<(Vector3, Vector3)> { (meet, new Vector3(RoofRidgeX + valleyRun, Line(valleyRun), NorthRoomSouth)) });
+        Timbers(state, "rafters-valley", new List<(Vector3, Vector3)> {
+            (new Vector3(RoofRidgeX + fromMeet, Line(fromMeet), RoofRidgeZ - fromMeet), new Vector3(RoofRidgeX + valleyRun, Line(valleyRun), NorthRoomSouth)) });
         // The ridge boards stand above the rafter ends and below the roof's top at 5.05. The north board starts 1 cm
         // inside the west one, so its end face lies in none of the west board's faces.
         const float half = .02f, ridgeBottom = 4.62f, ridgeTop = 4.92f;
@@ -469,6 +477,10 @@ public static class BungalowStorey
     {
         Solid(geometry, "terrace", Boards, TerraceWest, BoardsBottom, TerraceSouth, TerraceEast, BoardsTop, TerraceNorth);
         Solid(geometry, "terrace-frame", Metal, TerraceWest - .02f, TerraceFrameBottom, TerraceSouth - .02f, TerraceEast, BoardsBottom, TerraceNorth + .02f);
+        // Between the terrace's boards and the boards inside runs the wall's thickness; a steel sill under the door closes
+        // it. It reaches 1.5 cm into the terrace and 1 cm into the boards and stands 6 mm proud of both floors, so no face of
+        // it lies in theirs and the door's track still clears it. Its ends stop 1 cm inside the door frame's faces.
+        Solid(geometry, "terrace-sill", Metal, TerraceEast - .015f, BoardsBottom - .01f, DoorSouth + .01f, InWest + .01f, BoardsTop + .006f, DoorNorth - .01f);
         // The south and north runs set the outer corner posts; the west run stands between them.
         const float corner = .03f;
         Railing(geometry, "terrace-south", true, TerraceSouth + corner, TerraceWest + corner - .025f, TerraceEast);
@@ -481,10 +493,10 @@ public static class BungalowStorey
     {
         float centre = (LandingSouth + LandingNorth) * .5f;
         state.Copies.Add(Copy("stair", Stair, StairTop, new Vector3(LandingEast, UpperFloor, centre), StairYaw, StairScale));
-        Solid(geometry, "landing", Metal, LandingWest - .02f, BalconyBottom, LandingSouth, LandingEast, BoardsTop, LandingNorth);
+        Solid(geometry, "landing", Metal, LandingWest, BalconyBottom, LandingSouth, LandingEast, BoardsTop, LandingNorth);
         // A steel header under the landing's east edge takes the stair's stringers, whose top ends would otherwise hang
-        // in the air below the landing.
-        Face(geometry, "landing-header", Metal, LandingEast - .12f, BalconyBottom - .4f, LandingSouth, LandingEast + .12f, BalconyBottom + .01f, LandingNorth);
+        // in the air below the landing. Its ends stop 5 mm inside the landing's, so their end faces lie in no shared plane.
+        Face(geometry, "landing-header", Metal, LandingEast - .12f, BalconyBottom - .4f, LandingSouth + .005f, LandingEast + .12f, BalconyBottom + .01f, LandingNorth - .005f);
         // The stair's top tread ends a few centimetres short of the landing; an unseen strip closes the slit, which would
         // split the walking map there.
         Block(geometry, "landing-lip", LandingEast, BalconyBottom, LandingSouth, LandingEast + .3f, UpperFloor - .02f, LandingNorth);
@@ -493,6 +505,25 @@ public static class BungalowStorey
         Railing(geometry, "landing-south", true, LandingSouth + .03f, LandingWest, LandingEast);
         StairRail(state, geometry, "south", LandingSouth + .03f);
         StairRail(state, geometry, "north", LandingNorth - .03f);
+        StairSoffit(state);
+    }
+
+    // The docks stair's treads are open between the stringers; seen from above or from the side through the open risers
+    // one looked into the dark under them. A steel plate under the treads, between the stringers and parallel to the
+    // nosings, closes the stair from below. Its foot lies in the ground, its top end behind the landing's header.
+    private static void StairSoffit(WorldStateDefinition state)
+    {
+        const float drop = .32f;
+        float slope = Mathf.Atan2(StairRise, StairRun) * Mathf.Rad2Deg;
+        float length = Mathf.Sqrt(StairRise * StairRise + StairRun * StairRun);
+        var source = PropertyPivot;
+        var plate = Tilted("stair-soffit", Anchor, source, new Vector3(StairFoot, UpperFloor - StairRise - drop, (LandingSouth + LandingNorth) * .5f),
+            Quaternion.Euler(0f, 0f, -slope));
+        plate.OwnMesh = false;
+        plate.Exclude.Add("Colliders");
+        float half = (LandingNorth - LandingSouth) * .5f - .07f;
+        Face(plate, "plate", Metal, source.x - length, source.y - .02f, source.z - half, source.x, source.y, source.z + half);
+        state.Copies.Add(plate);
     }
 
     // The game has no sloped railing at this pitch: upright posts, and rails in copies tilted to the slope of the
@@ -542,12 +573,12 @@ public static class BungalowStorey
         var terrace = new PropertyExtensionDefinition
         {
             Id = TerraceGridId, PropertyCode = "bungalow", GridIndex = 1,
-            GridOrigin = new Vector3(TerraceWest + .25f, UpperFloor, TerraceNorth - .25f)
+            GridOrigin = new Vector3(TerraceGridWest + .25f, UpperFloor, TerraceGridNorth - .25f)
         };
         for (int x = 0; x < 6; x++)
             for (int y = 0; y < 2; y++)
                 terrace.Tiles.Add(new GridCoordinate(x, y));
-        terrace.Bounds.Add(BoundsOf(TerraceWest, UpperFloor - .1f, TerraceSouth, -176.5f, UpperFloor + 2.95f, TerraceNorth));
+        terrace.Bounds.Add(BoundsOf(TerraceGridWest, UpperFloor - .1f, TerraceGridSouth, -176.5f, UpperFloor + 2.95f, TerraceGridNorth));
         state.PropertyExtensions.Add(terrace);
 
         state.NavigationBounds = BoundsOf(HouseWest - .2f, -4.3f, HouseSouth - .2f, StairFoot + .9f, UpperFloor + 2.5f, HouseNorth + .2f);

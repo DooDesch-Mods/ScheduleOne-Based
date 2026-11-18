@@ -64,17 +64,32 @@ internal static class BungalowSiteProps
     internal static readonly Vector2 StairTree = new(-161.36f, 112.48f);
     internal static readonly (Vector3 At, Vector3 Face) StairTreeCut = (new(-161.36f, -3.94f, 113.15f), new(-161.36f, -3.05f, 112.55f));
 
-    // The west kit stands on the gravel between the deck and the sunroom while either is built: a table with the plan,
-    // a pallet of planks, a bucket and offcuts. The foreman reads at the table from its east side and walks to its north
-    // end.
-    private static readonly Vector3 WestTableAt = new(-185.4f, -4f, 119.8f);
-    private static readonly Vector3 WestStockAt = new(-185.5f, -4f, 117.0f);
-    internal static readonly (Vector3 At, Vector3 Face) WestTableFront = (new(-184.3f, -4f, 119.8f), new(-185.4f, -3.25f, 119.8f));
-    // East of the west stock pile, and south of it.
-    internal static readonly (Vector3 At, Vector3 Face) WestStockFront = (new(-184.6f, -4f, 117.0f), new(-185.5f, -3.3f, 117.0f));
-    internal static readonly (Vector3 At, Vector3 Face) WestStockSide = (new(-185.5f, -4f, 116.1f), new(-185.5f, -3.3f, 116.9f));
-    // The lawn rises toward the north; at the table's north end it stands at -3.76.
-    internal static readonly (Vector3 At, Vector3 Face) WestTableSide = (new(-185.4f, -3.76f, 121.5f), new(-185.4f, -3.25f, 120.7f));
+    // The west kit stands on the gravel between the deck and the sunroom while either is built: a table with the plan
+    // north of the garden table, the pallet south of the west door, a bucket and offcuts. Each stands at least 0.6 m from
+    // the shrub (x -185.98 .. -182.82, z from 118.79), the garden table (x -186.84 .. -184.43, z 113.42 .. 115.45) and
+    // the trunks at (-186.7, 117.3) and (-186.2, 107.8); the way out of the west door (z 110.15 .. 112.65) stays open.
+    // Table and pallet stand a few degrees off the house's lines. The foreman reads at the table from its south side.
+    private static readonly Vector3 WestTableAt = new(-184.75f, -4f, 117.4f);
+    private const float WestTableYaw = 8f;
+    private static readonly Vector3 WestStockAt = new(-184.3f, -3.94f, 108.9f);
+    private const float WestStockYaw = 12f;
+    internal static readonly (Vector3 At, Vector3 Face) WestTableFront = (new(-184.4f, -4f, 116.05f), new(-184.6f, -3.25f, 116.9f));
+    internal static readonly (Vector3 At, Vector3 Face) WestTableSide = (new(-185.6f, -4f, 116.2f), new(-185.5f, -3.25f, 117.0f));
+    // North of the west stock pile, toward the door, and west of it.
+    internal static readonly (Vector3 At, Vector3 Face) WestStockFront = (new(-184.3f, -3.99f, 110.6f), new(-184.3f, -3.3f, 109.75f));
+    internal static readonly (Vector3 At, Vector3 Face) WestStockSide = (new(-185.7f, -4.04f, 109.2f), new(-185.0f, -3.3f, 109.05f));
+
+    // Once the frames stand, the kit moves into the sunroom onto the slab: the table in the north half, the pallet
+    // against the house wall north of the way between the two doors (z 109.3 .. 113), which stays open.
+    private const float SunroomFloor = -3.70f;
+    private static readonly Vector3 InsideTableAt = new(-180.8f, SunroomFloor, 118.6f);
+    private const float InsideTableYaw = 70f;
+    private static readonly Vector3 InsideStockAt = new(-178.6f, SunroomFloor, 114.3f);
+    private const float InsideStockYaw = -8f;
+    internal static readonly (Vector3 At, Vector3 Face) InsideTableFront = (new(-179.6f, SunroomFloor, 118.9f), new(-180.2f, -2.95f, 118.9f));
+    internal static readonly (Vector3 At, Vector3 Face) InsideTableSide = (new(-181.0f, SunroomFloor, 116.75f), new(-180.7f, -2.95f, 117.4f));
+    internal static readonly (Vector3 At, Vector3 Face) InsideStockFront = (new(-178.6f, SunroomFloor, 115.95f), new(-178.6f, -3.0f, 115.1f));
+    internal static readonly (Vector3 At, Vector3 Face) InsideStockSide = (new(-180.1f, SunroomFloor, 114.3f), new(-179.4f, -3.0f, 114.3f));
     // On the carport's one day the foreman watches the pines come down from the street side.
     internal static readonly (Vector3 At, Vector3 Face) CarportWatch = (new(-160.5f, -3.92f, 108.8f), new(-165.9f, -2.8f, 104.4f));
     // In the north bay, facing the posts on the bay line.
@@ -154,12 +169,20 @@ internal static class BungalowSiteProps
             Id = "crew-path", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,
             Area = BoundsOf(PathFromX, -20f, PathCentreZ - half, PathToX, 20f, PathCentreZ + half)
         });
+        // Where the grass is gone the ground shows as trodden dirt, along a line that bends a little on its way.
+        var dirt = new ObjectRule
+        {
+            Id = "crew-path-dirt", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
+            PaintLayer = "Terrain_Dirt", PaintStrength = .85f, PaintWidth = PathWidth(level)
+        };
+        dirt.PaintPath.AddRange(new[] { new Vector2(PathFromX, PathCentreZ), new Vector2(-160.5f, 111.85f), new Vector2(-159.3f, 111.95f), new Vector2(PathToX, PathCentreZ) });
+        state.Rules.Add(dirt);
     }
 
     private static void Site(WorldStateDefinition state, CopyDefinition site, int level)
     {
-        SiteTable(state, site);
-        Stock(state, site, level switch { 1 => 12, 2 => 8, 3 => 6, 4 => 4, _ => 2 });
+        SiteTable(state);
+        Stock(state, level switch { 1 => 12, 2 => 8, 3 => 6, 4 => 4, _ => 2 });
         state.Copies.Add(Copy("site-fire-drum", Camp + "DrumFirepit", FireDrumPivot, FireDrumAt, 17));
         Block(site, "site-fire-drum-block", FireDrumAt.x - .32f, FireDrumAt.y, FireDrumAt.z - .32f, FireDrumAt.x + .32f, FireDrumAt.y + .9f, FireDrumAt.z + .32f);
         Cinderblock(state, "site-cinderblock-a", -158.85f, -3.95f, 118.05f, 23);
@@ -230,9 +253,13 @@ internal static class BungalowSiteProps
         Cinderblock(state, "yard-cinderblock", -160.6f, -4f, 123.3f, 141);
     }
 
-    // The west kit for the deck's stilts day and the sunroom's slab and frame days.
+    // The west kit for the deck's stilts day and the sunroom's slab day.
     internal static void WestKit(WorldStateDefinition state, string prefix, int planks, int seed) =>
-        Kit(state, prefix, WestTableAt, true, WestStockAt, new Vector3(-184.4f, -4f, 118.2f), 113, new Vector3(-184.3f, -4f, 116.3f), planks, seed);
+        Kit(state, prefix, WestTableAt, WestTableYaw, WestStockAt, WestStockYaw, new Vector3(-183.5f, -4f, 116.2f), 113, new Vector3(-185.8f, -4.03f, 110.4f), planks, seed);
+
+    // The kit inside the sunroom on its frames day.
+    internal static void InsideKit(WorldStateDefinition state, string prefix, int planks, int seed) =>
+        Kit(state, prefix, InsideTableAt, InsideTableYaw, InsideStockAt, InsideStockYaw, new Vector3(-181.6f, SunroomFloor, 114.9f), 40, new Vector3(-179.8f, SunroomFloor, 116.6f), planks, seed);
 
     // The carport's kit on its posts day stands in the second bay, which has no dock until the roof is on: the table
     // between the west and the middle post line, the stock between the middle and the east one. The bay's ground lies
@@ -245,52 +272,66 @@ internal static class BungalowSiteProps
     internal static readonly (Vector3 At, Vector3 Face) CarportStockSide = (new(-162.55f, -3.96f, 107.1f), new(-163.0f, -3.35f, 106.9f));
 
     internal static void CarportKit(WorldStateDefinition state, int planks, int seed) =>
-        Kit(state, "carport-kit", CarportTableAt, false, CarportStockAt, new Vector3(-164.9f, -3.96f, 107.6f), 61, new Vector3(-165.4f, -3.96f, 107.95f), planks, seed);
+        Kit(state, "carport-kit", CarportTableAt, 0f, CarportStockAt, 0f, new Vector3(-164.9f, -3.96f, 107.6f), 61, new Vector3(-165.4f, -3.96f, 107.95f), planks, seed);
 
-    private static void Kit(WorldStateDefinition state, string prefix, Vector3 tableAt, bool along, Vector3 stockAt, Vector3 bucket, float bucketYaw, Vector3 offcuts, int planks, int seed)
+    private static void Kit(WorldStateDefinition state, string prefix, Vector3 tableAt, float tableYaw, Vector3 stockAt, float stockYaw, Vector3 bucket, float bucketYaw, Vector3 offcuts, int planks, int seed)
     {
-        var site = new CopyDefinition
-        {
-            Id = prefix + "-site", Template = Anchor, Frame = Property, OwnMesh = false, Obstacle = false,
-            Exclude = { "Colliders" },
-            At = new LocalPoint(PropertyPivot, PropertyYaw)
-        };
-        SiteTable(state, site, prefix, tableAt, along);
-        Stock(state, site, prefix, stockAt, planks);
+        SiteTable(state, prefix, tableAt, tableYaw);
+        Stock(state, prefix, stockAt, stockYaw, planks);
         state.Copies.Add(Copy(prefix + "-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, bucket - new Vector3(0f, BucketUprightDrop, 0f), bucketYaw));
         Offcuts(state, prefix + "-offcuts", offcuts.x, offcuts.y, offcuts.z, .25f, seed);
-        state.Copies.Add(site);
     }
 
-    private static void SiteTable(WorldStateDefinition state, CopyDefinition site) => SiteTable(state, site, "site", TableAt, false);
-
-    // along = true turns the long side along z, else across it along x.
-    private static void SiteTable(WorldStateDefinition state, CopyDefinition site, string prefix, Vector3 at, bool along)
+    // Kit footprints (centre, yaw, half size along the turned x and z) for the vegetation check in tests.
+    internal static readonly (string Id, Vector3 At, float Yaw, float HalfX, float HalfZ)[] WestFootprints =
     {
-        state.Copies.Add(Copy(prefix + "-table", FoldingTable, FoldingTablePivot, at, along ? 90 : 0, TableScale));
-        float shortHalf = .61f * TableScale, longHalf = 1.26f * TableScale, top = at.y + .75f * TableScale;
-        float halfX = along ? shortHalf : longHalf, halfZ = along ? longHalf : shortHalf;
-        Block(site, prefix + "-table-block", at.x - halfX, at.y, at.z - halfZ, at.x + halfX, top, at.z + halfZ);
-        float planX = along ? .16f : .25f, planZ = along ? .25f : .16f;
-        Face(site, prefix + "-table-plan", "clipboard_paper_mat", at.x - planX, top + .002f, at.z - planZ, at.x + planX, top + .004f, at.z + planZ);
+        ("west-table", WestTableAt, WestTableYaw, 1.26f * TableScale, .61f * TableScale),
+        ("west-stock", WestStockAt, WestStockYaw, .78f, .78f),
+        ("inside-table", InsideTableAt, InsideTableYaw, 1.26f * TableScale, .61f * TableScale),
+        ("inside-stock", InsideStockAt, InsideStockYaw, .78f, .78f)
+    };
+
+    // A copy of the anchor turned by yaw about centre. Its boxes are given level, in world coordinates as if unturned.
+    private static CopyDefinition Turned(string id, Vector3 centre, float yaw) => new()
+    {
+        Id = id, Template = Anchor, Frame = Property, OwnMesh = false, Obstacle = false,
+        // The post only anchors the boxes; its collider child would stand as an unseen beam where the anchor lands.
+        Exclude = { "Colliders" },
+        At = new LocalPoint(centre - Quaternion.Euler(0, yaw, 0) * (centre - PropertyPivot), yaw + PropertyYaw)
+    };
+
+    private static void SiteTable(WorldStateDefinition state) => SiteTable(state, "site", TableAt, 0f);
+
+    // At yaw 0 the long side runs along x; the block and the plan turn with the table.
+    private static void SiteTable(WorldStateDefinition state, string prefix, Vector3 at, float yaw)
+    {
+        state.Copies.Add(Copy(prefix + "-table", FoldingTable, FoldingTablePivot, at, yaw, TableScale));
+        float halfZ = .61f * TableScale, halfX = 1.26f * TableScale, top = at.y + .75f * TableScale;
+        var table = Turned(prefix + "-table-boxes", at, yaw);
+        Block(table, prefix + "-table-block", at.x - halfX, at.y, at.z - halfZ, at.x + halfX, top, at.z + halfZ);
+        Face(table, prefix + "-table-plan", "clipboard_paper_mat", at.x - .25f, top + .002f, at.z - .16f, at.x + .25f, top + .004f, at.z + .16f);
+        state.Copies.Add(table);
     }
 
-    private static void Stock(WorldStateDefinition state, CopyDefinition site, int planks) => Stock(state, site, "site", StockAt, planks);
+    private static void Stock(WorldStateDefinition state, int planks) => Stock(state, "site", StockAt, 0f, planks);
 
-    // A pallet with planks stacked side by side across their length, four to a layer.
-    private static void Stock(WorldStateDefinition state, CopyDefinition site, string prefix, Vector3 at, int planks)
+    // A pallet with planks stacked side by side across their length, four to a layer; the planks turn with the pallet.
+    private static void Stock(WorldStateDefinition state, string prefix, Vector3 at, float yaw, int planks)
     {
-        state.Copies.Add(Copy(prefix + "-pallet", Pallet, PalletPivot, at, 0));
-        Block(site, prefix + "-pallet-block", at.x - .78f, at.y, at.z - .78f, at.x + .78f, at.y + .55f, at.z + .78f);
+        state.Copies.Add(Copy(prefix + "-pallet", Pallet, PalletPivot, at, yaw));
+        var pallet = Turned(prefix + "-pallet-boxes", at, yaw);
+        Block(pallet, prefix + "-pallet-block", at.x - .78f, at.y, at.z - .78f, at.x + .78f, at.y + .55f, at.z + .78f);
+        state.Copies.Add(pallet);
+        var turn = Quaternion.Euler(0, yaw, 0);
         float[] shift = { .015f, -.025f, .005f, -.01f, .03f, -.015f, .01f, -.03f, .02f, 0f, -.02f, .025f };
         // Planks side by side touch at their edges, so each of a layer lies 5 mm above the one before and no two tops share
         // a plane; the mesh leans by about 1 mm across its width, which a smaller step would not clear. The first layer lies 2 mm above the pallet deck and each further layer 2 mm above the one below, so no
         // plank's underside lies in the face it rests on.
         for (int i = 0; i < planks; i++)
             state.Copies.Add(Copy(prefix + "-plank-" + i, Plank, PlankPivot,
-                new Vector3(at.x + shift[i],
-                    at.y + PalletDeck + .002f + PlankThickness * (.5f + i / 4) + (i / 4) * .002f + (i % 4) * .005f,
-                    at.z + ((i % 4) - 1.5f) * .125f), 90));
+                at + turn * new Vector3(shift[i], 0f, ((i % 4) - 1.5f) * .125f)
+                   + new Vector3(0f, PalletDeck + .002f + PlankThickness * (.5f + i / 4) + (i / 4) * .002f + (i % 4) * .005f, 0f),
+                90 + yaw));
     }
 
     private static void Cinderblock(WorldStateDefinition state, string id, float x, float floor, float z, float yaw) =>
@@ -306,7 +347,7 @@ internal static class BungalowSiteProps
         var centre = new Vector3(x, floor, z);
         int pieces = Math.Max(2, (int)(radius * 14f));
         // The three handfuls overlap, so tops and bottoms are kept apart across the whole heap.
-        var levels = (Bottoms: new List<float>(), Tops: new List<float>());
+        var levels = (Bottoms: new List<(float Y, float X, float Z, float R)>(), Tops: new List<float>());
         float start = Between(0f, 180f);
         for (int turn = 0; turn < 3; turn++)
         {
@@ -332,7 +373,11 @@ internal static class BungalowSiteProps
                 float tall = board ? Between(.016f, .022f) : Between(.04f, .055f);
                 // The flicker check counts faces within 2 mm as one plane: each bottom and each top moves 3 mm until
                 // no other piece on this spot has one that close.
-                float low = Apart(levels.Bottoms, floor - .008f + lift, -.003f);
+                // Bottoms only clash where two pieces cover the same floor, so they are compared within reach: the piece's
+                // middle turned into the heap's frame, and the circle round its corners.
+                var middle = Quaternion.Euler(0, yaw, 0) * new Vector3(px - x, 0f, pz - z);
+                float low = SinkApart(levels.Bottoms, floor - .008f + lift, floor, middle.x, middle.z,
+                    Mathf.Sqrt(halfLength * halfLength + halfWidth * halfWidth));
                 float high = Apart(levels.Tops, floor + lift + tall, .003f);
                 float west = Apart(sides.X, px - halfLength, -.003f), east = Apart(sides.X, px + halfLength, .003f);
                 float south = Apart(sides.Z, pz - halfWidth, -.003f), north = Apart(sides.Z, pz + halfWidth, .003f);
@@ -340,6 +385,25 @@ internal static class BungalowSiteProps
             }
             state.Copies.Add(handful);
         }
+    }
+
+    // A piece's bottom moves in 3 mm steps either way from where it would lie until no piece within reach has one that
+    // close, but stays no lower than 3.5 cm under the floor's top, and a piece lying flat stays at least 2 mm in the
+    // floor: one way only and across the whole heap, a run of flat pieces walked down through the boards to their
+    // underside.
+    private static float SinkApart(List<(float Y, float X, float Z, float R)> used, float value, float floor, float x, float z, float reach)
+    {
+        float lowest = floor - .035f, highest = Math.Max(value, floor - .002f);
+        bool Free(float y) => !used.Any(u => Math.Abs(u.Y - y) < .0025f && (u.X - x) * (u.X - x) + (u.Z - z) * (u.Z - z) < (u.R + reach) * (u.R + reach));
+        float chosen = Mathf.Clamp(value, lowest, highest);
+        for (int k = 0; k < 24; k++)
+        {
+            float down = value - k * .003f, up = value + k * .003f;
+            if (down >= lowest && down <= highest && Free(down)) { chosen = down; break; }
+            if (up >= lowest && up <= highest && Free(up)) { chosen = up; break; }
+        }
+        used.Add((chosen, x, z, reach));
+        return chosen;
     }
 
     private static float Apart(List<float> used, float value, float step)

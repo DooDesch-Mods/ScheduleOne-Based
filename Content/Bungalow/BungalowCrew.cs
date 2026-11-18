@@ -50,8 +50,10 @@ internal sealed class BungalowCrew : ConstructionCrew
     }
 
     // The foreman is on every build: at the west kit's table for the deck and the sunroom, by the street for the carport.
-    private (Vector3 At, Vector3 Face) ForemanStation(bool secondary) => Upgrade == BungalowDefinition.CarportId
+    // Once the sunroom's frames stand, the kit and the crew work inside it.
+    private (Vector3 At, Vector3 Face) ForemanStation(bool secondary, bool inside) => Upgrade == BungalowDefinition.CarportId
         ? secondary ? BungalowSiteProps.CarportWatchSide : BungalowSiteProps.CarportWatch
+        : inside ? secondary ? BungalowSiteProps.InsideTableSide : BungalowSiteProps.InsideTableFront
         : secondary ? BungalowSiteProps.WestTableSide : BungalowSiteProps.WestTableFront;
 
     // On the gravel east of the deck, facing the outer beam.
@@ -77,6 +79,11 @@ internal sealed class BungalowCrew : ConstructionCrew
     private static readonly Vector3 FrameSouthPost = new(-183.05f, -3f, 112.5f);
     private static readonly Vector3 FrameNorthStand = new(-183.75f, -4f, 117.8f);
     private static readonly Vector3 FrameNorthPost = new(-183.05f, -3f, 117.8f);
+    // Inside on the slab (-3.70) once the frames stand, facing the frames north of the side light.
+    private static readonly Vector3 InsideSouthStand = new(-182.45f, -3.70f, 114.6f);
+    private static readonly Vector3 InsideSouthPost = new(-183.05f, -2.75f, 114.6f);
+    private static readonly Vector3 InsideNorthStand = new(-182.45f, -3.70f, 117.8f);
+    private static readonly Vector3 InsideNorthPost = new(-183.05f, -2.75f, 117.8f);
     // On the slab day no frame stands yet; he nails the formwork at the slab's west edge, as low as his reach allows.
     private static readonly Vector3 SlabSouthEdge = new(-183.05f, -3.4f, 112.5f);
     private static readonly Vector3 SlabNorthEdge = new(-183.05f, -3.4f, 117.8f);
@@ -149,8 +156,9 @@ internal sealed class BungalowCrew : ConstructionCrew
     private (Vector3 At, Vector3 Face) Station(int index, bool secondary, string? phase)
     {
         bool sunroom = Upgrade == BungalowDefinition.SunroomId;
+        bool inside = sunroom && phase == "sunroom-glass";
         if (Upgrade == BungalowDefinition.StoreyId) return StoreyStation(index, secondary, phase);
-        if (index == Foreman) return ForemanStation(secondary);
+        if (index == Foreman) return ForemanStation(secondary, inside);
         if (index == Carpenter)
         {
             // On the carport the carpenter measures the bays while the pines come down.
@@ -161,6 +169,7 @@ internal sealed class BungalowCrew : ConstructionCrew
                     : secondary ? BungalowSiteProps.CarportMeasureSide : BungalowSiteProps.CarportMeasure;
             if (sunroom && phase == "sunroom-base")
                 return secondary ? (FrameNorthStand, SlabNorthEdge) : (FrameSouthStand, SlabSouthEdge);
+            if (inside) return secondary ? (InsideNorthStand, InsideNorthPost) : (InsideSouthStand, InsideSouthPost);
             return sunroom
                 ? secondary ? (FrameNorthStand, FrameNorthPost) : (FrameSouthStand, FrameSouthPost)
                 : secondary ? (DeckNorthStand, DeckNorthBeam) : (DeckSouthStand, DeckSouthBeam);
@@ -169,6 +178,7 @@ internal sealed class BungalowCrew : ConstructionCrew
         if (IsCarpentry(phase))
             return Upgrade == BungalowDefinition.CarportId
                 ? secondary ? BungalowSiteProps.CarportStockSide : BungalowSiteProps.CarportStockFront
+                : inside ? secondary ? BungalowSiteProps.InsideStockSide : BungalowSiteProps.InsideStockFront
                 : secondary ? BungalowSiteProps.WestStockSide : BungalowSiteProps.WestStockFront;
         return sunroom
             ? secondary ? (SunroomWestStand, SunroomWestBark) : (SunroomEastStand, SunroomEastBark)

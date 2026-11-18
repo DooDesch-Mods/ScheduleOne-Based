@@ -32,9 +32,16 @@ public static class BungalowCarport
     // The halves overlap by 2 cm so no light shows through the ridge.
     private const float RidgeOverlap = .02f;
     private const float RidgeZ = 107.65f;
-    // Puts the sheets onto the post beams, as the porch roof sits on its own.
-    private const float RoofCentreY = -1.045f;
+    // Puts the sheets onto the post beams, which rise at the roof's slope: their tops stood about 0.15 m under the sheets'
+    // undersides, and the sheets now sit on them.
+    private const float RoofCentreY = -1.185f;
     private const float RoofCentreX = -165.35f;
+    // The scaled sheet, measured in the game: its top at the eave lies 0.259 m under the centre's height and rises 0.18 per
+    // metre to the ridge; it is 0.166 m thick and 6.75 m wide.
+    private const float EaveTopBelowCentre = .259f, RoofRise = .18f, SheetThickness = .166f, RoofHalfWidth = 3.375f;
+    // Each half is a whole scaled porch roof deep, from its eave to the ridge.
+    private const float RoofRun = RoofDepth * RoofScale;
+    private const string Timber = "wood brown", Metal = "metal_darkgrey_mat";
 
     // Centre of the porch post's bounds: a post at the south end and a beam 2.5 m to the north, 3 m tall.
     private static readonly Vector3 PostPivot = new(-164.8f, -2.2f, 114.1f);
@@ -117,6 +124,52 @@ public static class BungalowCarport
         float half = RoofDepth * RoofScale * .5f - RidgeOverlap * .5f;
         complete.Copies.Add(Copy("roof-south", Roof, RoofPivot, new Vector3(RoofCentreX, RoofCentreY, RidgeZ - half), 0, RoofScale));
         complete.Copies.Add(Copy("roof-north", Roof, RoofPivot, new Vector3(RoofCentreX, RoofCentreY, RidgeZ + half), 180, RoofScale));
+        Trim(complete, "south", RidgeZ - (RoofRun - RidgeOverlap * .5f), 1f, 0f);
+        Trim(complete, "north", RidgeZ + (RoofRun - RidgeOverlap * .5f), -1f, .004f);
+        RidgeCap(complete);
+    }
+
+    // The sheets' cut edges show as plain faces: a timber board covers each gable edge and the eave, laid out level from
+    // the eave's top edge and tilted up the slope. toRidge is +1 when the ridge lies north of the eave. The north half's
+    // gable boards stand 4 mm further out, so where the two halves' boards meet at the ridge no two faces share a plane.
+    private static void Trim(WorldStateDefinition state, string side, float eaveZ, float toRidge, float outward)
+    {
+        float angle = Mathf.Atan(RoofRise) * Mathf.Rad2Deg;
+        float length = RoofRun / Mathf.Cos(Mathf.Atan(RoofRise)) + .01f;
+        float thick = SheetThickness * Mathf.Cos(Mathf.Atan(RoofRise));
+        var pivot = new Vector3(RoofCentreX, RoofCentreY - EaveTopBelowCentre, eaveZ);
+        var trim = Tilted("roof-trim-" + side, Post, pivot, pivot, Quaternion.Euler(-angle * toRidge, 0f, 0f));
+        trim.OwnMesh = false;
+        trim.Exclude.Add("Colliders");
+        float west = RoofCentreX - RoofHalfWidth, east = RoofCentreX + RoofHalfWidth;
+        float Z(float along) => eaveZ + along * toRidge;
+        float z0 = Mathf.Min(Z(-.03f), Z(length)), z1 = Mathf.Max(Z(-.03f), Z(length));
+        // Each gable board reaches 1 cm into the sheet and stands 3.5 cm out from its edge; the outward shift moves the
+        // whole board, its inner face too, so the halves' inner faces under the ridge stay apart as well.
+        Face(trim, "gable-west", Timber, west - .035f - outward, pivot.y - thick - .06f, z0, west + .01f - outward, pivot.y + .025f, z1);
+        Face(trim, "gable-east", Timber, east - .01f + outward, pivot.y - thick - .06f, z0, east + .035f + outward, pivot.y + .025f, z1);
+        // The eave board runs between the gable boards' outer faces and ends inside them; its top and bottom stay 5 mm
+        // inside theirs.
+        float f0 = Mathf.Min(Z(-.035f), Z(.01f)), f1 = Mathf.Max(Z(-.035f), Z(.01f));
+        Face(trim, "eave", Timber, west - .025f, pivot.y - thick - .055f, f0, east + .025f, pivot.y + .02f, f1);
+        state.Copies.Add(trim);
+    }
+
+    // The two halves meet at the ridge with a seam between their top edges; a steel cap runs over it from gable to gable,
+    // a centimetre past the boards on each end.
+    private static void RidgeCap(WorldStateDefinition state)
+    {
+        var cap = new CopyDefinition
+        {
+            Id = "roof-ridge-cap", Template = Post, Frame = Property, OwnMesh = false, Obstacle = false,
+            Exclude = { "Colliders" },
+            At = new LocalPoint(PropertyPivot, PropertyYaw)
+        };
+        float ridgeTop = RoofCentreY - EaveTopBelowCentre + RoofRun * RoofRise;
+        const float halfDepth = .18f;
+        Face(cap, "cap", Metal, RoofCentreX - RoofHalfWidth - .055f, ridgeTop - halfDepth * RoofRise - .025f, RidgeZ - halfDepth,
+            RoofCentreX + RoofHalfWidth + .055f, ridgeTop + .035f, RidgeZ + halfDepth);
+        state.Copies.Add(cap);
     }
 
     // The posts stand at the long sides, so the vans drive in and out along the bays.
@@ -153,6 +206,22 @@ public static class BungalowCarport
         At = new LocalPoint(target - Quaternion.Euler(0, yaw, 0) * (scale * (source - PropertyPivot)), yaw + PropertyYaw),
         IndependentMesh = true, VisualOnly = true, Obstacle = false
     };
+
+    // Places a copy so that the source point lands on the target, turned by the world rotation.
+    private static CopyDefinition Tilted(string id, string template, Vector3 source, Vector3 target, Quaternion turn)
+    {
+        var frameTurn = turn * Quaternion.Euler(0f, PropertyYaw, 0f);
+        return new CopyDefinition
+        {
+            Id = id, Template = template, Frame = Property,
+            At = new LocalPoint(target - turn * (source - PropertyPivot), 0f),
+            Tilt = frameTurn.eulerAngles,
+            IndependentMesh = true, VisualOnly = true, Obstacle = false
+        };
+    }
+
+    private static void Face(CopyDefinition copy, string id, string material, float x1, float y1, float z1, float x2, float y2, float z2) =>
+        copy.Boxes.Add(new BoxDefinition { Id = id, Kind = BoxKind.Panel, Material = material, TileMetres = 1f, Box = BoundsOf(x1, y1, z1, x2, y2, z2) });
 
     private static Bounds BoundsOf(float x1, float y1, float z1, float x2, float y2, float z2)
     {
