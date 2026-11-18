@@ -40,6 +40,12 @@ public sealed class UpgradeState
     public long LastSleepCycle { get; set; } = -1;
     // Dollars the crew got as tips during this build, cash and product value together.
     public int Tips { get; set; }
+    // Rain has already cost this build its one night. Cleared when the build is ordered again or completes.
+    public bool RainDelayed { get; set; }
+    // The sleep cycle that rain took; only meaningful while RainDelayed is set.
+    public long RainDelayedCycle { get; set; }
+    // True from the rained-out night until the next night is processed.
+    public bool WasRainedOut() => RainDelayed && LastSleepCycle == RainDelayedCycle;
     public UpgradeState Copy() => (UpgradeState)MemberwiseClone();
 }
 

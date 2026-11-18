@@ -26,7 +26,7 @@ internal static class BungalowVfx
         int level = BungalowSiteProps.LevelOf(state);
         bool night = StorageVfx.IsNight();
         bool force = StorageVfx.Current == StorageVfx.Mode.Force, off = StorageVfx.Current == StorageVfx.Mode.Off;
-        bool site = level is >= 1 and <= 4;
+        bool site = level is >= 1 and <= 5;
         var wanted = new Dictionary<string, (string Template, Vector3 At)>();
         if (!off && site && (night || force)) wanted[FireId] = (StorageVfx.Fire, BungalowSiteProps.FireSpot);
         var weld = BungalowSiteProps.Weld(level);

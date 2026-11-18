@@ -32,6 +32,7 @@ internal abstract class ConstructionCrew : ISiteCrew
     private UpgradeStage _stage;
     private string? _phase;
     private string _updatedUpgrade = "";
+    private bool _rainedOut, _updatedRain;
     private string? _audioWarning;
     private AudioClip[]? _clips;
     private bool _initialized;
@@ -55,6 +56,8 @@ internal abstract class ConstructionCrew : ISiteCrew
 
     // The build the crew follows: the one under construction, otherwise the site's main upgrade.
     protected string Upgrade { get; private set; } = "";
+    // The quest phase of the job the crew follows; null on the order day.
+    protected string? Phase => _phase;
     // The Personnel region the workers are registered in.
     protected virtual string Region => "Northtown";
     // Whether the crew is on site while the followed build stands at this stage and phase.
@@ -113,12 +116,16 @@ internal abstract class ConstructionCrew : ISiteCrew
     // Called before Update when the site knows which build the crew follows.
     public void Follow(string upgrade) => Upgrade = upgrade;
 
+    // Called before Update: the build lost last night to rain, so the foreman says that instead of the day's line.
+    public void RainedOut(bool rainedOut) => _rainedOut = rainedOut;
+
     public void Update(UpgradeStage stage, string? phase)
     {
-        bool changed = stage != _stage || phase != _phase || Upgrade != _updatedUpgrade;
+        bool changed = stage != _stage || phase != _phase || Upgrade != _updatedUpgrade || _rainedOut != _updatedRain;
         _stage = stage;
         _phase = phase;
         _updatedUpgrade = Upgrade;
+        _updatedRain = _rainedOut;
         if (!changed) return;
         foreach (var worker in Workers.Values)
         {
@@ -352,7 +359,8 @@ internal abstract class ConstructionCrew : ISiteCrew
         {
             try
             {
-                string line = Based.UI.Text.T(_crew.Line(_index, _crew._phase));
+                bool rain = _crew._rainedOut && _index == _crew.ForemanIndex;
+                string line = Based.UI.Text.T(rain ? "Rain soaked the site. One more night." : _crew.Line(_index, _crew._phase));
                 Npc.Dialogue.BuildAndRegisterContainer("based_construction", builder =>
                 {
                     if (_index == _crew.ForemanIndex) Based.Runtime.Tips.Build(_crew.BaseId, builder, line);

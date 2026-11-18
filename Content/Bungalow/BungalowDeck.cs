@@ -72,6 +72,7 @@ public static class BungalowDeck
             Area = BoundsOf(RockX - 1.3f, -7f, RockZ - 1.3f, RockX + 1.3f, -3f, RockZ + 1.3f)
         });
         MapTrees.Remove(state, "pine", Tree.x, Tree.y);
+        if (!finished) BungalowSiteProps.WestKit(state, "deck-kit", 8, 107);
         // North of the step the slope rises to the boards, and its terrain grass would grow through them.
         if (finished)
             state.Rules.Add(new ObjectRule
@@ -104,7 +105,8 @@ public static class BungalowDeck
         {
             // The railings stand just outside the grid's edges, their unseen walls' inner faces on the edge lines; the
             // boards reach out under them.
-            const float guard = .07f, overhang = 2 * guard + .01f;
+            // The posts' foot plates reach 0.1 m out from the post's centre line; the boards end 1 cm past them.
+            const float guard = .07f, overhang = guard + .11f;
             Solid(geometry, "boards", Boards, West - overhang, beamTop, South - overhang, East, Top, North + overhang);
             // The fascias stop 3 mm under the boards' top, so their upper ends never lie in the boards' plane.
             Face(geometry, "fascia-south", Timber, East, FasciaBottom, South - overhang, East + .03f, Top - .003f, StepSouth);
@@ -113,10 +115,13 @@ public static class BungalowDeck
             Face(geometry, "step-riser", Timber, East, StepY, StepSouth, East + .03f, Top, StepNorth);
             Solid(geometry, "step", Boards, East, FasciaBottom, StepSouth, East + StepOut, StepY, StepNorth);
 
+            // The last post of the south and north runs stands this far inside the step edge, so its foot plate stays on
+            // the boards, which end at East.
+            const float EndInset = .11f;
             float railY = Top + FenceAboveFloor;
             FenceRun(state, geometry, "west", false, West - guard, South - guard, North + guard, startPost: false, endPost: false);
-            FenceRun(state, geometry, "south", true, South - guard, West - guard, East, railY);
-            FenceRun(state, geometry, "north", true, North + guard, West - guard, East, railY);
+            FenceRun(state, geometry, "south", true, South - guard, West - guard, East - EndInset, railY);
+            FenceRun(state, geometry, "north", true, North + guard, West - guard, East - EndInset, railY);
 
             var extension = new PropertyExtensionDefinition { Id = ExtensionId, PropertyCode = "bungalow", GridIndex = GridIndex };
             for (int x = TileXMin; x <= TileXMax; x++)

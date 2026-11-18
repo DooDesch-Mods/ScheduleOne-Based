@@ -118,6 +118,7 @@ public sealed class Mod : MelonMod
         NativeBus.ClientReceived += ReceiveClient;
         Tips.Listen();
         MapExpansionsApi.PeerWorldStateRequested += SendSnapshot;
+        S1API.GameTime.TimeManager.OnSleepStart += NightRain.SleepStarted;
         S1API.GameTime.TimeManager.OnSleepEnd += SleepEnded;
         foreach (var site in Sites) site.Crew?.Initialize(Log, Warn);
         _initialized = true;
@@ -357,7 +358,11 @@ public sealed class Mod : MelonMod
             // The crew follows the build under construction; the crew decides which builds and stages it works on.
             string followed = Constructing(site) ?? site.UpgradeId;
             var state = Engine.GetUpgrade(site.Base.Id, followed);
-            if (site.Crew is Content.SiteCrews.ConstructionCrew crew) crew.Follow(followed);
+            if (site.Crew is Content.SiteCrews.ConstructionCrew crew)
+            {
+                crew.Follow(followed);
+                crew.RainedOut(state.WasRainedOut());
+            }
             site.Crew.Update(state.Stage, Engine.CurrentPhase(state.BaseId, state.UpgradeId));
             site.Crew.Tick();
         }
@@ -714,6 +719,7 @@ public sealed class Mod : MelonMod
         SetHeld("");
         var before = Engine.ExportState();
         var finishedBefore = Finished();
+        DelayForRain(cycle);
         var result = Engine.AdvanceSleep(cycle);
         if (!result.Applied) { Log("Sleep skipped: " + result.Reason); return; }
         _worldDirty = true;
@@ -729,6 +735,37 @@ public sealed class Mod : MelonMod
         {
             try { ConstructionLitter.Drop(site, upgradeId); }
             catch (Exception error) { Contain("construction litter for " + upgradeId, error); }
+        }
+    }
+
+    // Rain on a night spent without a roof costs a running build one night, once per build. The delay is recorded
+    // before AdvanceSleep, which then leaves that build where it is and moves the others on.
+    private static void DelayForRain(long cycle)
+    {
+        bool rained = NightRain.Take(out string source);
+        foreach (var site in Sites)
+        {
+            string? upgradeId = Constructing(site);
+            if (upgradeId == null) continue;
+            string name = site.Base.Id + "/" + upgradeId;
+            if (Engine.GetUpgrade(site.Base.Id, upgradeId).RainDelayed)
+            {
+                Log("No rain delay for " + name + " in sleep cycle " + cycle + ": rain already cost this build a night (rain " + (rained ? "seen" : "not seen") + ", " + source + ").");
+                continue;
+            }
+            if (!Engine.IsOpenToRain(site.Base.Id, upgradeId))
+            {
+                Log("No rain delay for " + name + " in sleep cycle " + cycle + ": the build is not open to rain (rain " + (rained ? "seen" : "not seen") + ", " + source + ").");
+                continue;
+            }
+            if (!rained)
+            {
+                Log("No rain delay for " + name + " in sleep cycle " + cycle + ": no rain seen (" + source + ").");
+                continue;
+            }
+            var delay = Engine.DelayForRain(site.Base.Id, upgradeId, cycle);
+            if (delay.Applied) Log("Construction of " + name + " delayed one night by rain in sleep cycle " + cycle + " (" + source + ").");
+            else Warn("Rain delay of " + name + " in sleep cycle " + cycle + " refused: " + delay.Reason + ".");
         }
     }
 

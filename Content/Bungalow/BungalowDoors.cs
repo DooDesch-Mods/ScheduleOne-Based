@@ -101,6 +101,8 @@ internal sealed class CopiedDoor
 
     private Transform? _leaf;
     private InteractableObject? _interaction;
+    // How far the prompt stands from the middle of the leaf's collider, across the floor; -1 until a leaf is bound.
+    private float _promptOffset = -1f;
     private Vector3 _closed, _open;
     private Quaternion _closedTurn;
     private Vector3 _hinge, _across, _doorway;
@@ -226,6 +228,14 @@ internal sealed class CopiedDoor
         interaction.MaxInteractionRange = InteractionRange;
         interaction.RequiresUniqueClick = true;
         interaction.onInteractStart.AddListener((UnityAction)(() => Request(_side == 0)));
+        // Without a display point the game draws the prompt in the middle of the collider, on the leaf's centre.
+        var knob = new GameObject("Based " + Name + " knob").transform;
+        knob.SetParent(leaf, false);
+        knob.position = Knob(house, leaf, leafPath, bounds, slide, out string knobFrom);
+        interaction.displayLocationPoint = knob;
+        var offset = knob.position - bounds.center;
+        offset.y = 0f;
+        _promptOffset = offset.magnitude;
 
         _leaf = leaf;
         _interaction = interaction;
@@ -245,8 +255,33 @@ internal sealed class CopiedDoor
         Place();
         Mod.Log(Name + " bound: leaf '" + leafPath + "' at " + _closed + (_swing ? ", swings " + _swingAngle.ToString("0") + " degrees"
                 : ", slides by " + slide + " in " + _duration.ToString("0.0") + " s") + ", collider " + box.size + " on layer "
-                + LayerMask.LayerToName(blocker.layer) + ", " + (_side != 0 ? "open" : "closed") + ".");
+                + LayerMask.LayerToName(blocker.layer) + ", " + (_side != 0 ? "open" : "closed") + ", prompt at " + knob.position + " (" + knobFrom + ").");
         return true;
+    }
+
+    // Where the door's prompt shows: the house door's own display point, carried over to the copy's leaf, or else the
+    // closing edge at handle height: the edge away from the hinge for a swinging leaf, the edge against the slide for a
+    // sliding one.
+    private Vector3 Knob(GameObject house, Transform leaf, string leafPath, Bounds bounds, Vector3 slide, out string from)
+    {
+        var houseLeaf = house.transform.Find(leafPath);
+        foreach (var vanilla in house.GetComponentsInChildren<InteractableObject>(true))
+        {
+            var point = vanilla.displayLocationPoint;
+            if (point == null || houseLeaf == null) continue;
+            from = "the house door's display point";
+            return leaf.TransformPoint(houseLeaf.InverseTransformPoint(point.position));
+        }
+        from = houseLeaf == null ? "the closing edge; the house door has no leaf at '" + leafPath + "'" : "the closing edge; the house door has no display point";
+        var centre = bounds.center;
+        var flat = _swing ? centre - leaf.position : -slide;
+        flat.y = 0f;
+        if (flat.sqrMagnitude < .0001f) return centre;
+        var direction = flat.normalized;
+        float half = Mathf.Abs(Vector3.Dot(bounds.extents, new Vector3(Mathf.Abs(direction.x), 0f, Mathf.Abs(direction.z))));
+        var edge = centre + direction * Mathf.Max(0f, half - .08f);
+        edge.y = bounds.min.y + 1f;
+        return edge;
     }
 
     private Transform? FindCopy(Vector3 root)
@@ -305,7 +340,8 @@ internal sealed class CopiedDoor
         string where = _leaf == null ? "no leaf bound" : _swing
             ? "leaf at " + _leaf.position.ToString("F2") + ", angle " + _angle.ToString("0") + (_npcSide != 0 ? ", held open for an NPC" : "")
             : "leaf at " + _leaf.position.ToString("F2") + ", progress " + _progress.ToString("0.00");
-        string hit = _interaction == null ? "no interaction" : "interaction '" + _interaction.message + "' in " + InteractionRange + " m";
+        string hit = _interaction == null ? "no interaction" : "interaction '" + _interaction.message + "' in " + InteractionRange + " m"
+            + ", prompt " + _promptOffset.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " m from the leaf's middle";
         return (_side != 0 ? "open" : "closed") + "; " + where + "; " + hit + ".";
     }
 

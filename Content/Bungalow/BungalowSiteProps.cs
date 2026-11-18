@@ -48,16 +48,39 @@ internal static class BungalowSiteProps
     // The boards of the upper floor; offcuts lie on them.
     private const float UpperBoards = -.645f;
 
-    // The table stands long side to the house with the plan on it; the foreman reads it from the grass side and walks to
-    // its north end. Ground from -4.0 at the south end to -3.92 at the north end.
-    private static readonly Vector3 TableAt = new(-162.75f, -3.97f, 115.5f);
+    // The way from the street to the stair's foot and the front door runs east of the house between z 110.9 and 115.3;
+    // nothing of the site stands in it. The table stands north of it, long side across the yard, between the house and
+    // the skip, on ground from -3.93 to -3.97. The foreman reads the plan from its east end and walks to its west end.
+    private static readonly Vector3 TableAt = new(-161.4f, -3.96f, 116.35f);
     // The timber stock north of the house, between the house's corner and the tree.
     private static readonly Vector3 StockAt = new(-162.75f, -3.95f, 122.75f);
-    private static readonly Vector3 FireDrumAt = new(-160.4f, -3.98f, 114.6f);
+    private static readonly Vector3 FireDrumAt = new(-159.4f, -4f, 118.6f);
     internal static readonly Vector3 FireSpot = FireDrumAt + new Vector3(0, .85f, 0);
 
-    internal static readonly (Vector3 At, Vector3 Face) TableFront = (new(-161.75f, -3.98f, 115.5f), new(-162.75f, -3.25f, 115.5f));
-    internal static readonly (Vector3 At, Vector3 Face) TableSide = (new(-162.75f, -3.92f, 117.2f), new(-162.75f, -3.25f, 116.3f));
+    internal static readonly (Vector3 At, Vector3 Face) TableFront = (new(-159.6f, -4f, 116.35f), new(-160.5f, -3.25f, 116.35f));
+    internal static readonly (Vector3 At, Vector3 Face) TableSide = (new(-162.95f, -3.93f, 116.35f), new(-162.3f, -3.25f, 116.35f));
+
+    // The pine before the stair falls on the day the storey is ordered; the woodcutter stands on its north side.
+    internal static readonly Vector2 StairTree = new(-161.36f, 112.48f);
+    internal static readonly (Vector3 At, Vector3 Face) StairTreeCut = (new(-161.36f, -3.94f, 113.15f), new(-161.36f, -3.05f, 112.55f));
+
+    // The west kit stands on the gravel between the deck and the sunroom while either is built: a table with the plan,
+    // a pallet of planks, a bucket and offcuts. The foreman reads at the table from its east side and walks to its north
+    // end.
+    private static readonly Vector3 WestTableAt = new(-185.4f, -4f, 119.8f);
+    private static readonly Vector3 WestStockAt = new(-185.5f, -4f, 117.0f);
+    internal static readonly (Vector3 At, Vector3 Face) WestTableFront = (new(-184.3f, -4f, 119.8f), new(-185.4f, -3.25f, 119.8f));
+    // East of the west stock pile, and south of it.
+    internal static readonly (Vector3 At, Vector3 Face) WestStockFront = (new(-184.6f, -4f, 117.0f), new(-185.5f, -3.3f, 117.0f));
+    internal static readonly (Vector3 At, Vector3 Face) WestStockSide = (new(-185.5f, -4f, 116.1f), new(-185.5f, -3.3f, 116.9f));
+    // The lawn rises toward the north; at the table's north end it stands at -3.76.
+    internal static readonly (Vector3 At, Vector3 Face) WestTableSide = (new(-185.4f, -3.76f, 121.5f), new(-185.4f, -3.25f, 120.7f));
+    // On the carport's one day the foreman watches the pines come down from the street side.
+    internal static readonly (Vector3 At, Vector3 Face) CarportWatch = (new(-160.5f, -3.92f, 108.8f), new(-165.9f, -2.8f, 104.4f));
+    // In the north bay, facing the posts on the bay line.
+    internal static readonly (Vector3 At, Vector3 Face) CarportMeasure = (new(-161.2f, -3.92f, 110.0f), new(-163.5f, -3.0f, 109.5f));
+    internal static readonly (Vector3 At, Vector3 Face) CarportMeasureSide = (new(-160.9f, -3.92f, 107.6f), new(-163.2f, -3.0f, 107.0f));
+    internal static readonly (Vector3 At, Vector3 Face) CarportWatchSide =(new(-159.6f, -3.92f, 106.6f), new(-161.5f, -3f, 104.45f));
     // A worker hammers only at a contact point within 0.35 m of his hip (0.9 m above his feet), so each Face sits at
     // that height above the work: the top of the stack, the post, the wall.
     internal static readonly (Vector3 At, Vector3 Face) StockFront = (new(-161.4f, -3.97f, 122.75f), new(-162.1f, -3.2f, 122.75f));
@@ -70,27 +93,26 @@ internal static class BungalowSiteProps
     private static readonly (Vector3 At, Vector3 Face) PorchPost = (new(-166.7f, -3.85f, 113.35f), new(-167.2f, -2.9f, 112.85f));
     private static readonly (Vector3 At, Vector3 Face) EastWallCheck = (new(-163.0f, -3.92f, 119.0f), new(-163.75f, -2.95f, 119.0f));
 
-    // 1 for the floor, 2 the frame, 3 the walls, 4 the roof: the state that stands, from the quest's phase or the world
-    // state's id. Anything else is 0.
+    // 1 for the floor, 2 the frame, 3 the walls, 4 the rafters, 5 the roof: the state that stands, from the quest's phase
+    // or the world state's id. Anything else is 0.
     internal static int LevelOf(string? phase) => phase switch
     {
         "storey-floor" or BungalowStorey.FloorState => 1,
         "storey-frame" or BungalowStorey.FrameState => 2,
         "storey-walls" or BungalowStorey.WallsState => 3,
-        "storey-roof" or BungalowStorey.RoofState => 4,
-        "complete" => 5,
+        "storey-rafters" or BungalowStorey.RaftersState => 4,
+        "storey-roof" or BungalowStorey.RoofState => 5,
+        "complete" => 6,
         _ => 0
     };
 
-    // Where the fitter stands and what he welds on the day after a state stands: with the floor and stair in, the
-    // stair's foot post, from the gravel east of the loading dock; with the frame up, the landing's south post, from
-    // between the carport's posts. On the other days he is off the job.
-    internal static (Vector3 Stand, Vector3 Spark)? Weld(int level) => level switch
-    {
-        1 => (new Vector3(-161.85f, -3.96f, 111.05f), new Vector3(-162.5f, -3.15f, 111.38f)),
-        2 => (new Vector3(-167.7f, -4.02f, 110.55f), new Vector3(-168.42f, -2.3f, 111.42f)),
-        _ => null
-    };
+    // Where the fitter stands and what he welds on the days after the floor and the frame stand: the bracket of the wall
+    // lantern under the landing, from the ground below it (-3.93 to -3.96). On the other days he is off the job.
+    internal static (Vector3 Stand, Vector3 Spark)? Weld(int level) => level is 1 or 2
+        ? (new Vector3(-168.85f, -3.96f, 112.5f), new Vector3(-169.68f, -1.85f, 112.5f))
+        : null;
+
+    internal static (Vector3 At, Vector3 Face) Helper(bool secondary) => secondary ? EastWallCheck : PorchPost;
 
     internal static (Vector3 At, Vector3 Face) Foreman(int level, bool secondary) => level == 0
         ? secondary ? SurveyPorch : SurveyRoof
@@ -109,26 +131,46 @@ internal static class BungalowSiteProps
             Exclude = { "Colliders" },
             At = new LocalPoint(PropertyPivot, PropertyYaw)
         };
-        if (level <= 4) Site(state, site, level);
+        if (level >= 1) MapTrees.Remove(state, "stair-tree", StairTree.x, StairTree.y);
+        if (level >= 1) Path(state, level);
+        if (level <= 5) Site(state, site, level);
         else Cleared(state);
         if (site.Boxes.Count > 0) state.Copies.Add(site);
+    }
+
+    // The crew's feet wear the grass away between the pavement and the stair foot, wider with every night of work; the
+    // trodden strip stays once the storey is done.
+    private const float PathFromX = -161.75f;
+    private const float PathToX = -159.05f;
+    private const float PathCentreZ = 112.1f;
+
+    internal static float PathWidth(int level) => Mathf.Min(.5f + .25f * (Mathf.Min(level, 5) - 1), 1.5f);
+
+    private static void Path(WorldStateDefinition state, int level)
+    {
+        float half = PathWidth(level) * .5f;
+        state.Rules.Add(new ObjectRule
+        {
+            Id = "crew-path", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,
+            Area = BoundsOf(PathFromX, -20f, PathCentreZ - half, PathToX, 20f, PathCentreZ + half)
+        });
     }
 
     private static void Site(WorldStateDefinition state, CopyDefinition site, int level)
     {
         SiteTable(state, site);
-        Stock(state, site, level switch { 1 => 12, 2 => 8, 3 => 4, _ => 2 });
+        Stock(state, site, level switch { 1 => 12, 2 => 8, 3 => 6, 4 => 4, _ => 2 });
         state.Copies.Add(Copy("site-fire-drum", Camp + "DrumFirepit", FireDrumPivot, FireDrumAt, 17));
         Block(site, "site-fire-drum-block", FireDrumAt.x - .32f, FireDrumAt.y, FireDrumAt.z - .32f, FireDrumAt.x + .32f, FireDrumAt.y + .9f, FireDrumAt.z + .32f);
-        Cinderblock(state, "site-cinderblock-a", -160.95f, -3.98f, 114.25f, 23);
-        Cinderblock(state, "site-cinderblock-b", -159.85f, -3.99f, 114.95f, -38);
-        var generator = new Vector3(-160.0f, -4f, 116.4f);
+        Cinderblock(state, "site-cinderblock-a", -158.85f, -3.95f, 118.05f, 23);
+        Cinderblock(state, "site-cinderblock-b", -159.75f, -4f, 119.45f, -38);
+        var generator = new Vector3(-159.3f, -4f, 120.6f);
         state.Copies.Add(Copy("site-generator", BuildSite + "SM_Prop_Generator_01", GeneratorPivot, generator, 85));
         Block(site, "site-generator-block", generator.x - .35f, generator.y, generator.z - .5f, generator.x + .35f, generator.y + .7f, generator.z + .5f);
-        state.Copies.Add(Copy("site-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(-159.6f, -4f, 115.6f), 152));
-        state.Copies.Add(Copy("site-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(-163.3f, -3.99f - BucketUprightDrop, 114.3f), 47));
-        // The site sign faces the street; the cones flank the way from the pavement to the stair.
-        state.Copies.Add(Copy("site-sign", BuildSite + "CS_sign_02", SignPivot, new Vector3(-159.75f, -4.05f, 113.75f), -80));
+        state.Copies.Add(Copy("site-jerry-can", Camp + "Jerry Can", JerryCanPivot, new Vector3(-158.8f, -3.95f, 121.4f), 152));
+        state.Copies.Add(Copy("site-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, new Vector3(-163.35f, -3.83f - BucketUprightDrop, 119.4f), 47));
+        // The site sign faces the street south of the way in; the cones flank the way from the pavement to the stair.
+        state.Copies.Add(Copy("site-sign", BuildSite + "CS_sign_02", SignPivot, new Vector3(-158.9f, -3.9f, 109.4f), -80));
         state.Copies.Add(Copy("site-cone-0", BuildSite + "TrafficCone/trafficcone", ConePivot, new Vector3(-160.9f, -3.92f + ConeCentre - .03f, 110.45f), 0));
         state.Copies.Add(Copy("site-cone-1", BuildSite + "TrafficCone/trafficcone", ConePivot, new Vector3(-159.7f, -3.92f + ConeCentre - .03f, 110.65f), 0));
         if (level <= 3)
@@ -140,10 +182,15 @@ internal static class BungalowSiteProps
 
         // Offcuts: by the table outside on every day, on the open floor while the floor and frame stand, in the rooms
         // once the walls close; fewer when the roof is on.
-        Offcuts(state, "ground-offcuts", -162.95f, -3.99f, 113.75f, .3f, 5);
+        Offcuts(state, "ground-offcuts", -162.6f, -3.9f, 119.6f, .3f, 5);
         switch (level)
         {
             case 1:
+                // The night the old roof came off: its timber lies in heaps on the new floor and by the east wall.
+                Offcuts(state, "roof-debris-middle", -170.4f, UpperBoards, 116.6f, .5f, 83);
+                Offcuts(state, "roof-debris-west", -175.0f, UpperBoards, 110.6f, .4f, 89);
+                Offcuts(state, "roof-debris-north", -167.6f, UpperBoards, 120.6f, .38f, 97);
+                Offcuts(state, "roof-debris-ground", -163.25f, -3.83f, 120.4f, .42f, 79);
                 Offcuts(state, "floor-offcuts-south", -172.8f, UpperBoards, 112.6f, .35f, 11);
                 Offcuts(state, "floor-offcuts-east", -166.5f, UpperBoards, 118.4f, .3f, 23);
                 Offcuts(state, "floor-offcuts-stray", -174.6f, UpperBoards, 119.6f, .14f, 37);
@@ -161,44 +208,86 @@ internal static class BungalowSiteProps
                 Offcuts(state, "room-offcuts-north", -172.6f, UpperBoards, 118.0f, .22f, 61);
                 break;
             case 4:
+                // Rafter ends sawn off at the eaves lie in the rooms under the open roof.
+                Offcuts(state, "rafter-offcuts-south", -173.2f, UpperBoards, 113.4f, .32f, 101);
+                Offcuts(state, "rafter-offcuts-east", -166.8f, UpperBoards, 119.2f, .26f, 103);
+                Offcuts(state, "rafter-offcuts-north", -172.6f, UpperBoards, 118.0f, .2f, 107);
+                break;
+            case 5:
                 Offcuts(state, "room-offcuts-east", -166.8f, UpperBoards, 119.2f, .2f, 67);
                 Offcuts(state, "room-offcuts-stray", -173.2f, UpperBoards, 113.4f, .14f, 71);
                 break;
         }
     }
 
-    // Once the storey is handed over, the site is gone; its trash waits by the house's north-east corner and the empty
-    // crate by the street.
+    // Once the storey is handed over, the site is gone; its trash, the empty crate and a block wait by the house's
+    // north-east corner, out of the way to the stair.
     private static void Cleared(WorldStateDefinition state)
     {
         state.Copies.Add(Copy("yard-trash-can", Camp + "Trash Can Prop", TrashCanPivot, new Vector3(-162.7f, -3.93f, 122.4f), 33));
         state.Copies.Add(Copy("yard-trash-drum", Camp + "Liquid Drum Hollow with trash", TrashDrumPivot, new Vector3(-162.0f, -3.95f, 123.05f), -61));
-        state.Copies.Add(Copy("yard-crate", Camp + "Wood Crate Prop (1)", CratePivot, new Vector3(-160.0f, -4f, 114.6f), 52));
-        Cinderblock(state, "yard-cinderblock", -160.65f, -3.98f, 114.25f, 141);
+        state.Copies.Add(Copy("yard-crate", Camp + "Wood Crate Prop (1)", CratePivot, new Vector3(-161.2f, -3.98f, 123.9f), 52));
+        Cinderblock(state, "yard-cinderblock", -160.6f, -4f, 123.3f, 141);
     }
 
-    private static void SiteTable(WorldStateDefinition state, CopyDefinition site)
+    // The west kit for the deck's stilts day and the sunroom's slab and frame days.
+    internal static void WestKit(WorldStateDefinition state, string prefix, int planks, int seed) =>
+        Kit(state, prefix, WestTableAt, true, WestStockAt, new Vector3(-184.4f, -4f, 118.2f), 113, new Vector3(-184.3f, -4f, 116.3f), planks, seed);
+
+    // The carport's kit on its posts day stands in the second bay, which has no dock until the roof is on: the table
+    // between the west and the middle post line, the stock between the middle and the east one. The bay's ground lies
+    // between -3.93 and -4.02 there.
+    private static readonly Vector3 CarportTableAt = new(-167.0f, -3.97f, 106.6f);
+    private static readonly Vector3 CarportStockAt = new(-163.6f, -3.95f, 106.7f);
+    internal static readonly (Vector3 At, Vector3 Face) CarportTableFront = (new(-167.0f, -3.98f, 107.45f), new(-167.0f, -3.2f, 106.75f));
+    internal static readonly (Vector3 At, Vector3 Face) CarportTableSide = (new(-165.4f, -3.97f, 106.6f), new(-166.0f, -3.2f, 106.6f));
+    internal static readonly (Vector3 At, Vector3 Face) CarportStockFront = (new(-163.6f, -3.97f, 107.75f), new(-163.6f, -3.35f, 107.0f));
+    internal static readonly (Vector3 At, Vector3 Face) CarportStockSide = (new(-162.55f, -3.96f, 107.1f), new(-163.0f, -3.35f, 106.9f));
+
+    internal static void CarportKit(WorldStateDefinition state, int planks, int seed) =>
+        Kit(state, "carport-kit", CarportTableAt, false, CarportStockAt, new Vector3(-164.9f, -3.96f, 107.6f), 61, new Vector3(-165.4f, -3.96f, 107.95f), planks, seed);
+
+    private static void Kit(WorldStateDefinition state, string prefix, Vector3 tableAt, bool along, Vector3 stockAt, Vector3 bucket, float bucketYaw, Vector3 offcuts, int planks, int seed)
     {
-        var at = TableAt;
-        state.Copies.Add(Copy("site-table", FoldingTable, FoldingTablePivot, at, 90, TableScale));
-        // Turned by 90°, the table's long side runs along the house.
-        float halfX = .61f * TableScale, halfZ = 1.26f * TableScale, top = at.y + .75f * TableScale;
-        Block(site, "site-table-block", at.x - halfX, at.y, at.z - halfZ, at.x + halfX, top, at.z + halfZ);
-        Face(site, "site-table-plan", "clipboard_paper_mat", at.x - .16f, top + .002f, at.z - .25f, at.x + .16f, top + .004f, at.z + .25f);
+        var site = new CopyDefinition
+        {
+            Id = prefix + "-site", Template = Anchor, Frame = Property, OwnMesh = false, Obstacle = false,
+            Exclude = { "Colliders" },
+            At = new LocalPoint(PropertyPivot, PropertyYaw)
+        };
+        SiteTable(state, site, prefix, tableAt, along);
+        Stock(state, site, prefix, stockAt, planks);
+        state.Copies.Add(Copy(prefix + "-bucket", Camp + "SM_Prop_Bucket_01", BucketPivot, bucket - new Vector3(0f, BucketUprightDrop, 0f), bucketYaw));
+        Offcuts(state, prefix + "-offcuts", offcuts.x, offcuts.y, offcuts.z, .25f, seed);
+        state.Copies.Add(site);
     }
+
+    private static void SiteTable(WorldStateDefinition state, CopyDefinition site) => SiteTable(state, site, "site", TableAt, false);
+
+    // along = true turns the long side along z, else across it along x.
+    private static void SiteTable(WorldStateDefinition state, CopyDefinition site, string prefix, Vector3 at, bool along)
+    {
+        state.Copies.Add(Copy(prefix + "-table", FoldingTable, FoldingTablePivot, at, along ? 90 : 0, TableScale));
+        float shortHalf = .61f * TableScale, longHalf = 1.26f * TableScale, top = at.y + .75f * TableScale;
+        float halfX = along ? shortHalf : longHalf, halfZ = along ? longHalf : shortHalf;
+        Block(site, prefix + "-table-block", at.x - halfX, at.y, at.z - halfZ, at.x + halfX, top, at.z + halfZ);
+        float planX = along ? .16f : .25f, planZ = along ? .25f : .16f;
+        Face(site, prefix + "-table-plan", "clipboard_paper_mat", at.x - planX, top + .002f, at.z - planZ, at.x + planX, top + .004f, at.z + planZ);
+    }
+
+    private static void Stock(WorldStateDefinition state, CopyDefinition site, int planks) => Stock(state, site, "site", StockAt, planks);
 
     // A pallet with planks stacked side by side across their length, four to a layer.
-    private static void Stock(WorldStateDefinition state, CopyDefinition site, int planks)
+    private static void Stock(WorldStateDefinition state, CopyDefinition site, string prefix, Vector3 at, int planks)
     {
-        var at = StockAt;
-        state.Copies.Add(Copy("site-pallet", Pallet, PalletPivot, at, 0));
-        Block(site, "site-pallet-block", at.x - .78f, at.y, at.z - .78f, at.x + .78f, at.y + .55f, at.z + .78f);
+        state.Copies.Add(Copy(prefix + "-pallet", Pallet, PalletPivot, at, 0));
+        Block(site, prefix + "-pallet-block", at.x - .78f, at.y, at.z - .78f, at.x + .78f, at.y + .55f, at.z + .78f);
         float[] shift = { .015f, -.025f, .005f, -.01f, .03f, -.015f, .01f, -.03f, .02f, 0f, -.02f, .025f };
         // Planks side by side touch at their edges, so each of a layer lies 5 mm above the one before and no two tops share
         // a plane; the mesh leans by about 1 mm across its width, which a smaller step would not clear. The first layer lies 2 mm above the pallet deck and each further layer 2 mm above the one below, so no
         // plank's underside lies in the face it rests on.
         for (int i = 0; i < planks; i++)
-            state.Copies.Add(Copy("site-plank-" + i, Plank, PlankPivot,
+            state.Copies.Add(Copy(prefix + "-plank-" + i, Plank, PlankPivot,
                 new Vector3(at.x + shift[i],
                     at.y + PalletDeck + .002f + PlankThickness * (.5f + i / 4) + (i / 4) * .002f + (i % 4) * .005f,
                     at.z + ((i % 4) - 1.5f) * .125f), 90));

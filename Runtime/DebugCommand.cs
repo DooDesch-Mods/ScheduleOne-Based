@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate | gridedges [code] | zfight [filter] [x y z radius]";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | rain [on|dry|off|state] | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate | gridedges [code] | zfight [filter] [x y z radius]";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -103,6 +103,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     }
                     Mod.Log("baseddiag: storage effects " + Content.StorageUnit.StorageVfx.Describe());
                     Mod.Log("baseddiag: bungalow effects " + Content.Bungalow.BungalowVfx.Describe());
+                    Mod.Log("baseddiag: bungalow effects " + Content.Bungalow.BungalowVfx.Describe());
                     break;
                 case "creator":
                     // A joining test client without saved looks starts in the character creator; finish it with the defaults.
@@ -119,6 +120,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "advance":
                     Mod.DebugAdvance();
                     Mod.Log("baseddiag: one sleep cycle requested; revision " + Mod.Engine.Revision + ".");
+                    break;
+                case "rain":
+                    Rain(args);
                     break;
                 case "dock":
                     DockProbe.Execute(args.Skip(1).ToArray());
@@ -696,6 +700,30 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         Mod.Log("baseddiag: " + running + " stay-in-building events running, " + stuck + " without a usable door.");
     }
 
+    // rain on: every night counts as rainy; dry: every night counts as dry; off: the game's weather decides again.
+    private static void Rain(List<string> args)
+    {
+        string mode = args.Count > 1 ? args[1].ToLowerInvariant() : "state";
+        switch (mode)
+        {
+            case "on": NightRain.Forced = true; break;
+            case "dry": NightRain.Forced = false; break;
+            case "off": NightRain.Forced = null; break;
+            case "state": break;
+            default: throw new ArgumentException("baseddiag rain [on|dry|off|state]");
+        }
+        Mod.Log("baseddiag: rain " + (mode == "state" ? "state" : mode + " set") + "; " + NightRain.Describe() + ".");
+        foreach (var site in Mod.Sites)
+            foreach (var upgrade in site.Base.Upgrades)
+            {
+                var state = Mod.Engine.GetUpgrade(site.Base.Id, upgrade.Id);
+                if (state.Stage != UpgradeStage.Constructing && !state.RainDelayed) continue;
+                Mod.Log("baseddiag: rain " + site.Base.Id + "/" + upgrade.Id + ": stage=" + state.Stage + ", cycles=" + state.CompletedCycles + "/"
+                    + upgrade.ConstructionCycles + ", openToRain=" + Mod.Engine.IsOpenToRain(site.Base.Id, upgrade.Id) + ", delayed=" + state.RainDelayed
+                    + (state.RainDelayed ? " (cycle " + state.RainDelayedCycle + ")" : "") + ".");
+            }
+    }
+
     private static void Hammer(List<string> args)
     {
         if (args.Count > 2 && args[1] == "set")
@@ -942,6 +970,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         upgrade.CompletedCycles = cycles;
         if (stage == UpgradeStage.RightsMissing) upgrade.RightsPaid = 0;
         if (stage < UpgradeStage.Constructing) upgrade.ConstructionPaid = 0;
+        // A jump starts the build fresh at that night, so no earlier night was lost to rain.
+        upgrade.RainDelayed = false;
+        upgrade.RainDelayedCycle = 0;
         state.Revision++;
         Mod.DebugClearFailure();
         Mod.Engine.RestoreState(state);

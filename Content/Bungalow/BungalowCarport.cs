@@ -63,10 +63,45 @@ public static class BungalowCarport
         _registered = true;
     }
 
+    // The first night fells the pines and sets the posts; the kit stands in the second bay. The second puts the roof on
+    // and opens the second bay.
+    public const string PostsState = "posts";
+
     public static ExpansionDefinition Create()
     {
-        var complete = new WorldStateDefinition { Id = "complete" };
+        var definition = new ExpansionDefinition
+        {
+            Id = BungalowDefinition.CarportExpansionId, DisplayName = "Bungalow double carport", Version = "1.0.0", Source = null
+        };
+        definition.WorldStates.Add(BuildState(PostsState, false));
+        definition.WorldStates.Add(BuildState("complete", true));
+        return definition;
+    }
 
+    private static WorldStateDefinition BuildState(string id, bool finished)
+    {
+        var state = new WorldStateDefinition { Id = id };
+        Ground(state);
+        Posts(state, finished);
+        if (finished) RoofOn(state);
+        else BungalowSiteProps.CarportKit(state, 8, 131);
+        return state;
+    }
+
+    // The pines on the spot go and the rock in the second bay with them, from the first night.
+    private static void Ground(WorldStateDefinition state)
+    {
+        for (int i = 0; i < Pines.Length; i++) MapTrees.Remove(state, "pine-" + i, Pines[i].x, Pines[i].z);
+        // A rock juts 15 cm out of the ground in the second bay; a car parked there would stand on it.
+        state.Rules.Add(new ObjectRule
+        {
+            Id = "bay-rock", Name = "Rock1 (10)", Parent = "Rocks", Side = WorldSide.Main, Effect = ObjectEffect.Remove,
+            Area = BoundsOf(-164.6f, -6f, 104.1f, -162.1f, -3f, 106.5f)
+        });
+    }
+
+    private static void RoofOn(WorldStateDefinition complete)
+    {
         var extension = new PropertyExtensionDefinition { Id = ExtensionId, PropertyCode = "bungalow" };
         extension.Docks.Add(new PropertyDockDefinition
         {
@@ -75,8 +110,6 @@ public static class BungalowCarport
         });
         complete.PropertyExtensions.Add(extension);
 
-        for (int i = 0; i < Pines.Length; i++) MapTrees.Remove(complete, "pine-" + i, Pines[i].x, Pines[i].z);
-
         // Under the roof the rain stops; the game's rain mask was baked without it.
         float roofHalfX = 3.5f * RoofScale;
         complete.WeatherCover.Add(BoundsOf(RoofCentreX - roofHalfX, PostBottom, SouthEave, RoofCentreX + roofHalfX, PostTop + .5f, NorthEave));
@@ -84,8 +117,11 @@ public static class BungalowCarport
         float half = RoofDepth * RoofScale * .5f - RidgeOverlap * .5f;
         complete.Copies.Add(Copy("roof-south", Roof, RoofPivot, new Vector3(RoofCentreX, RoofCentreY, RidgeZ - half), 0, RoofScale));
         complete.Copies.Add(Copy("roof-north", Roof, RoofPivot, new Vector3(RoofCentreX, RoofCentreY, RidgeZ + half), 180, RoofScale));
+    }
 
-        // The posts stand at the long sides, so the vans drive in and out along the bays.
+    // The posts stand at the long sides, so the vans drive in and out along the bays.
+    private static void Posts(WorldStateDefinition state, bool finished)
+    {
         var blocks = new CopyDefinition
         {
             Id = "carport-blocks", Template = Post, Frame = Property, OwnMesh = false, Obstacle = false,
@@ -97,22 +133,16 @@ public static class BungalowCarport
         for (int i = 0; i < PostX.Length; i++)
         {
             float x = PostX[i];
-            complete.Copies.Add(Copy("post-south-" + i, Post, PostPivot, new Vector3(x, centreY, SouthEave + PostFromEnd), 0));
-            complete.Copies.Add(Copy("post-north-" + i, Post, PostPivot, new Vector3(x, centreY, NorthEave - PostFromEnd), 180));
+            state.Copies.Add(Copy("post-south-" + i, Post, PostPivot, new Vector3(x, centreY, SouthEave + PostFromEnd), 0));
+            state.Copies.Add(Copy("post-north-" + i, Post, PostPivot, new Vector3(x, centreY, NorthEave - PostFromEnd), 180));
             blocks.Boxes.Add(new BoxDefinition { Id = "post-south-" + i, Kind = BoxKind.Block, Box = BoundsOf(x - .1f, PostBottom, SouthEave - .1f, x + .1f, PostTop, SouthEave + .1f) });
             blocks.Boxes.Add(new BoxDefinition { Id = "post-north-" + i, Kind = BoxKind.Block, Box = BoundsOf(x - .1f, PostBottom, NorthEave - .1f, x + .1f, PostTop, NorthEave + .1f) });
         }
         // The roof sheets are copies without a collider; this slab under them is what the rain cover's raycast hits.
         float slabHalfX = 3.5f * RoofScale;
-        blocks.Boxes.Add(new BoxDefinition { Id = "roof", Kind = BoxKind.Block, Box = BoundsOf(RoofCentreX - slabHalfX, PostTop, SouthEave, RoofCentreX + slabHalfX, PostTop + .1f, NorthEave) });
-        complete.Copies.Add(blocks);
-
-        var definition = new ExpansionDefinition
-        {
-            Id = BungalowDefinition.CarportExpansionId, DisplayName = "Bungalow double carport", Version = "1.0.0", Source = null
-        };
-        definition.WorldStates.Add(complete);
-        return definition;
+        if (finished)
+            blocks.Boxes.Add(new BoxDefinition { Id = "roof", Kind = BoxKind.Block, Box = BoundsOf(RoofCentreX - slabHalfX, PostTop, SouthEave, RoofCentreX + slabHalfX, PostTop + .1f, NorthEave) });
+        state.Copies.Add(blocks);
     }
 
     // Places a copy so that the source point lands on the target, turned by yaw and scaled around it. The frame is the

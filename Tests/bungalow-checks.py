@@ -33,8 +33,8 @@ SITE = "site=bungalow"
 BUILDS = [
     ("sunroom", ["sunroom-base", "sunroom-glass", "complete"]),
     ("deck", ["deck-stilts", "complete"]),
-    ("carport", ["complete"]),
-    ("storey", ["storey-floor", "storey-frame", "storey-walls", "storey-roof", "complete"]),
+    ("carport", ["carport-posts", "complete"]),
+    ("storey", ["storey-floor", "storey-frame", "storey-walls", "storey-rafters", "storey-roof", "complete"]),
 ]
 TOL = .011
 # Grids by their height and west edge, when every build stands: (name, y, x min, x max, z min, z max).
@@ -42,6 +42,7 @@ GRIDS = [
     ("upper south-west", -.65, -176.0, -170.0, 109.35, 115.35),
     ("upper north-west", -.65, -176.0, -170.0, 115.5, 121.5),
     ("upper north-east", -.65, -169.85, -163.85, 115.5, 121.5),
+    ("upper terrace", -.65, -177.5, -176.5, 109.85, 112.85),
     # The house's south-west room with the sunroom and the deck west of it.
     ("west room, sunroom and deck", -3.7, -194.0, -170.0, 107.85, 121.35),
 ]
@@ -76,16 +77,23 @@ def wall_strip(line):
     """The sunroom's slab runs on from the west room's last grid line at x -176.5 to the house wall at -176.17, where the
     house's own grid has no tile; this strip under the wall is the one floor edge allowed off the lines."""
     return ("edge at (-176.500," in line and "out (1.000," in line and "based_bungalow_sunroom" in line
-            and "slab-collision" in line and "goes on past" in line) or door_balcony(line)
+            and "slab-collision" in line and "goes on past" in line) or door_balcony(line) or terrace_strip(line)
+
+
+def terrace_strip(line):
+    """The terrace's boards run on from its grid's east line at x -176.5 to the house wall at -176.2, where the south
+    room's grid has no tile either; the same strip under the wall as below."""
+    return ("edge at (-176.500," in line and "out (1.000," in line and "terrace" in line
+            and ("goes on past" in line or "reaches more than" in line))
 
 
 def door_balcony(line):
     """The upper sliding door stands in the west wall between z 110.25 and 112.55; the west edge in that doorway sees
-    the closed door's glass 8 cm out, as the house's own door sits below, or with the door open the French balcony's
-    guard 18 cm outside the door, which is the edge a player walks out to."""
+    the closed door's glass 8 cm out, as the house's own door sits below, or with the door open the terrace outside,
+    whose own grid starts on the next line at -176.5."""
     m = re.search(r"edge at \(-176\.000,[-\d.]+,([\d.]+)\) out \(-1\.000", line)
     return bool(m) and 110.25 < float(m.group(1)) < 112.55 and (
-        "door-balcony-guard" in line or "Sliding Glass Door/Sliding glass door" in line)
+        "terrace" in line or "Sliding Glass Door/Sliding glass door" in line)
 
 
 def grids(run, pick, label):

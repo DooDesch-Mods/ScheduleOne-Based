@@ -53,6 +53,7 @@ public static class BungalowSunroom
     // lies on the grid's west line instead of inside the room.
     internal const float DoorOut = .03f;
     private const float SideLight = DoorSouth - South;
+    private const float StepDepth = .4f, StepTop = -3.84f;
     private const float FramesSouth = DoorNorth + SideLight;
 
     private const float WestScale = (North - FramesSouth) / (2 * FrameWidth);
@@ -103,8 +104,10 @@ public static class BungalowSunroom
     {
         var state = new WorldStateDefinition { Id = id };
         for (int i = 0; i < Pines.Length; i++) MapTrees.Remove(state, "pine-" + i, Pines[i].x, Pines[i].y);
-        // The garden table stood where the slab goes; it moves to the gravel south-west of the room.
-        state.Moves.Add(new ObjectMoveDefinition { Id = "table", Path = Property + "/Round Outdoor Set", Offset = new Vector3(-4.1f, 0f, -6.1f) });
+        // The garden table stood where the slab goes; it moves onto the gravel west of the room, north of the door and
+        // clear of the trees south of the house.
+        state.Moves.Add(new ObjectMoveDefinition { Id = "table", Path = Property + "/Round Outdoor Set", Offset = new Vector3(-4.12f, 0f, .08f) });
+        if (stage < 2) BungalowSiteProps.WestKit(state, "sunroom-kit", stage == 0 ? 8 : 4, 101 + stage);
         // Terrain grass would grow through the slab; a tuft rooted just outside its edge leans over it, hence the margin.
         var grass = new Bounds();
         grass.SetMinMax(new Vector3(SlabWest - .3f, -20f, SlabSouth - .3f), new Vector3(House, 20f, SlabNorth + .3f));
@@ -148,6 +151,10 @@ public static class BungalowSunroom
             SideLightOf(geometry, "west-light-north", DoorNorth, FramesSouth, top, glazed);
             Face(geometry, "west-transom", Metal, West - .05f, DoorTop, DoorSouth, West + .05f, top, DoorNorth);
 
+            // The slab stands 0.28 m over the gravel at the door; a concrete step halves the height, 10 cm wider than the
+            // door on each side.
+            Solid(geometry, "west-step", Concrete, SlabWest - StepDepth, SlabBottom, DoorSouth - .1f, SlabWest, StepTop, DoorNorth + .1f);
+
             var shift = new Vector3(West - DoorOut - HouseDoorPlane, 0f, 0f);
             var frame = Tilted("west-door-frame", HouseDoorFrame, new Vector3(HouseDoorPlane, Floor, DoorSouth), new Vector3(West - DoorOut, Floor, DoorSouth), Quaternion.identity, 1f);
             state.Copies.Add(frame);
@@ -167,6 +174,7 @@ public static class BungalowSunroom
             }
             Gable(geometry, "south", South, Floor + endHeight, glazed);
             Gable(geometry, "north", North, Floor + endHeight, glazed);
+            state.Copies.Add(GableRails());
 
             // The frames are visual copies without colliders; invisible walls stand in their planes.
             Block(geometry, "west-wall-south", West - .05f, Floor, South - .05f, West + .05f, Floor + westHeight, DoorSouth);
@@ -204,12 +212,13 @@ public static class BungalowSunroom
             state.NavigationProbes.Add(new Vector3(-182.5f, Floor, 121.1f));
             state.NavigationProbes.Add(new Vector3(-177f, Floor, 121.1f));
 
-            // A networked copy, so the switch works and every peer sees the same state.
+            // A networked copy, so the switch works and every peer sees the same state. The storey's west switch copies the
+            // same original; an own mesh keeps both drawn while both are in view.
             var wallSwitch = new CopyDefinition
             {
                 Id = SwitchId, Template = HouseSwitch, Frame = Property,
                 At = new LocalPoint(SwitchAt - (HouseSwitchAt - PropertyPivot), PropertyYaw),
-                IndependentMesh = false, VisualOnly = false, Obstacle = false
+                IndependentMesh = true, VisualOnly = false, Obstacle = false
             };
             state.Copies.Add(wallSwitch);
             var slope = Quaternion.Euler(0f, 0f, Mathf.Atan(RoofSlope) * Mathf.Rad2Deg);
@@ -264,12 +273,31 @@ public static class BungalowSunroom
             float x0 = Mathf.Max(West, x - .02f), x1 = Mathf.Min(House, x + .02f);
             // The corner mullion stands against the west wall's frames, whose tops reach the same height; it stops 5 mm
             // lower so the two tops do not lie in one plane.
-            float mullionTop = RoofUnderside(x1) - (k == 0 ? .005f : 0f);
+            float mullionTop = RoofUnderside(x0) - (k == 0 ? .005f : .002f);
             Face(geometry, id + "-mullion-" + k, Metal, x0, bottom, z - .03f, x1, mullionTop, z + .03f);
             if (!glazed || k == columns) continue;
-            // The pane spans between the two mullions, so its top and bottom never lie in a mullion's plane.
-            Face(geometry, id + "-pane-" + k, Glass, x + .02f, bottom, z - .01f, x + width - .02f, RoofUnderside(x + width - .02f), z + .01f);
+            // The pane spans between the two mullions, so its top and bottom never lie in a mullion's plane. Its top is
+            // level at the roof's height over its lower end; the sloped rail above covers the wedge up to the roof.
+            Face(geometry, id + "-pane-" + k, Glass, x + .02f, bottom, z - .01f, x + width - .02f, RoofUnderside(x + .02f) - .002f, z + .01f);
         }
+    }
+
+    // Boxes stand level, so the gable band's tops step up towards the house. A rail under the roof's edge at each end
+    // follows the slope and hides the steps: a copy of the anchor, turned about the roof's line at the house wall.
+    private const float GableRail = .06f;
+    private static CopyDefinition GableRails()
+    {
+        var pivot = new Vector3(House, RoofUnderside(House), South);
+        var slope = Quaternion.Euler(0f, 0f, Mathf.Atan(RoofSlope) * Mathf.Rad2Deg);
+        var rails = Tilted("gable-rails", Anchor, pivot, pivot, slope, 1f);
+        rails.OwnMesh = false;
+        rails.Exclude.Add("Colliders");
+        float length = (House - West) / Mathf.Cos(Mathf.Atan(RoofSlope));
+        // Laid out level from the pivot; the copy's turn lifts the west end onto the roof's line. The rail is 5 mm deeper
+        // than the mullions on each side, so no face of the two lies in one plane.
+        foreach (var (id, z) in new[] { ("south", South), ("north", North) })
+            Face(rails, id, Metal, House - length, pivot.y - GableRail, z - .035f, House, pivot.y - .002f, z + .035f);
+        return rails;
     }
 
     // A fixed light beside the door: a metal border and a middle rail like Ray's frames, one pane above and one below.

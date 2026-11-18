@@ -25,20 +25,23 @@ public static class BungalowDefinition
         {
             new UpgradeDefinition(PermitId, PermitPrice, 0, 0, Array.Empty<string>(),
                 Array.Empty<ConstructionPhase>(), Array.Empty<UpgradeEffect>()),
-            new UpgradeDefinition(StoreyId, 0, StoreyPrice, 5, new[] { PermitId }, new[]
+            // The roof comes off on the first night and goes back on with the fifth; rain on any night in between soaks
+            // the open floor.
+            new UpgradeDefinition(StoreyId, 0, StoreyPrice, 6, new[] { PermitId }, new[]
             {
-                new ConstructionPhase("storey-floor", 1, BungalowStorey.FloorState),
-                new ConstructionPhase("storey-frame", 2, BungalowStorey.FrameState),
-                new ConstructionPhase("storey-walls", 3, BungalowStorey.WallsState),
-                new ConstructionPhase("storey-roof", 4, BungalowStorey.RoofState)
-            }, new[] { new UpgradeEffect("world-state", StoreyExpansionId, "complete") }),
+                new ConstructionPhase("storey-floor", 1, BungalowStorey.FloorState, OpenToRain: true),
+                new ConstructionPhase("storey-frame", 2, BungalowStorey.FrameState, OpenToRain: true),
+                new ConstructionPhase("storey-walls", 3, BungalowStorey.WallsState, OpenToRain: true),
+                new ConstructionPhase("storey-rafters", 4, BungalowStorey.RaftersState, OpenToRain: true),
+                new ConstructionPhase("storey-roof", 5, BungalowStorey.RoofState)
+            }, new[] { new UpgradeEffect("world-state", StoreyExpansionId, "complete") }, OpenToRainOnOrderDay: true),
             new UpgradeDefinition(SunroomId, 0, SunroomPrice, 3, new[] { PermitId }, new[]
             {
                 new ConstructionPhase("sunroom-base", 1, BungalowSunroom.BaseState),
                 new ConstructionPhase("sunroom-glass", 2, BungalowSunroom.FrameState)
             }, new[] { new UpgradeEffect("world-state", SunroomExpansionId, "complete") }),
-            new UpgradeDefinition(CarportId, 0, CarportPrice, 1, new[] { PermitId },
-                Array.Empty<ConstructionPhase>(), new[] { new UpgradeEffect("world-state", CarportExpansionId, "complete") }),
+            new UpgradeDefinition(CarportId, 0, CarportPrice, 2, new[] { PermitId },
+                new[] { new ConstructionPhase("carport-posts", 1, BungalowCarport.PostsState) }, new[] { new UpgradeEffect("world-state", CarportExpansionId, "complete") }),
             new UpgradeDefinition(DeckId, 0, DeckPrice, 2, new[] { PermitId },
                 new[] { new ConstructionPhase("deck-stilts", 1, BungalowDeck.StiltsState) },
                 new[] { new UpgradeEffect("world-state", DeckExpansionId, "complete") })
@@ -69,7 +72,9 @@ internal static class BungalowSite
             ["storey-floor"] = "Floor",
             ["storey-frame"] = "Frame",
             ["storey-walls"] = "Walls",
+            ["storey-rafters"] = "Rafters",
             ["storey-roof"] = "Roof and interior",
+            ["carport-posts"] = "Posts",
             ["sunroom-base"] = "Foundation",
             ["sunroom-glass"] = "Frames",
             ["deck-stilts"] = "Stilts"
@@ -134,6 +139,8 @@ internal static class BungalowSite
                 new[] { "A second delivery spot under the roof." })
             {
                 Name = "Double carport",
+                QuestType = typeof(BungalowCarportQuest),
+                OrderEntry = "Order the double carport from Ray",
                 // The gravel under the roof, between the posts.
                 Floor = -4f,
                 Plan = new PlanRoom[]
@@ -179,4 +186,10 @@ public sealed class BungalowDeckQuest : Based.Runtime.ConstructionQuest
 {
     protected override string BaseId => BungalowDefinition.BaseId;
     protected override string? UpgradeId => BungalowDefinition.DeckId;
+}
+
+public sealed class BungalowCarportQuest : Based.Runtime.ConstructionQuest
+{
+    protected override string BaseId => BungalowDefinition.BaseId;
+    protected override string? UpgradeId => BungalowDefinition.CarportId;
 }
