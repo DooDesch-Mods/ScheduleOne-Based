@@ -13,6 +13,7 @@ artifacts/
 
 # Tool output that is not mod content
 *.log
+Tests/out/
 
 # OS
 Thumbs.db
