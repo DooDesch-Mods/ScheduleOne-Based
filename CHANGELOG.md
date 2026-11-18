@@ -4,6 +4,13 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.2.2] - 2026-11-18
+
+### Fixed
+- Ray's office menu keeps the building plans and expansion entries when another mod swaps in its own copy of his
+  estate agent talk.
+- If Ray's entries are still missing, the log says once per load which check left them out.
+
 ## [1.2.1] - 2026-11-17
 
 ### Fixed
