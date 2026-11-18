@@ -8,9 +8,9 @@ project adheres to Semantic Versioning.
 
 ### Added
 - Bungalow expansion: Ray sells a building permit for $1,500 and four builds, one at a time.
-- Second storey with a balcony and an outside stair: $6,000, built over 4 nights.
+- Second storey with a balcony and an outside stair: $6,000, built over 6 nights.
 - Sunroom on the west side for $4,000 over 3 nights, a deck on stilts down the slope for $2,000 over 2 nights.
-- Double carport over the drive with a second loading bay for $1,500; rain stays out from under it.
+- Double carport over the drive with a second loading bay for $1,500 over 2 nights; rain stays out from under it.
 - A crew you can watch builds it night by night; this site has no foreman to tip.
 
 ### Changed
