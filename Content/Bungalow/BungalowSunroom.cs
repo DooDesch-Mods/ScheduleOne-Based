@@ -203,6 +203,7 @@ public static class BungalowSunroom
             Gable(geometry, "north", North, Floor + endHeight, glazed);
             state.Copies.Add(GableRails());
             Flashing(state, geometry);
+            Fascia(geometry);
 
             // The frames are visual copies without colliders; invisible walls stand in their planes.
             Block(geometry, "west-wall-south", West - .05f, Floor, South - .05f, West + .05f, Floor + westHeight, DoorSouth);
@@ -340,6 +341,16 @@ public static class BungalowSunroom
         // Laid out level from the pivot, 3 mm over the roof's top; it ends inside the upstand.
         Face(lip, "lip", Metal, House - .3f, pivot.y + .003f, South - .025f, House + .002f, pivot.y + .013f, North + .025f);
         state.Copies.Add(lip);
+    }
+
+    // The roof frames overhang the west front. Their long bars at the frames' joins are deeper than the rail along the
+    // west end, so from the garden their ends stood as dark wedges over the eave; a board along the whole edge covers
+    // them, from under the overhang to 5 mm over the roof's top, past the gable rails at both ends.
+    private static void Fascia(CopyDefinition geometry)
+    {
+        float roofWest = House - FrameWidth * RoofScale * Mathf.Cos(Mathf.Atan(RoofSlope));
+        float x0 = roofWest - .04f, x1 = roofWest + .01f;
+        Face(geometry, "roof-fascia", Metal, x0, RoofUnderside(x1) - .02f, South - .045f, x1, RoofMid(x0) + RoofDepth * .5f + .005f, North + .045f);
     }
 
     // A fixed light beside the door: a metal border and a middle rail like Ray's frames, one pane above and one below.

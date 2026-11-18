@@ -205,7 +205,7 @@ public static class BungalowDeck
     // that door's step; the garden table's gravel bed meets the deck's step north of it.
     // The line swings about half a metre to either side, the way feet cut a corner; the painter smooths it and frays
     // its edges, so the grass is cleared a little wider than the strip and its tufts stand back from the frayed edge.
-    private const float PathWidth = 1.2f;
+    private const float PathWidth = 1.5f;
     private static readonly Vector2[] PathLine =
     {
         new(East + StepOut - .05f, 111.6f), new(-186.6f, 111.95f), new(-185.3f, 112.05f), new(-184.1f, 111.7f),
@@ -216,7 +216,7 @@ public static class BungalowDeck
     {
         float minZ = float.MaxValue, maxZ = float.MinValue;
         foreach (var p in PathLine) { minZ = Mathf.Min(minZ, p.y); maxZ = Mathf.Max(maxZ, p.y); }
-        float margin = PathWidth * .6f + .3f;
+        float margin = PathWidth * .6f + .6f;
         state.Rules.Add(new ObjectRule
         {
             Id = "garden-path", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,

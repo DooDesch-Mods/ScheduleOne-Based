@@ -181,6 +181,12 @@ internal static class BungalowSiteProps
                 PaintLayer = ForecourtLayer, PaintStrength = 1f,
                 Area = BoundsOf(PathFromX - .3f, -20f, PathCentreZ - .9f, PathToX + .2f, 20f, PathCentreZ + 1.6f)
             });
+            // No tuft grows through the gravel, nor beside the stair's footing between the stair and the house.
+            state.Rules.Add(new ObjectRule
+            {
+                Id = "crew-path-grass", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,
+                Area = BoundsOf(-163.6f, -20f, PathCentreZ - 1.2f, PathToX + .4f, 20f, PathCentreZ + 1.9f)
+            });
             return;
         }
         // Where the grass is gone the ground shows as trodden dirt, along a line that bends a little on its way.
