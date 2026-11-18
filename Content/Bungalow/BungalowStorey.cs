@@ -69,6 +69,8 @@ public static class BungalowStorey
         TerraceNorth = TerraceGridNorth + .08f, TerraceEast = -176.2f;
     private const float TerraceFrameBottom = -.8f;
     private const string TerraceGridId = "bungalow-storey-terrace";
+    // Saved like the rooms' ids; renaming it loses what stands on the balcony.
+    private const string BalconyGridId = "bungalow-storey-balcony";
 
     // The house's three ceiling lights, copied 3 m up: each hangs under the upper ceiling where its original hangs under
     // the lower one, turned the same way, with the same range and brightness.
@@ -189,10 +191,12 @@ public static class BungalowStorey
         if (level >= 5)
             foreach (var (switchId, template, lamps) in Switches)
             {
-                // A networked copy, so the switch works and every peer sees the same state.
+                // A networked copy, so the switch works and every peer sees the same state. It draws its own meshes: the
+                // original's are part of a static batch, and Unity draws each part of a batch once a frame, so the switch
+                // downstairs and its copy would take turns vanishing as the view changes.
                 var wallSwitch = Copy(switchId, House + "/" + template, PropertyPivot, PropertyPivot + new Vector3(0f, Lift, 0f), 0);
                 wallSwitch.VisualOnly = false;
-                wallSwitch.IndependentMesh = false;
+                wallSwitch.IndependentMesh = true;
                 state.Copies.Add(wallSwitch);
                 foreach (int i in lamps)
                 {
@@ -523,6 +527,10 @@ public static class BungalowStorey
         plate.Exclude.Add("Colliders");
         float half = (LandingNorth - LandingSouth) * .5f - .07f;
         Face(plate, "plate", Metal, source.x - length, source.y - .02f, source.z - half, source.x, source.y, source.z + half);
+        // Under the run the headroom falls below a player's eye; one who walked in there had the camera inside the
+        // treads. An unseen block 2.2 m deep under the plate keeps anyone out from the foot to the landing, under which
+        // there is room to stand.
+        Block(plate, "keep-out", source.x - length, source.y - 2.2f, source.z - half - .05f, source.x, source.y - .02f, source.z + half + .05f);
         state.Copies.Add(plate);
     }
 
@@ -580,6 +588,18 @@ public static class BungalowStorey
                 terrace.Tiles.Add(new GridCoordinate(x, y));
         terrace.Bounds.Add(BoundsOf(TerraceGridWest, UpperFloor - .1f, TerraceGridSouth, -176.5f, UpperFloor + 2.95f, TerraceGridNorth));
         state.PropertyExtensions.Add(terrace);
+        // The balcony continues the east room's grid south through the wall: 5 tiles from the wall to the south railing,
+        // 11 from the west room's wall to the east railing.
+        var balcony = new PropertyExtensionDefinition
+        {
+            Id = BalconyGridId, PropertyCode = "bungalow", GridIndex = 0,
+            GridOrigin = new Vector3(EastWall + .25f, UpperFloor, NorthRoomSouth - .25f)
+        };
+        for (int x = 0; x < 5; x++)
+            for (int y = 0; y < 11; y++)
+                balcony.Tiles.Add(new GridCoordinate(x, y));
+        balcony.Bounds.Add(BoundsOf(EastWall, UpperFloor - .1f, BalconySouth, BalconyEast, UpperFloor + 2.95f, NorthRoomSouth));
+        state.PropertyExtensions.Add(balcony);
 
         state.NavigationBounds = BoundsOf(HouseWest - .2f, -4.3f, HouseSouth - .2f, StairFoot + .9f, UpperFloor + 2.5f, HouseNorth + .2f);
         state.NavigationAgents.AddRange(new[] { "Humanoid", "Ignore Costs", "Employee" });

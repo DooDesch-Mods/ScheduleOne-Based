@@ -205,6 +205,10 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "loadstate":
                     StaffTrack.LoadState();
                     break;
+                case "ghost":
+                    // ghost <itemId> = hold it, ghost read = the placement ghost's verdict, ghost drop = hands free
+                    GhostProbe.Handle(args);
+                    break;
                 case "gridedges":
                     // gridedges <property code> = every outer grid edge against the walls and floor ends there
                     BuildChecks.GridEdges(args.Count > 1 ? args[1] : _site.PropertyName.ToLowerInvariant());

@@ -10,11 +10,24 @@ Scripted acceptance checks of every Bungalow build stage, in the order the build
   switches  the storey's two copied wall switches stand, each switches only its own lamps, and neither the house's
             switches nor the other copy are touched
   litter    every finished build gets 8 to 15 game trash items from the shared construction litter, all inside its rooms
+  place     the game's own placement ghost (baseddiag ghost) is valid on the storey's floor in front of the door, on the
+            balcony and in the rooms, aimed from the player's eye
+  walls     after the step storey-roof to complete, the shell copy shows the outer walls the state cut had switched off
+  stair     a player sent under the stair's run does not stay there with the camera inside the treads
+  batch     each copied wall switch draws its own mesh: its bounds sit at the copy, not at the vanilla switch it copied
+
+What these four add, from hand test 3 (the checks of round 102 passed on that build):
+  7, 8  grid checked tile positions only; a tile cloned from a distance-culled template kept its collider off and the
+        balcony had no grid at all, so only a real ghost shows it (place)
+  5, 1  the checks loaded complete directly; the outer walls vanished only on the step from storey-roof (walls)
+  6     nothing checked where the player can walk; the space under the run was open (stair)
+  9     switches pressed the switch, never looked at what is drawn; the copy shared the vanilla switch's batch (batch)
+  2, 3, 4  ground paint and grass are judged in the player-view shot set, not here
 
 Needs Debug builds of MapExpansions and Based in a running test slot and a save where the player owns the Bungalow.
 Uses MapExpansions' Tests/employee-reach.py for the console helpers.
 
-    python _wt-Based-bungalow/Tests/bungalow-checks.py [--slot mptest] [--only grid,zfight,lines,switches,litter]
+    python _wt-Based-bungalow/Tests/bungalow-checks.py [--slot mptest] [--only grid,zfight,lines,switches,litter,batch,place,stair,walls]
         [--mapexpansions _wt-MapExpansions-bungalow-int]
 """
 import argparse
@@ -256,6 +269,97 @@ def litter(run, pick):
         run.check("%s: the pieces lie in the build's rooms" % suffix, bool(n) and int(n.group(1)) >= placed, now[-160:] or "no count")
 
 
+def s1(slot, *args):
+    proc = subprocess.run([sys.executable, S1, "--slot", slot, *[str(a) for a in args]], capture_output=True, text=True)
+    return proc.returncode, proc.stdout + proc.stderr
+
+
+# Placement spots, each one the game should allow: (name, player x, z, floor y, target x, y, z).
+PLACE_SPOTS = [
+    ("in front of the upstairs door", -172.0, 113.1, -.65, -170.55, -.65, 113.1),
+    ("on the balcony", -169.0, 113.4, -.65, -166.5, -.65, 114.0),
+    ("on the balcony's east end", -166.5, 114.8, -.65, -165.0, -.65, 113.4),
+    ("in the storey's south-west room", -174.0, 114.5, -.65, -173.0, -.65, 112.5),
+    ("in the storey's north-east room", -167.0, 119.5, -.65, -166.0, -.65, 117.5),
+]
+PLACE_ITEM = "smallstoragerack"
+
+
+def place(run, slot):
+    run.cmd("baseddiag ghost hush", wait=1.0)
+    log = run.cmd("baseddiag ghost %s" % PLACE_ITEM, wait=2.0)
+    held = any("baseddiag ghost: holding" in l or "baseddiag ghost: gave" in l for l in log)
+    run.check("ghost: %s in hand" % PLACE_ITEM, held, [l.strip()[-160:] for l in log if "baseddiag ghost" in l][-2:])
+    if not held:
+        return
+    for name, px, pz, fy, tx, ty, tz in PLACE_SPOTS:
+        s1(slot, "tp", px, round(fy + 1.0, 3), pz)
+        code, out = s1(slot, "cam", "shot", "--eye", px, round(fy + 1.785, 3), pz, "--target", tx, ty, tz,
+                       "--hud", "show", "--settle", "30", "--sight", "off", "--keep")
+        read = run.cmd("baseddiag ghost read", wait=1.5)
+        verdict = next((l.strip() for l in read if "baseddiag ghost: valid" in l), "")
+        run.check("ghost valid %s" % name, "valid True" in verdict, verdict[-260:] or ("no ghost line; cam %d %s" % (code, out[-160:])))
+    s1(slot, "cam", "release")
+    run.cmd("baseddiag ghost drop", wait=1.0)
+
+
+def walls(run):
+    """The outer walls after the step storey-roof to complete, as the night's sleep takes it."""
+    stage(run, "storey", "storey-roof")
+    mark = run.mark()
+    stage(run, "storey", "complete")
+    time.sleep(2.0)
+    woke = [l.strip() for l in run.lines(mark) if "switched on in the copy" in l]
+    cuts = [int(m.group(1)) for m in (re.search(r", cut (\d+)\)", l) for l in woke) if m]
+    run.check("storey-roof to complete: the shell copy shows the outer walls the cut switched off",
+              bool(cuts) and max(cuts) >= 1, woke[-3:] or "no 'switched on in the copy' line")
+
+
+# The stair's run: from the landing's east edge at the upper floor down to its foot at the ground, over the landing's
+# width. A player whose position lies below the treads at its own x stands under the run.
+STAIR_TOP_X, STAIR_TOP_Y, STAIR_FOOT_X, STAIR_FOOT_Y = -168.35, -.65, -162.46, -3.96
+STAIR_Z = (111.35, 112.85)
+
+
+def tread(x):
+    return STAIR_TOP_Y + (STAIR_FOOT_Y - STAIR_TOP_Y) * (x - STAIR_TOP_X) / (STAIR_FOOT_X - STAIR_TOP_X)
+
+
+def stair(run, slot):
+    z0, z1 = STAIR_Z
+    for px, pz in ((-164.8, 112.1), (-163.4, 111.8)):
+        s1(slot, "tp", px, -3.0, pz)
+        time.sleep(1.5)
+        code, out = s1(slot, "where")
+        m = re.search(r'"position": \[\s*(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)', out)
+        if not m:
+            run.check("stair: player sent to %.1f, %.1f" % (px, pz), False, out[-200:])
+            continue
+        x, y, z = (float(v) for v in m.groups())
+        inside = STAIR_TOP_X < x < STAIR_FOOT_X and z0 < z < z1 and y < tread(x)
+        run.check("stair: player sent under the run at %.1f, %.1f does not stay under it" % (px, pz), not inside,
+                  "ended at %.2f, %.2f, %.2f, treads there at %.2f" % (x, y, z, tread(x)))
+
+
+def batch(run, slot):
+    """The spawned copies are roots named ModularSwitch; a copy that shares the vanilla switch's static batch draws its
+    mesh with the vanilla switch's bounds, 3 m under the storey's plate."""
+    proc = subprocess.run([sys.executable, S1, "--slot", slot, "find", "", "--under", "ModularSwitch", "--rect", "-177", "112",
+                           "-169", "118.5", "--kind", "renderer", "--active-only", "-n", "200"], capture_output=True, text=True)
+    try:
+        objects = json.loads(proc.stdout).get("objects", [])
+    except ValueError:
+        objects = []
+    drawn = [o for o in objects if o.get("enabled") and o.get("path", "").startswith("ModularSwitch")]
+    for copy_id, (at, where, _) in COPIES.items():
+        mine = [((o.get("bounds") or {}).get("center") or [0, 0, 0]) for o in drawn]
+        mine = [c for c in mine if abs(c[0] - at[0]) < .3 and abs(c[2] - at[2]) < .3]
+        near = [c for c in mine if abs(c[1] - at[1]) <= .6]
+        far = [[round(v, 2) for v in c] for c in mine if abs(c[1] - at[1]) > .6]
+        run.check("switch '%s' draws its own mesh at its plate" % copy_id, bool(near) and not far,
+                  far[:3] or "%d renderers drawn at the plate" % len(near))
+
+
 def stage(run, suffix, phase):
     log = run.cmd("baseddiag %s phase %s %s" % (SITE, phase, suffix), wait=10.0)
     ok = any("construction moved to" in l or "complete" in l for l in log)
@@ -298,6 +402,14 @@ def main():
         switches(run, pick)
     if "litter" in only:
         litter(run, pick)
+    if "batch" in only:
+        batch(run, args.slot)
+    if "place" in only:
+        place(run, args.slot)
+    if "stair" in only:
+        stair(run, args.slot)
+    if "walls" in only:
+        walls(run)
     return run.summary()
 
 

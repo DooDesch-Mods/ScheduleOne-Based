@@ -18,6 +18,8 @@ internal static class BungalowSiteProps
     private const string Anchor = Property + "/bungalow/PorchBeam";
     private static readonly Vector3 PropertyPivot = new(-170f, -4f, 115.5f);
     private const float PropertyYaw = 90f;
+    // The terrain layer of the gravel forecourt in front of the house, read with mxsplat.
+    internal const string ForecourtLayer = "Terrain_Gravel";
 
     private const string Pallet = "Map/Hyland Point/Region_Northtown/North Waterfront/Pallet Prop (2)";
     private static readonly Vector3 PalletPivot = new(-57.9526f, -.348f, 143.1308f);
@@ -169,6 +171,18 @@ internal static class BungalowSiteProps
             Id = "crew-path", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,
             Area = BoundsOf(PathFromX, -20f, PathCentreZ - half, PathToX, 20f, PathCentreZ + half)
         });
+        // Once the storey is done the strip is laid with the forecourt's gravel, as a patch from the stair's foot to the
+        // pavement that reaches north into the forecourt; a painted line this short frays to a quarter of the layer.
+        if (level >= 6)
+        {
+            state.Rules.Add(new ObjectRule
+            {
+                Id = "crew-path-gravel", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
+                PaintLayer = ForecourtLayer, PaintStrength = 1f,
+                Area = BoundsOf(PathFromX - .3f, -20f, PathCentreZ - .9f, PathToX + .2f, 20f, PathCentreZ + 1.6f)
+            });
+            return;
+        }
         // Where the grass is gone the ground shows as trodden dirt, along a line that bends a little on its way.
         var dirt = new ObjectRule
         {

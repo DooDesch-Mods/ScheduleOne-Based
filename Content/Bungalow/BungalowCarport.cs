@@ -90,6 +90,7 @@ public static class BungalowCarport
         var state = new WorldStateDefinition { Id = id };
         Ground(state);
         Posts(state, finished);
+        if (finished) Bay(state);
         if (finished) RoofOn(state);
         else BungalowSiteProps.CarportKit(state, 8, 131);
         return state;
@@ -104,6 +105,20 @@ public static class BungalowCarport
         {
             Id = "bay-rock", Name = "Rock1 (10)", Parent = "Rocks", Side = WorldSide.Main, Effect = ObjectEffect.Remove,
             Area = BoundsOf(-164.6f, -6f, 104.1f, -162.1f, -3f, 106.5f)
+        });
+    }
+
+    // Under the roof the grass goes: the game draws grass only near the player, so up close it stood over the bay's
+    // markings. The ground takes the tint of the house's own parking bay, painted to the eaves with a soft edge.
+    private const string BayLayer = BungalowSiteProps.ForecourtLayer;
+    private static void Bay(WorldStateDefinition state)
+    {
+        var area = BoundsOf(PostX[0] - .2f, -20f, SouthEave, PostX[PostX.Length - 1] + .2f, 20f, NorthEave);
+        state.Rules.Add(new ObjectRule { Id = "bay-grass", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails, Area = area });
+        state.Rules.Add(new ObjectRule
+        {
+            Id = "bay-ground", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
+            PaintLayer = BayLayer, PaintStrength = 1f, Area = area
         });
     }
 

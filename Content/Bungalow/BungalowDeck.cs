@@ -203,19 +203,24 @@ public static class BungalowDeck
     // A trodden strip from the deck's step to the sliding door of the house, bending round the trunk south of the
     // sunroom's door. With the sunroom built, its slab covers the part east of the sunroom's door and the strip ends at
     // that door's step; the garden table's gravel bed meets the deck's step north of it.
+    // The line swings about half a metre to either side, the way feet cut a corner; the painter smooths it and frays
+    // its edges, so the grass is cleared a little wider than the strip and its tufts stand back from the frayed edge.
     private const float PathWidth = 1.2f;
     private static readonly Vector2[] PathLine =
     {
-        new(East + StepOut - .05f, 111.6f), new(-186.4f, 111.45f), new(-185.2f, 111.55f), new(-184.2f, 111.35f),
-        new(-183.1f, 111.45f), new(-179.5f, 111.35f), new(-176.4f, 111.4f)
+        new(East + StepOut - .05f, 111.6f), new(-186.6f, 111.95f), new(-185.3f, 112.05f), new(-184.1f, 111.7f),
+        new(-183.0f, 111.25f), new(-181.5f, 110.95f), new(-179.8f, 111.05f), new(-178.1f, 111.45f), new(-176.4f, 111.4f)
     };
 
     private static void GardenPath(WorldStateDefinition state)
     {
+        float minZ = float.MaxValue, maxZ = float.MinValue;
+        foreach (var p in PathLine) { minZ = Mathf.Min(minZ, p.y); maxZ = Mathf.Max(maxZ, p.y); }
+        float margin = PathWidth * .6f + .3f;
         state.Rules.Add(new ObjectRule
         {
             Id = "garden-path", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,
-            Area = BoundsOf(PathLine[0].x, -20f, 111.35f - PathWidth * .5f, PathLine[PathLine.Length - 1].x, 20f, 111.6f + PathWidth * .5f)
+            Area = BoundsOf(PathLine[0].x, -20f, minZ - margin, PathLine[PathLine.Length - 1].x, 20f, maxZ + margin)
         });
         var dirt = new ObjectRule
         {
