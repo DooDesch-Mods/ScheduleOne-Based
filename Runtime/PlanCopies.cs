@@ -242,7 +242,7 @@ internal static class PlanCopies
 
 // S1API has no way to add a choice to the menu of a conversation the schedule swaps in (Ray's estate agent
 // conversation) only while a condition holds: DialogueInjector rewrites the node's choices for good and has no
-// visibility predicate. Until it has one, this patch adds the entries per menu.
+// visibility predicate. Until ifBars/S1API#394 lands, this patch adds the entries per menu.
 [HarmonyPatch(typeof(DialogueController), nameof(DialogueController.ModifyChoiceList))]
 internal static class RayPlanCopiesChoice
 {

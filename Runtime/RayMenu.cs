@@ -103,6 +103,7 @@ internal static class RayMenu
     }
 
     // Called for the choice list of every conversation node; only the first menu of Ray's agent conversation gets the entry.
+    // Runs from the patch RayPlanCopiesChoice (PlanCopies.cs). Until ifBars/S1API#394 lands, that patch adds the entries per menu.
     internal static void AddChoice(DialogueController controller, string nodeLabel, Il2CppSystem.Collections.Generic.List<DialogueChoiceData> choices)
     {
         if (!RayAgentMenu.Accepts("Expansion entry", _controller, controller, nodeLabel)) return;
