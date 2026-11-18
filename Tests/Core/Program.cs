@@ -39,7 +39,12 @@ var checks = new (string Name, Action Run)[]
     ("the real Ming definition passes DefinitionRegistry with its saved ids, prices and phases", MingThroughRegistry),
     ("a permit completes on its rights payment and unlocks a menu of builds, one at a time", PermitMenu),
     ("definitions reject a permit with construction, phases or effects", PermitDefinitions),
-    ("a tip counts once, only during construction, only on the host, and survives save/load", Tips)
+    ("a tip counts once, only during construction, only on the host, and survives save/load", Tips),
+    ("rain delays a build once and it completes one night later", RainDelaysOnce),
+    ("rain only delays a build that stands open to rain", RainNeedsOpenBuild),
+    ("the rain delay survives save/load and reaches clients", RainDelaySaved),
+    ("rain delay is host only and ignores processed or invalid cycles", RainDelayGuards),
+    ("a rainy slot counts only once fully in place inside the night", RainWindowSlots)
 };
 int failed = 0;
 foreach (var check in checks)
@@ -560,6 +565,99 @@ static void Tips()
     var client = Engine(host: false);
     Equal("host-required", client.AddTip("c1", "fixture", "A", 10).Reason);
     Equal("host-required", client.SetTips("fixture", "A", 10).Reason);
+}
+
+// Three nights: order day and the first phase are open to rain, the second phase has a roof.
+static BaseDefinition RainFixture(bool openOnOrderDay = true) => new("fixture", "isolated-property", new[]
+{
+    new UpgradeDefinition("A", 100, 500, 3, Array.Empty<string>(),
+        new[] { new ConstructionPhase("open", 1, "open-state", OpenToRain: true), new ConstructionPhase("roofed", 2, "roofed-state") },
+        new[] { new UpgradeEffect("space", "area-a", "ready") }, OpenToRainOnOrderDay: openOnOrderDay)
+});
+
+static void RainDelaysOnce()
+{
+    var engine = Engine(RainFixture()); Order(engine, "A", "a");
+    Equal(true, engine.IsOpenToRain("fixture", "A"));
+    Equal("rain-delayed", engine.DelayForRain("fixture", "A", 1).Reason);
+    Equal("already-delayed", engine.DelayForRain("fixture", "A", 1).Reason);
+    Equal(true, engine.AdvanceSleep(1).Applied);
+    var state = engine.GetUpgrade("fixture", "A");
+    Equal(0, state.CompletedCycles); Equal(UpgradeStage.Constructing, state.Stage); Equal(true, state.WasRainedOut());
+    Equal(true, engine.IsOpenToRain("fixture", "A"));
+    // A second rain does not delay again.
+    Equal("already-delayed", engine.DelayForRain("fixture", "A", 2).Reason);
+    engine.AdvanceSleep(2);
+    state = engine.GetUpgrade("fixture", "A");
+    Equal(1, state.CompletedCycles); Equal(false, state.WasRainedOut()); Equal(true, state.RainDelayed);
+    Equal("open", engine.CurrentPhase("fixture", "A"));
+    engine.AdvanceSleep(3);
+    Equal(2, engine.GetUpgrade("fixture", "A").CompletedCycles); Equal(UpgradeStage.Constructing, engine.GetUpgrade("fixture", "A").Stage);
+    engine.AdvanceSleep(4);
+    state = engine.GetUpgrade("fixture", "A");
+    Equal(UpgradeStage.Complete, state.Stage); Equal(false, state.RainDelayed); Equal(3, state.CompletedCycles);
+    Equal("not-constructing", engine.DelayForRain("fixture", "A", 5).Reason);
+}
+
+static void RainNeedsOpenBuild()
+{
+    var closed = Engine(RainFixture(openOnOrderDay: false)); Order(closed, "A", "a");
+    Equal(false, closed.IsOpenToRain("fixture", "A"));
+    Equal("not-open-to-rain", closed.DelayForRain("fixture", "A", 1).Reason);
+    Equal(false, closed.GetUpgrade("fixture", "A").RainDelayed);
+    closed.AdvanceSleep(1);
+    Equal(true, closed.IsOpenToRain("fixture", "A"));
+    closed.AdvanceSleep(2);
+    Equal(false, closed.IsOpenToRain("fixture", "A"));
+    Equal("not-open-to-rain", closed.DelayForRain("fixture", "A", 3).Reason);
+    Equal("not-constructing", Engine(RainFixture()).DelayForRain("fixture", "A", 1).Reason);
+    Equal(false, Engine(RainFixture()).IsOpenToRain("fixture", "A"));
+}
+
+static void RainDelaySaved()
+{
+    var engine = Engine(RainFixture()); Order(engine, "A", "a");
+    engine.DelayForRain("fixture", "A", 1); engine.AdvanceSleep(1);
+    var restored = RoundTrip(engine, RainFixture());
+    var state = restored.GetUpgrade("fixture", "A");
+    Equal(true, state.RainDelayed); Equal(true, state.WasRainedOut());
+    Equal("already-delayed", restored.DelayForRain("fixture", "A", 2).Reason);
+    var client = Engine(RainFixture(), host: false); client.RestoreState(engine.ExportSnapshot());
+    Equal(true, client.GetUpgrade("fixture", "A").RainDelayed);
+    // A delay left on an upgrade that is not constructing is cleared on load.
+    var saved = engine.ExportState(); var upgrade = saved.Upgrades.Single(u => u.UpgradeId == "A");
+    upgrade.Stage = UpgradeStage.RightsOwned; upgrade.CompletedCycles = 0; upgrade.ConstructionPaid = 0;
+    var warnings = new List<string>(); var loaded = Engine(RainFixture()); loaded.MigrationWarning += warnings.Add;
+    loaded.RestoreState(saved);
+    Equal(false, loaded.GetUpgrade("fixture", "A").RainDelayed); Equal(true, warnings.Any(w => w.Contains("rain delay")));
+}
+
+static void RainDelayGuards()
+{
+    var engine = Engine(RainFixture()); Order(engine, "A", "a");
+    var client = Engine(RainFixture(), host: false); client.RestoreState(engine.ExportSnapshot());
+    Equal("host-required", client.DelayForRain("fixture", "A", 1).Reason);
+    Equal("invalid-cycle", engine.DelayForRain("fixture", "A", -1).Reason);
+    engine.AdvanceSleep(1);
+    Equal("cycle-already-processed", engine.DelayForRain("fixture", "A", 1).Reason);
+    Throws<KeyNotFoundException>(() => engine.DelayForRain("fixture", "missing", 2));
+}
+
+static void RainWindowSlots()
+{
+    Equal(0, RainWindow.MinuteOfWeatherDay(700)); Equal(900, RainWindow.MinuteOfWeatherDay(2200));
+    Equal(1140, RainWindow.MinuteOfWeatherDay(200)); Equal(1439, RainWindow.MinuteOfWeatherDay(659));
+    // 07:00-12:00 dry, 12:00-14:00 rain moving in over 30 minutes, then dry; the night is 22:00 to 07:00.
+    var dryNight = new[] { new WeatherSlot(300, 0, false), new WeatherSlot(90, 30, true), new WeatherSlot(1020, 0, false) };
+    Equal(false, RainWindow.Rains(dryNight, 900, 1440));
+    // Rain from 02:00 to 03:40 on the next calendar day (minute 1140 to 1240).
+    var wetNight = new[] { new WeatherSlot(1100, 0, false), new WeatherSlot(100, 40, true), new WeatherSlot(200, 0, false) };
+    Equal(true, RainWindow.Rains(wetNight, 900, 1440));
+    // Rain already over when the player goes to bed.
+    Equal(false, RainWindow.Rains(wetNight, 1300, 1440));
+    // Only the moving-in transition lies in the night: not counted.
+    Equal(false, RainWindow.Rains(new[] { new WeatherSlot(1100, 0, false), new WeatherSlot(0, 340, true) }, 900, 1200));
+    Equal(false, RainWindow.Rains(Array.Empty<WeatherSlot>(), 0, 1440));
 }
 
 sealed class AuthorityFlag(bool canMutate) : IAuthority { public bool CanMutate => canMutate; }

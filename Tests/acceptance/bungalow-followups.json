@@ -1,0 +1,469 @@
+{
+  "name": "Bungalow Wintergarten, Hangterrasse, Carport (Handtest 1)",
+  "spawn": [
+    -158.5,
+    -3.6,
+    114.0
+  ],
+  "time": 1200,
+  "enter": {
+    "command": "baseddiag site=bungalow phase {stage}",
+    "until": "construction moved to|baseddiag: .*(not|no |unknown)|Exception",
+    "ok": "construction moved to",
+    "settle": 4
+  },
+  "logscan": {
+    "allow": [
+      "logscan-allow.txt"
+    ]
+  },
+  "stages": [
+    {
+      "id": "storey:complete"
+    },
+    {
+      "id": "sunroom:sunroom-base",
+      "checks": [
+        {
+          "id": "sunroom-base-crew",
+          "item": "25 Bauarbeiter fehlen",
+          "type": "console",
+          "time": 1200,
+          "retry": 45,
+          "command": "baseddiag site=bungalow workers",
+          "until": "worker diagnostics",
+          "expect": "(?s)(?=.*\"id\":\"based_bungalow_foreman\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_carpenter\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_lumberjack\"[^\\n]*\"visible\":true)"
+        },
+        {
+          "id": "sunroom-base-tip",
+          "item": "25 kein Trinkgeld",
+          "type": "console",
+          "before": [
+            "baseddiag site=bungalow tip wallet 1000",
+            "baseddiag site=bungalow tip set 0"
+          ],
+          "command": "baseddiag site=bungalow tip cash 50",
+          "until": "baseddiag: tips|Exception",
+          "expect": "ray\\.bungalow-sunroom stage=\\w+ tips=(\\d+)",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "id": "sunroom-base-kit",
+          "item": "24 Baustellenausstattung",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -188,
+              115.5,
+              -182,
+              121.5
+            ],
+            "path": "Copies/(Table_Foldout|Pallet Prop|SM_Prop_Plank)"
+          },
+          "min": 3
+        }
+      ]
+    },
+    {
+      "id": "sunroom:sunroom-glass",
+      "checks": [
+        {
+          "id": "sunroom-glass-crew",
+          "item": "25 Bauarbeiter fehlen",
+          "type": "console",
+          "time": 1200,
+          "retry": 45,
+          "command": "baseddiag site=bungalow workers",
+          "until": "worker diagnostics",
+          "expect": "(?s)(?=.*\"id\":\"based_bungalow_foreman\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_carpenter\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_lumberjack\"[^\\n]*\"visible\":true)"
+        },
+        {
+          "id": "sunroom-glass-kit",
+          "item": "24 Baustellenausstattung",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -188,
+              115.5,
+              -182,
+              121.5
+            ],
+            "path": "Copies/(Table_Foldout|Pallet Prop|SM_Prop_Plank)"
+          },
+          "min": 3
+        }
+      ]
+    },
+    {
+      "id": "sunroom:complete",
+      "checks": [
+        {
+          "id": "sunroom-step",
+          "item": "27 Stufe vor der Wintergarten-Tür",
+          "type": "rays",
+          "expect": "blocked",
+          "by": "west-step",
+          "rays": [
+            [
+              [
+                -183.35,
+                -3.6,
+                110.8
+              ],
+              [
+                -183.35,
+                -3.95,
+                110.8
+              ]
+            ],
+            [
+              [
+                -183.35,
+                -3.6,
+                112.0
+              ],
+              [
+                -183.35,
+                -3.95,
+                112.0
+              ]
+            ]
+          ]
+        },
+        {
+          "id": "sunroom-door-nav",
+          "item": "27 Stufe vor der Wintergarten-Tür",
+          "type": "nav",
+          "from": [
+            -185.0,
+            -4.0,
+            111.4
+          ],
+          "to": [
+            -180.0,
+            -3.7,
+            111.4
+          ],
+          "tol": 0.8
+        },
+        {
+          "id": "table-in-place",
+          "item": "22 Tisch im Baum",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -186.9,
+              113.3,
+              -184.3,
+              115.9
+            ],
+            "path": "Round Outdoor Set"
+          },
+          "min": 3
+        },
+        {
+          "id": "table-clear",
+          "item": "22 Tisch im Baum",
+          "type": "absent",
+          "find": {
+            "kind": "collider",
+            "rect": [
+              -186.9,
+              113.3,
+              -184.3,
+              115.9
+            ],
+            "path": "^(?!.*(Round Outdoor Set|Terrain|StylizedWater)).*$"
+          }
+        },
+        {
+          "id": "terrace-over-glass",
+          "item": "20 Balkon über dem Glasdach",
+          "type": "rays",
+          "expect": "clear",
+          "rays": [
+            [
+              [
+                -178.6,
+                -0.825,
+                109.95
+              ],
+              [
+                -176.3,
+                -0.825,
+                109.95
+              ]
+            ],
+            [
+              [
+                -178.6,
+                -0.825,
+                111.4
+              ],
+              [
+                -176.3,
+                -0.825,
+                111.4
+              ]
+            ],
+            [
+              [
+                -178.6,
+                -0.825,
+                112.75
+              ],
+              [
+                -176.3,
+                -0.825,
+                112.75
+              ]
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "deck:deck-stilts",
+      "checks": [
+        {
+          "id": "deck-stilts-crew",
+          "item": "25 Bauarbeiter fehlen",
+          "type": "console",
+          "time": 1200,
+          "retry": 45,
+          "command": "baseddiag site=bungalow workers",
+          "until": "worker diagnostics",
+          "expect": "(?s)(?=.*\"id\":\"based_bungalow_foreman\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_carpenter\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_lumberjack\"[^\\n]*\"visible\":true)"
+        },
+        {
+          "id": "deck-stilts-tip",
+          "item": "25 kein Trinkgeld",
+          "type": "console",
+          "before": [
+            "baseddiag site=bungalow tip wallet 1000",
+            "baseddiag site=bungalow tip set 0"
+          ],
+          "command": "baseddiag site=bungalow tip cash 50",
+          "until": "baseddiag: tips|Exception",
+          "expect": "ray\\.bungalow-deck stage=\\w+ tips=(\\d+)",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "id": "deck-stilts-kit",
+          "item": "28 Baustellenausstattung",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -188,
+              115.5,
+              -182,
+              121.5
+            ],
+            "path": "Copies/(Table_Foldout|Pallet Prop|SM_Prop_Plank)"
+          },
+          "min": 3
+        }
+      ]
+    },
+    {
+      "id": "deck:complete",
+      "checks": [
+        {
+          "id": "deck-fence-inside-south",
+          "item": "29 Fußplatten über der Kante",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -194.6,
+              107.3,
+              -187.6,
+              107.66
+            ],
+            "path": "Fence"
+          }
+        },
+        {
+          "id": "deck-fence-inside-north",
+          "item": "29 Fußplatten über der Kante",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -194.6,
+              118.04,
+              -187.6,
+              118.4
+            ],
+            "path": "Fence"
+          }
+        },
+        {
+          "id": "deck-fence-inside-west",
+          "item": "29 Fußplatten über der Kante",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -194.6,
+              107.3,
+              -194.19,
+              118.4
+            ],
+            "path": "Fence"
+          }
+        },
+        {
+          "id": "deck-fence-inside-east",
+          "item": "29 Fußplatten über der Kante",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -187.99,
+              107.3,
+              -187.5,
+              109.9
+            ],
+            "path": "Fence"
+          }
+        },
+        {
+          "id": "deck-fence-inside-east-n",
+          "item": "29 Fußplatten über der Kante",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -187.99,
+              116.1,
+              -187.5,
+              118.4
+            ],
+            "path": "Fence"
+          }
+        }
+      ]
+    },
+    {
+      "id": "carport:carport-posts",
+      "checks": [
+        {
+          "id": "carport-posts-crew",
+          "item": "25 Bauarbeiter fehlen",
+          "type": "console",
+          "time": 1200,
+          "retry": 45,
+          "command": "baseddiag site=bungalow workers",
+          "until": "worker diagnostics",
+          "expect": "(?s)(?=.*\"id\":\"based_bungalow_foreman\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_carpenter\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_lumberjack\"[^\\n]*\"visible\":true)"
+        },
+        {
+          "id": "carport-posts-tip",
+          "item": "25 kein Trinkgeld",
+          "type": "console",
+          "before": [
+            "baseddiag site=bungalow tip wallet 1000",
+            "baseddiag site=bungalow tip set 0"
+          ],
+          "command": "baseddiag site=bungalow tip cash 50",
+          "until": "baseddiag: tips|Exception",
+          "expect": "ray\\.bungalow-carport stage=\\w+ tips=(\\d+)",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "id": "carport-posts-kit",
+          "item": "26 Carport-Stufen",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -168,
+              105.5,
+              -162,
+              108.5
+            ],
+            "path": "Copies/(Table_Foldout|Pallet Prop|SM_Prop_Plank)"
+          },
+          "min": 3
+        },
+        {
+          "id": "carport-posts-no-roof",
+          "item": "26 Carport-Stufen",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -170,
+              103,
+              -160,
+              112
+            ],
+            "minY": -1.6,
+            "path": "Copies/SmallRoof"
+          }
+        },
+        {
+          "id": "carport-posts-stand",
+          "item": "26 Carport-Stufen",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -169,
+              104,
+              -161.7,
+              111.3
+            ],
+            "path": "Copies/PorchBeam"
+          },
+          "min": 6
+        }
+      ]
+    },
+    {
+      "id": "carport:complete",
+      "checks": [
+        {
+          "id": "carport-roof",
+          "item": "26 Carport ohne Dach",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -170,
+              103,
+              -160,
+              112
+            ],
+            "minY": -1.6,
+            "path": "Copies/SmallRoof"
+          },
+          "min": 2
+        },
+        {
+          "id": "carport-bay-rock",
+          "item": "26 Auto schwebt",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -164.6,
+              104.1,
+              -162.1,
+              106.5
+            ],
+            "path": "Rocks/Rock1 \\(10\\)/"
+          }
+        }
+      ]
+    }
+  ]
+}

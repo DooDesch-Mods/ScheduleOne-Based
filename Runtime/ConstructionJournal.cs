@@ -22,7 +22,7 @@ internal static class ConstructionJournal
     // The morning starts behind a black fade, and the messages that arrive with it push an earlier notice off the screen.
     private const float NoticeDelay = 4f;
 
-    private readonly record struct Seen(UpgradeStage Stage, int Cycles, string Held);
+    private readonly record struct Seen(UpgradeStage Stage, int Cycles, string Held, bool RainedOut);
     private readonly record struct Notice(string Title, string Subtitle, float Due, bool Work);
 
     private static readonly Dictionary<(SiteDefinition, string), Seen> Last = new();
@@ -172,7 +172,8 @@ internal static class ConstructionJournal
         var state = Mod.Engine.GetUpgrade(site.Base.Id, page.UpgradeId);
         var upgrade = site.UpgradeOf(page.UpgradeId);
         // A hold belongs to the build under construction.
-        var now = new Seen(state.Stage, state.CompletedCycles, state.Stage == UpgradeStage.Constructing ? Mod.HeldBy : "");
+        var now = new Seen(state.Stage, state.CompletedCycles, state.Stage == UpgradeStage.Constructing ? Mod.HeldBy : "",
+            state.Stage == UpgradeStage.Constructing && state.WasRainedOut());
         var key = (site, page.UpgradeId);
         if (!Last.TryGetValue(key, out var before))
         {
@@ -184,6 +185,7 @@ internal static class ConstructionJournal
         string done = site.FollowUp(page.UpgradeId)?.Done ?? "Ready to move in";
         // The list shrinks while the player clears the walls, and only the start of a hold is news.
         if (now.Held.Length > 0 && before.Held.Length == 0) Queue(Text.T(page.Title), Text.T("Construction on hold"));
+        else if (now.RainedOut && !before.RainedOut) Queue(Text.T(page.Title), Text.T("Rain soaked the site. One more night."), true);
         else if (now.Stage == UpgradeStage.Complete && before.Stage != UpgradeStage.Complete) Queue(Text.T(page.Title), Text.T(done), true);
         else if (now.Stage == UpgradeStage.Constructing && now.Cycles > before.Cycles)
         {

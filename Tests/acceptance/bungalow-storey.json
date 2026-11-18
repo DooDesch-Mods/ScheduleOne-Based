@@ -1,0 +1,879 @@
+{
+  "name": "Bungalow Obergeschoss (Handtest 1)",
+  "spawn": [
+    -158.5,
+    -3.6,
+    114.0
+  ],
+  "time": 1200,
+  "enter": {
+    "command": "baseddiag site=bungalow phase {stage}",
+    "until": "construction moved to|baseddiag: .*(not|no |unknown)|Exception",
+    "ok": "construction moved to",
+    "settle": 4
+  },
+  "progress": {
+    "kind": "renderer",
+    "rect": [
+      -184,
+      103,
+      -157,
+      125
+    ],
+    "path": "based_bungalow|Based_Bungalow|MapExpansions"
+  },
+  "logscan": {
+    "allow": [
+      "logscan-allow.txt"
+    ]
+  },
+  "stages": [
+    {
+      "id": "storey:storey-floor",
+      "checks": [
+        {
+          "id": "storey-floor-crew",
+          "item": "25 Bauarbeiter fehlen",
+          "type": "console",
+          "time": 1200,
+          "retry": 45,
+          "command": "baseddiag site=bungalow workers",
+          "until": "worker diagnostics",
+          "expect": "(?s)(?=.*\"id\":\"based_bungalow_foreman\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_carpenter\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_lumberjack\"[^\\n]*\"visible\":true)"
+        },
+        {
+          "id": "storey-tip",
+          "item": "25 kein Trinkgeld",
+          "type": "console",
+          "before": [
+            "baseddiag site=bungalow tip wallet 1000",
+            "baseddiag site=bungalow tip set 0"
+          ],
+          "command": "baseddiag site=bungalow tip cash 50",
+          "until": "baseddiag: tips|Exception",
+          "expect": "ray\\.bungalow-storey stage=\\w+ tips=(\\d+)",
+          "op": ">=",
+          "value": 1
+        },
+        {
+          "id": "corridor-clear-floor",
+          "item": "1 Zugang zugestellt",
+          "type": "rays",
+          "expect": "clear",
+          "time": 300,
+          "rays": [
+            [
+              [
+                -157.5,
+                -3.3,
+                111.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                111.0
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                112.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                112.0
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                112.5
+              ],
+              [
+                -162.3,
+                -3.3,
+                112.5
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                113.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                113.0
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                114.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                114.0
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                115.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                115.0
+              ]
+            ]
+          ],
+          "ignore": [
+            "Fir L - Variant 2"
+          ]
+        },
+        {
+          "id": "seam-east-wall",
+          "item": "2 Spaltmaße Bodenplatten",
+          "type": "covered",
+          "tol": 0.002,
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.",
+            "rect": [
+              -171,
+              110,
+              -163,
+              117
+            ]
+          },
+          "surface": {
+            "axis": "y",
+            "at": -0.647,
+            "rect": [
+              -169.86,
+              111.5,
+              -169.86,
+              115.2
+            ],
+            "step": 0.1
+          }
+        },
+        {
+          "id": "seam-north-room",
+          "item": "2 Spaltmaße Bodenplatten",
+          "type": "covered",
+          "tol": 0.002,
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.",
+            "rect": [
+              -171,
+              110,
+              -163,
+              117
+            ]
+          },
+          "surface": {
+            "axis": "y",
+            "at": -0.647,
+            "rect": [
+              -169.6,
+              115.36,
+              -164.6,
+              115.36
+            ],
+            "step": 0.1
+          }
+        },
+        {
+          "id": "sparks-at-lamp",
+          "item": "5 Stromeffekt an der Stütze",
+          "type": "console",
+          "retry": 15,
+          "before": [
+            "baseddiag site=bungalow vfx force"
+          ],
+          "command": "baseddiag site=bungalow vfx",
+          "until": "bungalow effects",
+          "expect": "weld-sparks at \\(-169\\.[67]\\d, -1\\.8\\d, 112\\.[45]\\d\\)"
+        },
+        {
+          "id": "vfx-back-to-normal",
+          "item": "5 Stromeffekt an der Stütze",
+          "type": "console",
+          "command": "baseddiag site=bungalow vfx on",
+          "until": "baseddiag",
+          "expect": "baseddiag"
+        },
+        {
+          "id": "roof-debris",
+          "item": "15 zu wenig Dachtrümmer",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.piece-",
+            "rect": [
+              -176.1,
+              109.3,
+              -163.8,
+              121.6
+            ],
+            "minY": -0.75,
+            "limit": 2000
+          },
+          "min": 60
+        },
+        {
+          "id": "stair-tree-gone-storey-floor",
+          "item": "1 Zugang zugestellt",
+          "type": "absent",
+          "find": {
+            "kind": "collider",
+            "rect": [
+              -162.2,
+              111.6,
+              -160.5,
+              113.4
+            ],
+            "path": "InstancedMapTrees"
+          }
+        }
+      ]
+    },
+    {
+      "id": "storey:storey-frame",
+      "checks": [
+        {
+          "id": "storey-frame-crew",
+          "item": "25 Bauarbeiter fehlen",
+          "type": "console",
+          "time": 1200,
+          "retry": 45,
+          "command": "baseddiag site=bungalow workers",
+          "until": "worker diagnostics",
+          "expect": "(?s)(?=.*\"id\":\"based_bungalow_foreman\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_carpenter\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_lumberjack\"[^\\n]*\"visible\":true)"
+        },
+        {
+          "id": "site-boards",
+          "item": "3 unsichtbare Wand",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.frame-",
+            "rect": [
+              -177,
+              109,
+              -163,
+              122
+            ],
+            "path": "frame-(west-door-low|west-door-high|west-window|north-window)$"
+          },
+          "min": 4
+        },
+        {
+          "id": "frame-blocks-walls",
+          "item": "4 durch das Gerüst laufen",
+          "type": "rays",
+          "expect": "blocked",
+          "by": "MapExpansions",
+          "rays": [
+            [
+              [
+                -173.0,
+                0.35,
+                115.0
+              ],
+              [
+                -173.0,
+                0.35,
+                115.9
+              ]
+            ],
+            [
+              [
+                -170.4,
+                0.35,
+                111.0
+              ],
+              [
+                -169.5,
+                0.35,
+                111.0
+              ]
+            ],
+            [
+              [
+                -170.4,
+                0.35,
+                120.5
+              ],
+              [
+                -169.5,
+                0.35,
+                120.5
+              ]
+            ]
+          ]
+        },
+        {
+          "id": "frame-doors-open",
+          "item": "4 Türausschnitt fehlt",
+          "type": "rays",
+          "expect": "clear",
+          "rays": [
+            [
+              [
+                -174.9,
+                0.35,
+                115.0
+              ],
+              [
+                -174.9,
+                0.35,
+                115.9
+              ]
+            ],
+            [
+              [
+                -171.15,
+                0.35,
+                115.0
+              ],
+              [
+                -171.15,
+                0.35,
+                115.9
+              ]
+            ],
+            [
+              [
+                -170.4,
+                0.35,
+                113.8
+              ],
+              [
+                -169.3,
+                0.35,
+                113.8
+              ]
+            ]
+          ]
+        },
+        {
+          "id": "frame-top",
+          "item": "6 Gerüst steht über die Wand",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.frame-",
+            "rect": [
+              -177,
+              109,
+              -163,
+              122
+            ],
+            "minY": 1.81
+          }
+        }
+      ]
+    },
+    {
+      "id": "storey:storey-walls",
+      "checks": [
+        {
+          "id": "storey-walls-crew",
+          "item": "25 Bauarbeiter fehlen",
+          "type": "console",
+          "time": 1200,
+          "retry": 45,
+          "command": "baseddiag site=bungalow workers",
+          "until": "worker diagnostics",
+          "expect": "(?s)(?=.*\"id\":\"based_bungalow_foreman\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_carpenter\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_lumberjack\"[^\\n]*\"visible\":true)"
+        },
+        {
+          "id": "day-change-fast",
+          "item": "8 Lag nach dem Schlafen",
+          "type": "console",
+          "maxWait": 60000,
+          "command": "baseddiag site=bungalow phase storey:storey-roof",
+          "until": "world state: '[^']*storey[^']*' applied",
+          "expect": "storey[^']*' applied '[^']*' in (\\d+) ms",
+          "op": "<",
+          "value": 1500
+        }
+      ]
+    },
+    {
+      "id": "storey:storey-rafters",
+      "checks": [
+        {
+          "id": "storey-rafters-crew",
+          "item": "25 Bauarbeiter fehlen",
+          "type": "console",
+          "time": 1200,
+          "retry": 45,
+          "command": "baseddiag site=bungalow workers",
+          "until": "worker diagnostics",
+          "expect": "(?s)(?=.*\"id\":\"based_bungalow_foreman\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_carpenter\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_lumberjack\"[^\\n]*\"visible\":true)"
+        },
+        {
+          "id": "rafters-up",
+          "item": "18 Dachstuhl",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.",
+            "rect": [
+              -176.4,
+              108.9,
+              -163.3,
+              121.9
+            ],
+            "minY": 2.2,
+            "limit": 2000
+          },
+          "min": 20
+        },
+        {
+          "id": "rafters-kit",
+          "item": "24 Baustellenausstattung",
+          "type": "count",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -164,
+              115,
+              -158.5,
+              124.5
+            ],
+            "path": "Copies/(Table_Foldout|Pallet Prop|SM_Prop_Plank)"
+          },
+          "min": 3
+        }
+      ]
+    },
+    {
+      "id": "storey:storey-roof",
+      "checks": [
+        {
+          "id": "storey-roof-crew",
+          "item": "25 Bauarbeiter fehlen",
+          "type": "console",
+          "time": 1200,
+          "retry": 45,
+          "command": "baseddiag site=bungalow workers",
+          "until": "worker diagnostics",
+          "expect": "(?s)(?=.*\"id\":\"based_bungalow_foreman\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_carpenter\"[^\\n]*\"visible\":true)(?=.*\"id\":\"based_bungalow_lumberjack\"[^\\n]*\"visible\":true)"
+        }
+      ]
+    },
+    {
+      "id": "storey:complete",
+      "checks": [
+        {
+          "id": "corridor-clear-complete",
+          "item": "1 Zugang zugestellt",
+          "type": "rays",
+          "expect": "clear",
+          "time": 300,
+          "rays": [
+            [
+              [
+                -157.5,
+                -3.3,
+                111.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                111.0
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                112.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                112.0
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                112.5
+              ],
+              [
+                -162.3,
+                -3.3,
+                112.5
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                113.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                113.0
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                114.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                114.0
+              ]
+            ],
+            [
+              [
+                -157.5,
+                -3.3,
+                115.0
+              ],
+              [
+                -162.3,
+                -3.3,
+                115.0
+              ]
+            ]
+          ],
+          "ignore": [
+            "Fir L - Variant 2"
+          ]
+        },
+        {
+          "id": "landing-header",
+          "item": "7 Treppe nicht verbunden",
+          "type": "covered",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.landing-header"
+          },
+          "surface": {
+            "axis": "x",
+            "at": -168.35,
+            "rect": [
+              -1.2,
+              111.4,
+              -0.9,
+              112.8
+            ],
+            "step": 0.1
+          }
+        },
+        {
+          "id": "door-prompt-storey",
+          "item": "9 E-Hinweis nicht am Knauf",
+          "type": "console",
+          "command": "baseddiag door storey state",
+          "until": "baseddiag: upper storey door",
+          "expect": "prompt ([\\d.]+) m from the leaf's middle",
+          "op": ">=",
+          "value": 0.25
+        },
+        {
+          "id": "door-prompt-landing",
+          "item": "9 E-Hinweis nicht am Knauf",
+          "type": "console",
+          "command": "baseddiag door landing state",
+          "until": "baseddiag: upper landing door",
+          "expect": "prompt ([\\d.]+) m from the leaf's middle",
+          "op": ">=",
+          "value": 0.25
+        },
+        {
+          "id": "door-prompt-hall",
+          "item": "9 E-Hinweis nicht am Knauf",
+          "type": "console",
+          "command": "baseddiag door hall state",
+          "until": "baseddiag: upper hall door",
+          "expect": "prompt ([\\d.]+) m from the leaf's middle",
+          "op": ">=",
+          "value": 0.25
+        },
+        {
+          "id": "low-rail",
+          "item": "10 Spalt Boden-Geländer",
+          "type": "covered",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.balcony-south-rail"
+          },
+          "surface": {
+            "axis": "z",
+            "at": 112.88,
+            "rect": [
+              -168.0,
+              -0.53,
+              -164.7,
+              -0.53
+            ],
+            "step": 0.25
+          }
+        },
+        {
+          "id": "band-clear-post-sw",
+          "item": "11 Balken durch Eckpfeiler",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.band-",
+            "rect": [
+              -176.17,
+              109.18,
+              -175.98,
+              109.37
+            ]
+          }
+        },
+        {
+          "id": "band-clear-post-nw",
+          "item": "11 Balken durch Eckpfeiler",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.band-",
+            "rect": [
+              -176.17,
+              121.48,
+              -175.98,
+              121.67
+            ]
+          }
+        },
+        {
+          "id": "band-clear-post-se",
+          "item": "11 Balken durch Eckpfeiler",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.band-",
+            "rect": [
+              -170.02,
+              109.18,
+              -169.84,
+              109.37
+            ]
+          }
+        },
+        {
+          "id": "band-clear-post-e",
+          "item": "11 Balken durch Eckpfeiler",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.band-",
+            "rect": [
+              -163.87,
+              115.33,
+              -163.68,
+              115.52
+            ]
+          }
+        },
+        {
+          "id": "band-clear-post-ne",
+          "item": "11 Balken durch Eckpfeiler",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.band-",
+            "rect": [
+              -163.87,
+              121.48,
+              -163.68,
+              121.67
+            ]
+          }
+        },
+        {
+          "id": "lamps-stay-off",
+          "item": "12 Lampen aus, Schein an",
+          "type": "console",
+          "time": 2200,
+          "before": [
+            "mxswitch -170.02 0.5 114.6 0.45 off",
+            "mxswitch -169.83 0.5 117.75 0.45 off",
+            "mxtp -172.0 -0.55 118.0",
+            "mxtp -173.0 -0.55 119.0",
+            "mxtp -158.5 -3.6 114.0"
+          ],
+          "command": "mxlight -171.5 2.0 118.0 4",
+          "until": "mxlight near:",
+          "expect": "(?s)\\A(?!.*Copies/FluroBar[^\\n]*enabled True)(?=.*Copies/FluroBar[^\\n]*enabled False)"
+        },
+        {
+          "id": "corridor-no-crate-stone",
+          "item": "13 Kiste und Stein im Weg",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "rect": [
+              -161.4,
+              113.6,
+              -159.2,
+              115.4
+            ],
+            "path": "Copies/"
+          }
+        },
+        {
+          "id": "footing-above-gravel",
+          "item": "14 Steinplatte im Boden",
+          "type": "rays",
+          "expect": "blocked",
+          "by": "stair-footing",
+          "rays": [
+            [
+              [
+                -162.76,
+                -3.5,
+                111.25
+              ],
+              [
+                -162.76,
+                -3.875,
+                111.25
+              ]
+            ],
+            [
+              [
+                -161.76,
+                -3.5,
+                111.25
+              ],
+              [
+                -161.76,
+                -3.875,
+                111.25
+              ]
+            ],
+            [
+              [
+                -162.76,
+                -3.5,
+                112.95
+              ],
+              [
+                -162.76,
+                -3.875,
+                112.95
+              ]
+            ],
+            [
+              [
+                -161.76,
+                -3.5,
+                112.95
+              ],
+              [
+                -161.76,
+                -3.875,
+                112.95
+              ]
+            ]
+          ]
+        },
+        {
+          "id": "balcony-rail-inside-south",
+          "item": "29 Fußplatten über der Kante",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.balcony-",
+            "rect": [
+              -168.3,
+              112.5,
+              -164.4,
+              112.845
+            ]
+          }
+        },
+        {
+          "id": "balcony-rail-inside-east",
+          "item": "29 Fußplatten über der Kante",
+          "type": "absent",
+          "find": {
+            "kind": "renderer",
+            "name": "MapExpansions.Panel.balcony-",
+            "rect": [
+              -164.345,
+              112.9,
+              -164.0,
+              115.3
+            ]
+          }
+        },
+        {
+          "id": "terrace-floor",
+          "item": "20 Balkon",
+          "type": "rays",
+          "expect": "blocked",
+          "by": "terrace",
+          "rays": [
+            [
+              [
+                -177.0,
+                0.5,
+                110.3
+              ],
+              [
+                -177.0,
+                -1.2,
+                110.3
+              ]
+            ],
+            [
+              [
+                -177.2,
+                0.5,
+                112.5
+              ],
+              [
+                -177.2,
+                -1.2,
+                112.5
+              ]
+            ]
+          ]
+        },
+        {
+          "id": "stair-tree-gone-complete",
+          "item": "1 Zugang zugestellt",
+          "type": "absent",
+          "find": {
+            "kind": "collider",
+            "rect": [
+              -162.2,
+              111.6,
+              -160.5,
+              113.4
+            ],
+            "path": "InstancedMapTrees"
+          }
+        }
+      ]
+    }
+  ]
+}

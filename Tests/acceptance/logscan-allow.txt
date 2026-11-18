@@ -5,3 +5,19 @@
 validate: 'based_debug_delivery_dock' .* has no At yet
 # Bungalow extension tiles sit beside the property's heatmap on purpose (the carport and the slope terrace).
 property extension: tile .* lies outside the heatmap of 'bungalow'
+
+# Vanilla lines of a played save in a long run: dealer contracts run out, NPCs miss a seat or a walk, audio and
+# coroutine leftovers of vanilla objects, and stacks capped by the game. None of them comes from Based.
+Dealer contract expired! It was assigned to dealer
+Failed to find a free seat! Returning the first seat
+NPC walk to location not successful
+\[dev\] walk failed x\d+: .h[jo]_
+AudioSourceController _audioSource is null
+Coroutine continue failure
+SetQuantity called and passed quantity larger than stack limit
+# The runs jump the clock by whole nights; townsfolk far from the site miss their car or find its seat taken.
+NPC .* was unable to reach vehicle .* and was teleported to it
+Seat is already occupied
+
+# Personnel trims face layers of its generated townsfolk to the game's layer budget; the stack loads it for the crew.
+\[Personnel\] \[appearance\] .* exceeds the face layer budget

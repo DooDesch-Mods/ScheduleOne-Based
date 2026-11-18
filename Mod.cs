@@ -43,7 +43,8 @@ public sealed class Mod : MelonMod
     // Built on first use, not in the type initializer: the site types need S1API, and the missing-mods check has to
     // run first so a missing S1API still reaches the player.
     private static IReadOnlyList<SiteDefinition>? _sites;
-    internal static IReadOnlyList<SiteDefinition> Sites => _sites ??= new[] { MingSite.Create(), Content.StorageUnit.StorageSite.Create() };
+    internal static IReadOnlyList<SiteDefinition> Sites => _sites ??= new[]
+        { MingSite.Create(), Content.StorageUnit.StorageSite.Create(), Content.Bungalow.BungalowSite.Create() };
     // The vendors that name missing mods, without building the sites.
     private static readonly (string NpcId, string ContainerId, string Choice)[] NoticeVendors =
         { (MingSite.VendorNpcId, MingSite.VendorContainerId, MingSite.RequestChoice) };
@@ -117,6 +118,7 @@ public sealed class Mod : MelonMod
         NativeBus.ClientReceived += ReceiveClient;
         Tips.Listen();
         MapExpansionsApi.PeerWorldStateRequested += SendSnapshot;
+        S1API.GameTime.TimeManager.OnSleepStart += NightRain.SleepStarted;
         S1API.GameTime.TimeManager.OnSleepEnd += SleepEnded;
         foreach (var site in Sites) site.Crew?.Initialize(Log, Warn);
         _initialized = true;
@@ -152,6 +154,8 @@ public sealed class Mod : MelonMod
             PlanCopies.Reset();
             Tips.Reset();
             Content.StorageUnit.StorageVfx.Reset();
+            Content.Bungalow.BungalowVfx.Reset();
+            Content.Bungalow.BungalowPlaque.Reset();
             Content.StorageUnit.StorageLadder.Reset();
             RayMenu.Reset();
             StaffRoom.Reset();
@@ -267,6 +271,10 @@ public sealed class Mod : MelonMod
             TickStorageEffects();
             TickHold();
             TickJournal();
+            try { Content.Bungalow.BungalowDoors.Tick(); }
+            catch (Exception error) { Contain("bungalow doors", error); }
+            try { Content.Bungalow.BungalowPlaque.Tick(); }
+            catch (Exception error) { Contain("sunroom plaque", error); }
         }
         catch (Exception error) { Contain("runtime update", error); }
     }
@@ -279,6 +287,10 @@ public sealed class Mod : MelonMod
         catch (Exception error) { Contain("storage site effects", error); }
         try { Content.StorageUnit.StorageLadder.Tick(); }
         catch (Exception error) { Contain("storage ladder", error); }
+        var bungalow = Sites.FirstOrDefault(s => s.Base.Id == Content.Bungalow.BungalowDefinition.BaseId);
+        if (bungalow == null) return;
+        try { Content.Bungalow.BungalowVfx.Tick(Constructing(bungalow) == Content.Bungalow.BungalowDefinition.StoreyId); }
+        catch (Exception error) { Contain("bungalow site effects", error); }
     }
 
     // The quest names what still stands on the walls, so the list shrinks while the player clears them.
@@ -346,10 +358,14 @@ public sealed class Mod : MelonMod
         if (site.Crew == null) return;
         try
         {
-            // The crew works the stages of a build; one without stages goes up in a night without it.
-            string? building = Constructing(site);
-            string followed = building != null && site.UpgradeOf(building).Phases.Count > 0 ? building : site.UpgradeId;
+            // The crew follows the build under construction; the crew decides which builds and stages it works on.
+            string followed = Constructing(site) ?? site.UpgradeId;
             var state = Engine.GetUpgrade(site.Base.Id, followed);
+            if (site.Crew is Content.SiteCrews.ConstructionCrew crew)
+            {
+                crew.Follow(followed);
+                crew.RainedOut(state.WasRainedOut());
+            }
             site.Crew.Update(state.Stage, Engine.CurrentPhase(state.BaseId, state.UpgradeId));
             site.Crew.Tick();
         }
@@ -706,6 +722,7 @@ public sealed class Mod : MelonMod
         SetHeld("");
         var before = Engine.ExportState();
         var finishedBefore = Finished();
+        DelayForRain(cycle);
         var result = Engine.AdvanceSleep(cycle);
         if (!result.Applied) { Log("Sleep skipped: " + result.Reason); return; }
         _worldDirty = true;
@@ -721,6 +738,37 @@ public sealed class Mod : MelonMod
         {
             try { ConstructionLitter.Drop(site, upgradeId); }
             catch (Exception error) { Contain("construction litter for " + upgradeId, error); }
+        }
+    }
+
+    // Rain on a night spent without a roof costs a running build one night, once per build. The delay is recorded
+    // before AdvanceSleep, which then leaves that build where it is and moves the others on.
+    private static void DelayForRain(long cycle)
+    {
+        bool rained = NightRain.Take(out string source);
+        foreach (var site in Sites)
+        {
+            string? upgradeId = Constructing(site);
+            if (upgradeId == null) continue;
+            string name = site.Base.Id + "/" + upgradeId;
+            if (Engine.GetUpgrade(site.Base.Id, upgradeId).RainDelayed)
+            {
+                Log("No rain delay for " + name + " in sleep cycle " + cycle + ": rain already cost this build a night (rain " + (rained ? "seen" : "not seen") + ", " + source + ").");
+                continue;
+            }
+            if (!Engine.IsOpenToRain(site.Base.Id, upgradeId))
+            {
+                Log("No rain delay for " + name + " in sleep cycle " + cycle + ": the build is not open to rain (rain " + (rained ? "seen" : "not seen") + ", " + source + ").");
+                continue;
+            }
+            if (!rained)
+            {
+                Log("No rain delay for " + name + " in sleep cycle " + cycle + ": no rain seen (" + source + ").");
+                continue;
+            }
+            var delay = Engine.DelayForRain(site.Base.Id, upgradeId, cycle);
+            if (delay.Applied) Log("Construction of " + name + " delayed one night by rain in sleep cycle " + cycle + " (" + source + ").");
+            else Warn("Rain delay of " + name + " in sleep cycle " + cycle + " refused: " + delay.Reason + ".");
         }
     }
 
