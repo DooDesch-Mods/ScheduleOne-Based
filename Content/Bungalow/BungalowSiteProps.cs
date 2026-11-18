@@ -278,8 +278,9 @@ internal static class BungalowSiteProps
 
     // The front garden of the finished house, from the neighbourhood's own pieces: two shrubs in concrete beds north of
     // the way to the stair and the door, one by the house front and one by the pavement, a loose shrub between the skip
-    // and the pavement, and a mailbox on the pavement's edge like the Sherman house's up the street. The way from the
-    // street to the stair and the door (z 110.9 .. 115.3) and the drive to the bays stay open.
+    // and the pavement, and a mailbox in the grass beside the way, half a metre short of the pavement like the Sherman
+    // house's up the street. The pavement's house side runs at x -159.25; nothing of the garden reaches it. The way from
+    // the street to the stair and the door (z 110.9 .. 115.3) and the drive to the bays stay open.
     private const string BedShrub = "Map/Hyland Point/Bushes/Shrub with base (8)";
     private static readonly Vector3 BedShrubPivot = new(-50.94f, -3.9f, 135.19f);
     private const string LooseShrub = "Map/Hyland Point/Bushes/Shrub (45)";
@@ -290,9 +291,9 @@ internal static class BungalowSiteProps
     private static void Garden(WorldStateDefinition state)
     {
         Bed(state, "garden-bed-house", new Vector3(-162.85f, -3.97f, 116.05f), 20);
-        Bed(state, "garden-bed-street", new Vector3(-159.65f, -4f, 116.3f), -35);
-        state.Copies.Add(Copy("garden-shrub-skip", LooseShrub, LooseShrubPivot, new Vector3(-159.4f, -4f, 119.0f), 75, .45f));
-        state.Copies.Add(Copy("garden-mailbox", Mailbox, MailboxPivot, new Vector3(-158.4f, -3.9f, 114.35f), 6));
+        Bed(state, "garden-bed-street", new Vector3(-160.55f, -4f, 117.5f), -35);
+        state.Copies.Add(Copy("garden-shrub-skip", LooseShrub, LooseShrubPivot, new Vector3(-160.3f, -4f, 120.1f), 75, .45f));
+        state.Copies.Add(Copy("garden-mailbox", Mailbox, MailboxPivot, new Vector3(-160.25f, -4.05f, 115.8f), 6));
     }
 
     // The shrub stands in its bed; the rustle trigger with its nav cut stays behind.
