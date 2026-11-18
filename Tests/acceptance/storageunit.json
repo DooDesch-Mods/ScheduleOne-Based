@@ -1,0 +1,81 @@
+{
+  "name": "Storage Unit",
+  "spawn": [-12.0, 0.2, 96.0],
+  "time": 1200,
+  "enter": {
+    "command": "baseddiag site=storageunit phase {stage}",
+    "until": "construction moved to|baseddiag: .*(not|no |unknown)|Exception",
+    "ok": "construction moved to",
+    "settle": 3
+  },
+  "progress": {"kind": "renderer", "rect": [-16, 88, 8, 120], "path": "based_storage|Based_Storage|MapExpansions"},
+  "logscan": {"allow": ["logscan-allow.txt"]},
+  "shots": {
+    "time": 1200,
+    "box": [-10.8, 0.0, 93.5, 3.6, 7.8, 114.5],
+    "floors": [0.1, 3.25],
+    "rooms": [
+      {"name": "loft", "floor": 3.25, "ceiling": 6.0, "rect": [-8.74, 103.81, -2.06, 113.79]},
+      {"name": "walkway", "floor": 3.25, "ceiling": 6.0, "rect": [-2.05, 94.4, 0.245, 113.79]},
+      {"name": "east", "floor": 3.25, "ceiling": 6.0, "rect": [0.26, 103.81, 3.24, 113.79]},
+      {"name": "south", "floor": 3.25, "ceiling": 6.0, "rect": [0.26, 94.31, 3.24, 101.29]},
+      {"name": "hall", "floor": 0.1, "ceiling": 3.2, "rect": [-8.6, 94.4, -2.6, 103.4]}
+    ],
+    "extra": [
+      {"name": "stair-foot", "eye": [-12.6, 0.6, 99.0], "target": [-9.84, 0.1, 100.3]},
+      {"name": "landing-under", "eye": [-12.4, 0.5, 107.6], "target": [-9.84, 3.19, 105.5]},
+      {"name": "landing-door", "eye": [-10.4, 4.9, 103.0], "target": [-8.9, 4.4, 105.47], "sight": "check"}
+    ]
+  },
+  "stages": [
+    {"id": "ray.storageunit-loft:loft-stair", "checks": [
+      {"id": "crew-on-site", "item": "nur 1 Arbeiter", "type": "console", "time": 1200,
+       "command": "baseddiag site=storageunit workers", "until": "storage workers diagnostics",
+       "expect": "active=(\\d+)", "op": ">=", "value": 3, "retry": 45},
+      {"id": "build-vfx", "item": "fehlende VFX", "type": "count", "time": 1200,
+       "find": {"kind": "renderer", "rect": [-16, 88, 8, 120], "type": "ParticleSystemRenderer", "path": "Based_StorageVfx"},
+       "min": 1}
+    ]},
+    {"id": "ray.storageunit-loft:loft-door"},
+    {"id": "ray.storageunit-loft:complete"},
+    {"id": "ray.storageunit-east:east-open", "checks": [
+      {"id": "crew-on-site-east", "item": "nur 1 Arbeiter", "type": "console", "time": 1200,
+       "command": "baseddiag site=storageunit workers", "until": "storage workers diagnostics",
+       "expect": "active=(\\d+)", "op": ">=", "value": 3, "retry": 45}
+    ]},
+    {"id": "ray.storageunit-east:complete"},
+    {"id": "ray.storageunit-south:south-open"},
+    {"id": "ray.storageunit-south:complete", "shots": true, "checks": [
+      {"id": "stair-grounded", "item": "Treppe", "type": "grounded", "group": true,
+       "find": {"kind": "renderer", "name": "stair-stringer-foot"}, "minObjects": 2},
+      {"id": "landing-posts-grounded", "item": "Pfeiler", "type": "grounded",
+       "find": {"kind": "renderer", "name": "landing-post"}, "minObjects": 2},
+      {"id": "ladder-grounded", "item": "Gerüst", "type": "grounded",
+       "find": {"kind": "renderer", "name": "Yellow Ladder", "rect": [-4, 99, -1, 102]}},
+      {"id": "landing-closed-below", "item": "Vordach", "type": "rays", "expect": "blocked",
+       "by": "MapExpansions\\.based_storage",
+       "grid": {"rect": [-10.6, 104.95, -9.1, 106.15], "step": 0.5, "from": 1.0, "to": 5.0}},
+      {"id": "loft-ceiling-closed", "item": "Spalte", "type": "covered",
+       "find": {"kind": "renderer", "name": "MapExpansions.Panel", "rect": [-11, 93, 4, 115]},
+       "surface": {"axis": "y", "at": 6.005, "rect": [-8.6, 103.81, 3.1, 113.7], "step": 0.25}},
+      {"id": "south-ceiling-closed", "item": "Spalte", "type": "covered",
+       "find": {"kind": "renderer", "name": "MapExpansions.Panel", "rect": [-11, 93, 4, 115]},
+       "surface": {"axis": "y", "at": 6.005, "rect": [0.3, 94.05, 3.2, 101.45], "step": 0.25}},
+      {"id": "south-wall-closed", "item": "fehlende Wandstufen", "type": "covered",
+       "find": {"kind": "renderer", "name": "MapExpansions.Panel", "rect": [-11, 93, 4, 115]},
+       "surface": {"axis": "z", "at": 94.15, "rect": [-2.05, 3.27, 3.2, 6.2], "step": 0.25}},
+      {"id": "south-wall-ceiling-joint", "item": "Etagennaht", "type": "covered",
+       "find": {"kind": "renderer", "name": "MapExpansions.Panel", "rect": [-11, 93, 4, 115]},
+       "surface": {"axis": "y", "at": 6.0, "rect": [-2.05, 94.0, 3.2, 94.3], "step": 0.1}},
+      {"id": "no-fake-window", "item": "Fenster", "type": "absent",
+       "find": {"kind": "renderer", "name": "FakeWindow", "rect": [-11, 93, 4, 115], "minY": 3.0}},
+      {"id": "door-nav", "item": "Tür", "type": "nav", "from": [-9.84, 0, 98.4], "to": [-8.1, 3.25, 105.45], "tol": 0.8},
+      {"id": "loft-nav", "item": "Tür", "type": "nav", "from": [-9.84, 0, 98.4], "to": [-5.5, 3.25, 109.0], "tol": 0.8},
+      {"id": "npc-walks-stair", "item": "Treppe für NPCs", "type": "walk", "time": 1200, "to": [-8.1, 3.25, 105.45],
+       "locate": {"command": "baseddiag site=storageunit staff", "until": "baseddiag: staff|baseddiag: employee",
+                  "regex": "baseddiag: employee .+? \\(\\w+\\) index \\d+ at \\((?P<x>-?[\\d.]+), (?P<y>-?[\\d.]+), (?P<z>-?[\\d.]+)\\)",
+                  "hire": "addemployee handler storageunit", "hireUntil": "Adding employee", "hireSettle": 25},
+       "timeout": 180, "maxStep": 1.0}
+    ]}
+  ]
+}

@@ -2,6 +2,7 @@ using Based.Content;
 using Based.Core;
 using Based.UI;
 using Il2CppScheduleOne.Dialogue;
+using Il2CppScheduleOne.NPCs.Schedules;
 using HarmonyLib;
 using S1API.Money;
 using UnityEngine;
@@ -37,6 +38,7 @@ internal static class PlanCopies
         _choice = null;
         _handler = null;
         _missingReported = _offered = false;
+        RayAgentMenu.Reset();
     }
 
     // Runs once a second while a save is loaded.
@@ -84,6 +86,9 @@ internal static class PlanCopies
         };
         choice.onChoosen.AddListener((Action)Prepare);
         controller.AddDialogueChoice(choice, 55);
+        // One line per talk: with it a log tells "the menu check refused" (a line from RayAgentMenu follows)
+        // apart from "the menu patch never ran" (nothing follows). The schedule's override is already cleared here.
+        _handler.onConversationStart.AddListener((Action)(() => Mod.Log("Ray starts a conversation.")));
         _choice = choice;
         _controller = controller;
         Mod.Log("Ray's dialogue extended with copies of the building plans.");
@@ -100,11 +105,10 @@ internal static class PlanCopies
     // Called for the choice list of every conversation node; only the first menu of Ray's agent conversation gets the entry.
     internal static void AddChoice(DialogueController controller, string nodeLabel, Il2CppSystem.Collections.Generic.List<DialogueChoiceData> choices)
     {
-        if (_controller == null || controller.Pointer != _controller.Pointer || nodeLabel != "ENTRY") return;
-        if (DialogueHandler.ActiveDialogue?.name != AgentConversation) return;
+        if (!RayAgentMenu.Accepts("Plan copies", _controller, controller, nodeLabel)) return;
         if (!_offered) { Mod.Log("Ray's menu stays as it is: no building plans to offer."); return; }
         for (int i = 0; i < choices.Count; i++)
-            if (choices[i]?.ChoiceLabel == OfferLabel) return;
+            if (choices[i]?.ChoiceLabel == OfferLabel) { Mod.Log("Ray's menu already lists the building plan copies."); return; }
         var entry = new DialogueChoiceData { Guid = Guid.NewGuid().ToString(), ChoiceLabel = OfferLabel, ChoiceText = Text.T("I lost my building plans.") };
         // Before the farewell, which vanilla keeps last.
         choices.Insert(Math.Max(0, choices.Count - 1), entry);
@@ -157,6 +161,9 @@ internal static class PlanCopies
     }
 
 #if DEBUG
+    private static NPCEvent_LocationDialogue? _copiedEvent;
+    private static Conversation? _copiedOriginal;
+
     // Opens Ray's conversation through the controller's own interact entry, the call the game makes when the
     // player talks to him, so the menu the player sees includes the plan copy entry. "office" and "street" set the
     // controller state his schedule sets (the estate agent conversation as override, or none) before talking.
@@ -171,9 +178,29 @@ internal static class PlanCopies
         {
             Mod.Log("baseddiag ray: dialogue in progress " + (_handler?.IsDialogueInProgress ?? false) + "; ending it.");
             _handler?.EndDialogue();
+            if (_copiedEvent != null)
+            {
+                _copiedEvent.DialogueOverride = _copiedOriginal;
+                _copiedEvent = null;
+                Mod.Log("baseddiag ray: the work event has its own conversation again.");
+            }
             return;
         }
         if (where == "street") controller.OverrideContainer = null;
+        else if (where == "copy")
+        {
+            // A copy of the estate agent conversation, as a mod that rebuilds Ray's office menu would set it: the
+            // work event and the controller both point to it, and its name is no longer the vanilla one.
+            NPCEvent_LocationDialogue? work = null;
+            foreach (var location in npc.gameObject.GetComponentsInChildren<NPCEvent_LocationDialogue>(true))
+                if (location.DialogueOverride != null && location.DialogueOverride.name == AgentConversation) { work = location; break; }
+            if (work == null) { Mod.Warn("baseddiag ray: no work event of Ray's opens " + AgentConversation + "."); return; }
+            var copy = UnityEngine.Object.Instantiate(work.DialogueOverride);
+            _copiedEvent = work;
+            _copiedOriginal = work.DialogueOverride;
+            work.DialogueOverride = copy;
+            controller.OverrideContainer = copy;
+        }
         else if (where == "office")
         {
             Conversation? agent = null;
@@ -182,7 +209,7 @@ internal static class PlanCopies
             if (agent == null) { Mod.Warn("baseddiag ray: the conversation " + AgentConversation + " was not found."); return; }
             controller.OverrideContainer = agent;
         }
-        else if (where.Length > 0) { Mod.Warn("baseddiag ray: unknown place '" + where + "', use office or street."); return; }
+        else if (where.Length > 0) { Mod.Warn("baseddiag ray: unknown place '" + where + "', use office, street, copy or end."); return; }
         if (!controller.CanStartDialogue()) Mod.Warn("baseddiag ray: CanStartDialogue is false (pursuit, clipboard or police call); starting anyway.");
         Mod.Log("baseddiag ray: override '" + (controller.OverrideContainer?.name ?? "none") + "', dialogue in progress " + (_handler?.IsDialogueInProgress ?? false)
             + ", active '" + (DialogueHandler.ActiveDialogue?.name ?? "none") + "', behaviour " + controller.UseDialogueBehaviour + ".");
@@ -213,6 +240,9 @@ internal static class PlanCopies
     }
 }
 
+// S1API has no way to add a choice to the menu of a conversation the schedule swaps in (Ray's estate agent
+// conversation) only while a condition holds: DialogueInjector rewrites the node's choices for good and has no
+// visibility predicate. Until ifBars/S1API#394 lands, this patch adds the entries per menu.
 [HarmonyPatch(typeof(DialogueController), nameof(DialogueController.ModifyChoiceList))]
 internal static class RayPlanCopiesChoice
 {
