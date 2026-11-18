@@ -41,6 +41,15 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "door":
                     Mod.Log("baseddiag: " + Content.Bungalow.BungalowDoors.Debug(args));
                     break;
+                case "plaque":
+                    // plaque x y z lean = moves the live sunroom plaque until the next scene; plaque alone only reports.
+                    if (args.Count > 4)
+                    {
+                        float P(int i) => float.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture);
+                        Content.Bungalow.BungalowPlaque.DebugMove(new UnityEngine.Vector3(P(1), P(2), P(3)), P(4));
+                    }
+                    Mod.Log("baseddiag: " + Content.Bungalow.BungalowPlaque.Describe());
+                    break;
                 case "status":
                     Mod.Log("baseddiag: " + BuildPlan.State(_site));
                     break;

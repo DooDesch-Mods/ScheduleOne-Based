@@ -111,6 +111,7 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Assets/quest-icon.png" LogicalName="Based.Assets.quest-icon.png" />
     <EmbeddedResource Include="Assets/folder-icon.png" LogicalName="Based.Assets.folder-icon.png" />
+    <EmbeddedResource Include="Assets/sunroom-plaque.png" LogicalName="Based.Assets.sunroom-plaque.png" />
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">

@@ -155,6 +155,7 @@ public sealed class Mod : MelonMod
             Tips.Reset();
             Content.StorageUnit.StorageVfx.Reset();
             Content.Bungalow.BungalowVfx.Reset();
+            Content.Bungalow.BungalowPlaque.Reset();
             Content.StorageUnit.StorageLadder.Reset();
             RayMenu.Reset();
             StaffRoom.Reset();
@@ -272,6 +273,8 @@ public sealed class Mod : MelonMod
             TickJournal();
             try { Content.Bungalow.BungalowDoors.Tick(); }
             catch (Exception error) { Contain("bungalow doors", error); }
+            try { Content.Bungalow.BungalowPlaque.Tick(); }
+            catch (Exception error) { Contain("sunroom plaque", error); }
         }
         catch (Exception error) { Contain("runtime update", error); }
     }

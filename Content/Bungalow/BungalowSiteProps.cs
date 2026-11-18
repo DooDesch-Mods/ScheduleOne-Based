@@ -264,13 +264,51 @@ internal static class BungalowSiteProps
     }
 
     // Once the storey is handed over, the site is gone; its trash, the empty crate and a block wait by the house's
-    // north-east corner, out of the way to the stair.
+    // north-east corner, out of the way to the stair, loosely grouped and each turned its own way. The trash can and the
+    // crate are loose props in the camp they come from: they keep their rigidbody and can be pushed and carried like
+    // there, and MapExpansions gives each a GUID of its own so a drag shows on every peer. The drum stands fixed there too.
     private static void Cleared(WorldStateDefinition state)
     {
-        state.Copies.Add(Copy("yard-trash-can", Camp + "Trash Can Prop", TrashCanPivot, new Vector3(-162.7f, -3.93f, 122.4f), 33));
-        state.Copies.Add(Copy("yard-trash-drum", Camp + "Liquid Drum Hollow with trash", TrashDrumPivot, new Vector3(-162.0f, -3.95f, 123.05f), -61));
-        state.Copies.Add(Copy("yard-crate", Camp + "Wood Crate Prop (1)", CratePivot, new Vector3(-161.2f, -3.98f, 123.9f), 52));
-        Cinderblock(state, "yard-cinderblock", -160.6f, -4f, 123.3f, 141);
+        state.Copies.Add(Loose(Copy("yard-trash-can", Camp + "Trash Can Prop", TrashCanPivot, new Vector3(-163.1f, -3.94f, 122.15f), 21)));
+        state.Copies.Add(Copy("yard-trash-drum", Camp + "Liquid Drum Hollow with trash", TrashDrumPivot, new Vector3(-162.2f, -3.95f, 123.35f), -47));
+        state.Copies.Add(Loose(Copy("yard-crate", Camp + "Wood Crate Prop (1)", CratePivot, new Vector3(-163.2f, -3.97f, 123.6f), 64)));
+        Cinderblock(state, "yard-cinderblock", -161.75f, -3.98f, 124.15f, 118);
+        Garden(state);
+    }
+
+    // The front garden of the finished house, from the neighbourhood's own pieces: two shrubs in concrete beds north of
+    // the way to the stair and the door, one by the house front and one by the pavement, a loose shrub between the skip
+    // and the pavement, and a mailbox on the pavement's edge like the Sherman house's up the street. The way from the
+    // street to the stair and the door (z 110.9 .. 115.3) and the drive to the bays stay open.
+    private const string BedShrub = "Map/Hyland Point/Bushes/Shrub with base (8)";
+    private static readonly Vector3 BedShrubPivot = new(-50.94f, -3.9f, 135.19f);
+    private const string LooseShrub = "Map/Hyland Point/Bushes/Shrub (45)";
+    private static readonly Vector3 LooseShrubPivot = new(-144.85f, -4.01f, 128.69f);
+    private const string Mailbox = "Map/Hyland Point/Region_Westville/Sherman House/Mailbox3";
+    private static readonly Vector3 MailboxPivot = new(-157.34f, -4.1f, 132.16f);
+
+    private static void Garden(WorldStateDefinition state)
+    {
+        Bed(state, "garden-bed-house", new Vector3(-162.85f, -3.97f, 116.05f), 20);
+        Bed(state, "garden-bed-street", new Vector3(-159.65f, -4f, 116.3f), -35);
+        state.Copies.Add(Copy("garden-shrub-skip", LooseShrub, LooseShrubPivot, new Vector3(-159.4f, -4f, 119.0f), 75, .45f));
+        state.Copies.Add(Copy("garden-mailbox", Mailbox, MailboxPivot, new Vector3(-158.4f, -3.9f, 114.35f), 6));
+    }
+
+    // The shrub stands in its bed; the rustle trigger with its nav cut stays behind.
+    private static void Bed(WorldStateDefinition state, string id, Vector3 at, float yaw)
+    {
+        var bed = Copy(id, BedShrub, BedShrubPivot, at, yaw, .75f);
+        bed.Exclude.Add("Bush rustle sound");
+        state.Copies.Add(bed);
+    }
+
+    // A copy that keeps the template's physics and its network-synced dragging instead of standing as a picture.
+    private static CopyDefinition Loose(CopyDefinition copy)
+    {
+        copy.VisualOnly = false;
+        copy.IndependentMesh = false;
+        return copy;
     }
 
     // The west kit for the deck's stilts day and the sunroom's slab day.

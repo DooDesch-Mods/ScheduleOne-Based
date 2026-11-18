@@ -106,14 +106,22 @@ public static class BungalowCarport
             Id = "bay-rock", Name = "Rock1 (10)", Parent = "Rocks", Side = WorldSide.Main, Effect = ObjectEffect.Remove,
             Area = BoundsOf(-164.6f, -6f, 104.1f, -162.1f, -3f, 106.5f)
         });
+        // A shrub by the apartment wall grows over the second bay's street corner and hides half its marking.
+        state.Rules.Add(new ObjectRule
+        {
+            Id = "bay-shrub", Name = "Shrub (46)", Parent = "Bushes", Side = WorldSide.Main, Effect = ObjectEffect.Remove,
+            Area = BoundsOf(-163f, -6f, 103f, -160f, -2f, 106f)
+        });
     }
 
     // Under the roof the grass goes: the game draws grass only near the player, so up close it stood over the bay's
-    // markings. The ground takes the tint of the house's own parking bay, painted to the eaves with a soft edge.
+    // markings. The ground takes the tint of the house's own parking bay, painted with a soft edge. The cleared ground
+    // reaches past the eaves to the apartment wall in the south and a metre toward the street, so no blade at the
+    // area's edge leans over the markings, which run to x -161.82.
     private const string BayLayer = BungalowSiteProps.ForecourtLayer;
     private static void Bay(WorldStateDefinition state)
     {
-        var area = BoundsOf(PostX[0] - .2f, -20f, SouthEave, PostX[PostX.Length - 1] + .2f, 20f, NorthEave);
+        var area = BoundsOf(PostX[0] - .4f, -20f, 103.2f, -160.9f, 20f, NorthEave + .3f);
         state.Rules.Add(new ObjectRule { Id = "bay-grass", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails, Area = area });
         state.Rules.Add(new ObjectRule
         {

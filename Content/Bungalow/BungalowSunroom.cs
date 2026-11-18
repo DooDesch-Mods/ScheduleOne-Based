@@ -203,7 +203,7 @@ public static class BungalowSunroom
             Gable(geometry, "north", North, Floor + endHeight, glazed);
             state.Copies.Add(GableRails());
             Flashing(state, geometry);
-            Fascia(geometry);
+            state.Copies.Add(RoofTrims());
 
             // The frames are visual copies without colliders; invisible walls stand in their planes.
             Block(geometry, "west-wall-south", West - .05f, Floor, South - .05f, West + .05f, Floor + westHeight, DoorSouth);
@@ -343,14 +343,23 @@ public static class BungalowSunroom
         state.Copies.Add(lip);
     }
 
-    // The roof frames overhang the west front. Their long bars at the frames' joins are deeper than the rail along the
-    // west end, so from the garden their ends stood as dark wedges over the eave; a board along the whole edge covers
-    // them, from under the overhang to 5 mm over the roof's top, past the gable rails at both ends.
-    private static void Fascia(CopyDefinition geometry)
+    // Trim boards close the roof's three free edges, laid out level from the roof's top edge at the house and tilted to its
+    // slope, so each lies along its edge and its top stands 2 to 4 mm over the roof's top. The two side boards run from the
+    // house to past the west edge and stand 4 cm out, 5 mm further than the gable rails under them, so the two outer faces
+    // do not share a plane. The west board covers the ends of the frames' long bars, which are deeper than the frames'
+    // border; it runs between the side boards and ends inside them, so the corners close without two faces in one plane.
+    private static CopyDefinition RoofTrims()
     {
-        float roofWest = House - FrameWidth * RoofScale * Mathf.Cos(Mathf.Atan(RoofSlope));
-        float x0 = roofWest - .04f, x1 = roofWest + .01f;
-        Face(geometry, "roof-fascia", Metal, x0, RoofUnderside(x1) - .02f, South - .045f, x1, RoofMid(x0) + RoofDepth * .5f + .005f, North + .045f);
+        var pivot = new Vector3(House, RoofAtHouse, South);
+        var slope = Quaternion.Euler(0f, 0f, Mathf.Atan(RoofSlope) * Mathf.Rad2Deg);
+        var trims = Tilted("roof-trims", Anchor, pivot, pivot, slope, 1f);
+        trims.OwnMesh = false;
+        trims.Exclude.Add("Colliders");
+        float top = pivot.y, bottom = top - RoofDepth, westEnd = House - FrameWidth * RoofScale;
+        Face(trims, "trim-south", Metal, westEnd - .035f, bottom - .03f, South - .04f, House - .002f, top + .004f, South + .002f);
+        Face(trims, "trim-north", Metal, westEnd - .035f, bottom - .03f, North - .002f, House - .002f, top + .004f, North + .04f);
+        Face(trims, "trim-west", Metal, westEnd - .03f, bottom - .025f, South - .035f, westEnd + .002f, top + .002f, North + .035f);
+        return trims;
     }
 
     // A fixed light beside the door: a metal border and a middle rail like Ray's frames, one pane above and one below.
