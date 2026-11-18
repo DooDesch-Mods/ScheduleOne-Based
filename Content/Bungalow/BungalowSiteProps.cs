@@ -278,22 +278,27 @@ internal static class BungalowSiteProps
 
     // The front garden of the finished house, from the neighbourhood's own pieces: two shrubs in concrete beds north of
     // the way to the stair and the door, one by the house front and one by the pavement, a loose shrub between the skip
-    // and the pavement, and a mailbox in the grass beside the way, half a metre short of the pavement like the Sherman
-    // house's up the street. The pavement's house side runs at x -159.25; nothing of the garden reaches it. The way from
-    // the street to the stair and the door (z 110.9 .. 115.3) and the drive to the bays stay open.
+    // and the pavement, and a mailbox with a trash can beside it. The single-family houses down the street (Mailbox4,
+    // Mailbox1) keep a single mailbox on a white post in the grass where their drive meets the pavement, its box towards
+    // the road, and a trash can next to it; the Bungalow does the same in the grass strip south of its drive (grass from
+    // z 103 to 105, the drive is dirt from there to the way). The pavement's house side runs at x -159.25; nothing of the
+    // garden reaches it. The way from the street to the stair and the door (z 110.9 .. 115.3) and the drive to the bays
+    // stay open.
     private const string BedShrub = "Map/Hyland Point/Bushes/Shrub with base (8)";
     private static readonly Vector3 BedShrubPivot = new(-50.94f, -3.9f, 135.19f);
     private const string LooseShrub = "Map/Hyland Point/Bushes/Shrub (45)";
     private static readonly Vector3 LooseShrubPivot = new(-144.85f, -4.01f, 128.69f);
-    private const string Mailbox = "Map/Hyland Point/Region_Westville/Sherman House/Mailbox3";
-    private static readonly Vector3 MailboxPivot = new(-157.34f, -4.1f, 132.16f);
+    // Template yaw 0, box along -forward: a yaw of 270 turns the box to the road in the east.
+    private const string Mailbox = "Map/Hyland Point/Region_Westville/Sherman House/Mailbox4";
+    private static readonly Vector3 MailboxPivot = new(-128.1f, -4.01f, 127.87f);
 
     private static void Garden(WorldStateDefinition state)
     {
         Bed(state, "garden-bed-house", new Vector3(-162.85f, -3.97f, 116.05f), 20);
         Bed(state, "garden-bed-street", new Vector3(-160.55f, -4f, 117.5f), -35);
         state.Copies.Add(Copy("garden-shrub-skip", LooseShrub, LooseShrubPivot, new Vector3(-160.3f, -4f, 120.1f), 75, .45f));
-        state.Copies.Add(Copy("garden-mailbox", Mailbox, MailboxPivot, new Vector3(-160.25f, -4.05f, 115.8f), 6));
+        state.Copies.Add(Copy("garden-mailbox", Mailbox, MailboxPivot, new Vector3(-159.8f, -4f, 103.9f), 270));
+        state.Copies.Add(Loose(Copy("garden-trash-can", Camp + "Trash Can Prop", TrashCanPivot, new Vector3(-160.15f, -3.99f, 102.85f), 12)));
     }
 
     // The shrub stands in its bed; the rustle trigger with its nav cut stays behind.
