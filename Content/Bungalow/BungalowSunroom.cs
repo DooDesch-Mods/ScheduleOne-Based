@@ -117,7 +117,7 @@ public static class BungalowSunroom
             Id = "table-gravel", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
             PaintLayer = "Terrain_Gravel", PaintStrength = 1f, Area = bed
         });
-        // From the sunroom's door step a trodden strip runs to the gravel bed of the garden table.
+        // From the sunroom's door step a gravel strip, the forecourt's gravel like the garden path, runs to the table's bed.
         state.Rules.Add(new ObjectRule
         {
             Id = "seating-path", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.ClearDetails,
@@ -125,8 +125,8 @@ public static class BungalowSunroom
         });
         var seating = new ObjectRule
         {
-            Id = "seating-path-dirt", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
-            PaintLayer = "Terrain_Dirt", PaintStrength = 1f, PaintWidth = 1f
+            Id = "seating-path-gravel", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
+            PaintLayer = BungalowSiteProps.ForecourtLayer, PaintStrength = 1f, PaintWidth = 1f
         };
         seating.PaintPath.AddRange(new[] { new Vector2(West - StepDepth, 111.4f), new Vector2(-184.0f, 112.15f), new Vector2(-184.55f, 113.05f) });
         state.Rules.Add(seating);

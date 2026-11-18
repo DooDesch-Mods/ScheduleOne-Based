@@ -200,7 +200,7 @@ public static class BungalowDeck
         IndependentMesh = true, VisualOnly = true, Obstacle = false
     };
 
-    // A trodden strip from the deck's step to the sliding door of the house, bending round the trunk south of the
+    // A strip of the forecourt's gravel from the deck's step to the sliding door of the house, bending round the trunk south of the
     // sunroom's door. With the sunroom built, its slab covers the part east of the sunroom's door and the strip ends at
     // that door's step; the garden table's gravel bed meets the deck's step north of it.
     // The line swings about half a metre to either side, the way feet cut a corner; the painter smooths it and frays
@@ -224,8 +224,8 @@ public static class BungalowDeck
         });
         var dirt = new ObjectRule
         {
-            Id = "garden-path-dirt", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
-            PaintLayer = "Terrain_Dirt", PaintStrength = 1f, PaintWidth = PathWidth
+            Id = "garden-path-gravel", Name = "", Side = WorldSide.Main, Effect = ObjectEffect.Paint,
+            PaintLayer = BungalowSiteProps.ForecourtLayer, PaintStrength = 1f, PaintWidth = PathWidth
         };
         dirt.PaintPath.AddRange(PathLine);
         state.Rules.Add(dirt);
