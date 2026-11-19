@@ -39,7 +39,8 @@ var checks = new (string Name, Action Run)[]
     ("the real Ming definition passes DefinitionRegistry with its saved ids, prices and phases", MingThroughRegistry),
     ("a permit completes on its rights payment and unlocks a menu of builds, one at a time", PermitMenu),
     ("definitions reject a permit with construction, phases or effects", PermitDefinitions),
-    ("a tip counts once, only during construction, only on the host, and survives save/load", Tips)
+    ("a tip counts once, only during construction, only on the host, and survives save/load", Tips),
+    ("a saved item on an old grid moves onto the new grid with its tile shifted, other items stay as saved", GridMoves)
 };
 int failed = 0;
 foreach (var check in checks)
@@ -63,6 +64,43 @@ static UpgradeDefinition Upgrade(string id, string[] prerequisites, string effec
 
 static UpgradeEngine Engine(BaseDefinition? definition = null, bool host = true) => new(new[] { definition ?? Fixture() }, new AuthorityFlag(host));
 static PurchaseCommand Command(string id, string upgrade, PurchaseKind kind, string payer = "buyer", string baseId = "fixture") => new(id, baseId, upgrade, kind, payer);
+static void GridMoves()
+{
+    var upper = Guid.Parse("c74e0e82-ec6a-f51d-c753-2db2eac0ce5e");
+    var loft = Guid.Parse("130b18d7-2fce-c8d7-704a-848c74f8684b");
+    var south = Guid.Parse("b6a48b82-00f1-38bb-7ad5-18db7e797829");
+    var old = new Dictionary<Guid, GridMove.OldGrid> { [loft] = new("loft", 11, 0), [south] = new("south room", 0, 20) };
+
+    // A mushroom bed as vanilla's JsonUtility writes it, with the fields of its own data type after the grid's.
+    string bed = "{\"DataType\":\"MushroomBedData\",\"DataVersion\":0,\"GameVersion\":\"0.4.7f12\",\"GUID\":\"0b5e7c3a-1111-2222-3333-444455556666\",\"ItemString\":\"{\\\"ID\\\":\\\"mushroombed\\\"}\",\"GridGUID\":\"" + loft + "\",\"OriginCoordinate\":{\"x\":6.0,\"y\":3.0},\"Rotation\":90,\"Contents\":{\"Items\":[]}}";
+    var moved = GridMove.Rewrite(bed, upper, old) ?? throw new Exception("the loft bed was not moved");
+    Equal("0b5e7c3a-1111-2222-3333-444455556666", moved.ItemGuid);
+    Equal("loft", moved.OldGridName);
+    Equal((6f, 3f, 17f, 3f), (moved.FromX, moved.FromY, moved.ToX, moved.ToY));
+    using (var doc = JsonDocument.Parse(moved.Json))
+    {
+        var root = doc.RootElement;
+        Equal(upper.ToString(), root.GetProperty("GridGUID").GetString());
+        Equal(17.0, root.GetProperty("OriginCoordinate").GetProperty("x").GetDouble());
+        Equal(3.0, root.GetProperty("OriginCoordinate").GetProperty("y").GetDouble());
+        Equal(90, root.GetProperty("Rotation").GetInt32());
+        Equal("{\"ID\":\"mushroombed\"}", root.GetProperty("ItemString").GetString());
+        Equal(JsonValueKind.Object, root.GetProperty("Contents").ValueKind);
+    }
+
+    string station = "{\"GUID\":\"aa\",\"GridGUID\":\"" + south + "\",\"OriginCoordinate\":{\"x\":4,\"y\":12}}";
+    var down = GridMove.Rewrite(station, upper, old) ?? throw new Exception("the south station was not moved");
+    Equal((4f, 32f), (down.ToX, down.ToY));
+
+    // On the upper grid already, on another grid, or no grid item at all: left as saved.
+    Equal<GridMove.Moved?>(null, GridMove.Rewrite("{\"GUID\":\"b\",\"GridGUID\":\"" + upper + "\",\"OriginCoordinate\":{\"x\":1,\"y\":1}}", upper, old));
+    Equal<GridMove.Moved?>(null, GridMove.Rewrite("{\"GUID\":\"c\",\"GridGUID\":\"" + Guid.NewGuid() + "\",\"OriginCoordinate\":{\"x\":1,\"y\":1}}", upper, old));
+    Equal<GridMove.Moved?>(null, GridMove.Rewrite("{\"GUID\":\"d\",\"Position\":{\"x\":1,\"y\":2,\"z\":3}}", upper, old));
+    Equal<GridMove.Moved?>(null, GridMove.Rewrite("", upper, old));
+    // On an old grid without a readable tile: reported, not guessed.
+    Throws<FormatException>(() => GridMove.Rewrite("{\"GUID\":\"e\",\"GridGUID\":\"" + loft + "\"}", upper, old));
+}
+
 static void Equal<T>(T expected, T actual) { if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new Exception($"Expected {expected}; actual {actual}."); }
 static void Throws<T>(Action action) where T : Exception { try { action(); } catch (T) { return; } throw new Exception("Expected " + typeof(T).Name); }
 static PurchaseResult Pay(UpgradeEngine engine, string id, string upgrade, PurchaseKind kind)
