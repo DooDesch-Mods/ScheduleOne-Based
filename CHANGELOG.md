@@ -4,6 +4,13 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.2.4] - 2026-11-19
+
+### Fixed
+- Mushroom beds, spawn stations and drying racks placed upstairs in the Storage Unit before 1.2.3 load again.
+- A world already saved with 1.2.3 no longer holds them. Only a copy of the save from before that update brings them
+  back.
+
 ## [1.2.3] - 2026-11-19
 
 ### Fixed
