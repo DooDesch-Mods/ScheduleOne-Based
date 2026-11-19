@@ -22,10 +22,13 @@ import time
 CODE = "storageunit"
 SITE = "site=" + CODE
 PHASE = "ray.storageunit-bay:complete"
-# The upper rooms' grids in build order: loft, east room, south room. The hall floor is grid 0.
+# The upper floor's one grid follows the hall floor's grid 0. Each item upstairs has its origin tile on it, in the
+# loft (x 11 .. 23), the east room (x 0 .. 10, y 0 .. 19) or the south room (x 0 .. 9, y 25 .. 38). Column x 5 keeps
+# clear of what storageunit-room-grid.py builds in x 1 .. 2 when both run on one save.
 # An item's position is its pivot, which can sit up to a metre above the floor it stands on (y 3.25 upstairs).
-ROOMS = {1: "loft", 2: "east room", 3: "south room"}
-FURNITURE = [("smallstoragerack", 1), ("smallstoragerack", 2), ("dryingrack", 2), ("smallstoragerack", 3), ("dryingrack", 3)]
+UPPER = 1
+FURNITURE = [("smallstoragerack", "loft", (15, 4)), ("smallstoragerack", "east room", (5, 4)), ("dryingrack", "east room", (5, 12)),
+             ("smallstoragerack", "south room", (5, 28)), ("dryingrack", "south room", (5, 34))]
 # Work on the hall floor that needs supplies from upstairs. The hall floor is grid 0, its old tiles are the vanilla unit.
 DOWNSTAIRS = [("plasticpot", 2), ("packagingstation", 1)]
 DOCKS = {0: (-7.20, 102.35), 1: (-3.95, 101.95)}
@@ -148,7 +151,7 @@ def check_base(run, pick, label, guids):
         run.check("%s: dock %d at x %.2f z %.2f%s" % (label, index, x, z, "" if guids is None else " with the same GUID"), ok,
                   pick(log, "dockroute dock %d guid" % index) or "dock %d missing" % index)
     items = upstairs(run)
-    want = sorted(i for i, _ in FURNITURE)
+    want = sorted(i for i, _, _ in FURNITURE)
     have = sorted(i[0] for i in items)
     run.check("%s: the furniture stands upstairs" % label, all(have.count(w) >= want.count(w) for w in set(want)), have)
     run.check("%s: everything upstairs sits on the upper floor" % label, all(3.2 < i[1] < 5.5 for i in items),
@@ -184,10 +187,10 @@ def main():
     run.cmd("addemployee handler %s" % CODE, wait=4.0)
     log = run.cmd("mxreach place %s locker old" % CODE, wait=2.0)
     print("      " + (pick(log, "mxreach place") or "no reply to mxreach place locker"), flush=True)
-    for item, grid in FURNITURE:
-        log = run.cmd("mxreach place %s %s wing 0 %d" % (CODE, item, grid), wait=2.0)
-        placed = next((l.strip()[-240:] for l in log if "mxreach place: built " + item in l and "of grid %d " % grid in l), "")
-        run.check("built %s in the %s" % (item, ROOMS[grid]), bool(placed), placed or pick(log, "mxreach place"))
+    for item, room, (x, y) in FURNITURE:
+        log = run.cmd("mxreach at %s %s %d %d 0 %d" % (CODE, item, x, y, UPPER), wait=2.0)
+        placed = next((l.strip()[-240:] for l in log if "mxreach at: built " + item in l and "of grid %d " % UPPER in l), "")
+        run.check("built %s in the %s" % (item, room), bool(placed), placed or pick(log, "mxreach at"))
     for item, count in DOWNSTAIRS:
         for n in range(count):
             log = run.cmd("mxreach place %s %s old 0 0" % (CODE, item), wait=2.0)

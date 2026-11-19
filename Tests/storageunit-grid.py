@@ -1,12 +1,13 @@
-"""The upper floor's placement grids end where the floor ends, on the lines the walls stand on.
+"""The upper floor's placement grid ends where the floor ends, on the lines the walls stand on.
 
-For each stage the Storage Unit's build jumps to that phase and MapExpansions' `mxgrid storageunit check` probes every
-outer edge of every grid: a wall or railing must stand on the grid line, and an edge without one must be where the
-floor ends or another grid goes on. This script turns that into PASS/FAIL per stage and grid, and also checks each
-upper grid's extent against the walls it must reach, so every corner lies on the shared lines (x on .25/.75, z on
-.3/.8). Edges that are open on purpose in a stage are allowed and listed:
+The upper floor has one grid: the loft's night builds it, the east and south rooms add their tiles to it. For each
+stage the Storage Unit's build jumps to that phase and MapExpansions' `mxgrid storageunit check` probes every outer
+edge of every grid: a wall or railing must stand on the grid line, and an edge without one must be where the floor
+ends or another grid goes on. This script turns that into PASS/FAIL per stage, checks that the upper floor has exactly
+one grid, and checks its extent against the walls it must reach, so every corner lies on the lines (x on .25/.75, z
+on .3/.8). Edges that are open on purpose in a stage are allowed and listed:
   - east-open: the loft's east edge (x -2.25) faces the walkway, which is not yet part of the property;
-  - south-open: the east grid's walkway edge at z 103.8 faces the walkway south of it;
+  - south-open: the walkway's edge at z 103.8 faces the walkway south of it;
   - from south-open on: the gap in the kerb at the ladder's top (x -1.75, z 99.89 .. 101.03).
 The landing in front of the loft door has no grid; the tile under its middle is reported, not judged, and its open
 edges must lie on the grid's lines (west -10.75, south 104.8, north 106.3).
@@ -21,16 +22,17 @@ import sys
 
 S1 = r"F:\Projects\Mods\Schedule1\Workspace\tools\bridge\s1.py"
 STAGES = ["loft:complete", "east:east-open", "east:complete", "south:south-open", "south:complete", "bay:complete"]
-# Upper grids by origin, with the extent their tiles must cover (x min, x max, z min, z max) and the first stage they
-# exist in. The order is the build's.
-GRIDS = {
-    "loft": ((-2.5, 3.25, 113.55), (-8.75, -2.25, 103.8, 113.8)),
-    "east": ((3.0, 3.25, 113.55), (-2.25, 3.25, 103.8, 113.8)),
-    "south": ((3.0, 3.25, 103.55), (-1.75, 3.25, 94.3, 103.8)),
-}
-EXPECTED = {"loft:complete": ["loft"], "east:east-open": ["loft"], "east:complete": ["loft", "east"],
-            "south:south-open": ["loft", "east"], "south:complete": ["loft", "east", "south"],
-            "bay:complete": ["loft", "east", "south"]}
+# The upper grid's origin, and per stage the extent its tiles must cover (x min, x max, z min, z max): the loft, then
+# with the walkway and the east room, then with the south room.
+UPPER = (3.0, 3.25, 113.55)
+LOFT = (-8.75, -2.25, 103.8, 113.8)
+EAST = (-8.75, 3.25, 103.8, 113.8)
+SOUTH = (-8.75, 3.25, 94.3, 113.8)
+EXTENT = {"loft:complete": LOFT, "east:east-open": LOFT, "east:complete": EAST, "south:south-open": EAST,
+          "south:complete": SOUTH, "bay:complete": SOUTH}
+# Tiles per extent: the loft 13 x 20 without the 3 x 3 corner by the stairs, the east room and walkway 11 x 20, the
+# south room 10 x 19 without the 6 x 5 corner over the hall.
+TILES = {LOFT: 251, EAST: 251 + 220, SOUTH: 251 + 220 + 160}
 TOL = .011
 
 failed = 0
@@ -77,34 +79,29 @@ def vec(text):
     return tuple(float(v) for v in text.strip("() ").split(","))
 
 
-def name_of(origin):
-    for name, (o, _) in GRIDS.items():
-        if all(abs(a - b) < .02 for a, b in zip(origin, o)):
-            return name
-    return None
-
-
 def check_stage(slot, stage):
     text = run(slot, r"mxgrid storageunit check:|rror", "mxgrid", "storageunit", "check")
     if "mxgrid storageunit check:" not in text:
         report(False, "%s grid check ran" % stage, text[-300:])
         return
-    index_name, seen = {}, set()
+    index_name, upstairs = {}, []
     for m in re.finditer(r"mxgrid storageunit grid (\d+) '[^']*': (\d+) tiles, origin (\([^)]*\)), yaw (\S+), tiles x (\S+)\.\.(\S+) z (\S+)\.\.(\S+?),?\s", text):
         gi, count, origin = m.group(1), int(m.group(2)), vec(m.group(3))
-        name = name_of(origin)
-        if name is None:
+        if abs(origin[1] - UPPER[1]) > .5:
             continue
-        index_name[gi] = name
-        seen.add(name)
-        want = GRIDS[name][1]
+        upstairs.append("grid %s at %s" % (gi, m.group(3)))
+        if not all(abs(a - b) < .02 for a, b in zip(origin, UPPER)):
+            continue
+        index_name[gi] = "upper"
+        tiles = EXTENT[stage]
+        # mxgrid's extent starts at the grid's origin, so it covers the origin even where no tile reaches it.
+        want = (min(tiles[0], UPPER[0]), max(tiles[1], UPPER[0]), min(tiles[2], UPPER[2]), max(tiles[3], UPPER[2]))
         got = tuple(float(m.group(i)) for i in (5, 6, 7, 8))
         ok = all(near(a, b) for a, b in zip(got, want))
-        report(ok, "%s %s grid extent on the lines" % (stage, name),
-               "x %.3f..%.3f z %.3f..%.3f (want x %.2f..%.2f z %.2f..%.2f), %d tiles" % (got + want + (count,)))
-    for name in EXPECTED.get(stage, []):
-        if name not in seen:
-            report(False, "%s %s grid present" % (stage, name), "no grid with origin %s" % (GRIDS[name][0],))
+        report(ok, "%s upper grid extent on the lines" % stage,
+               "x %.3f..%.3f z %.3f..%.3f (want x %.2f..%.2f z %.2f..%.2f with the origin)" % (got + want))
+        report(count == TILES[tiles], "%s upper grid tile count" % stage, "%d tiles (want %d)" % (count, TILES[tiles]))
+    report(len(upstairs) == 1 and len(index_name) == 1, "%s the upper floor has one grid" % stage, "; ".join(upstairs) or "none")
     problems = {}
     for m in re.finditer(r"mxgrid storageunit grid (\d+) tile (-?\d+),(-?\d+) edge (\S+) at (\([^)]*\)): (wall|floor) '([^']*)'(.*)", text):
         gi = m.group(1)
