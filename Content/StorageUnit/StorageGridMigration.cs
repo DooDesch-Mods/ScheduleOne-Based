@@ -10,7 +10,7 @@ using Property = Il2CppScheduleOne.Property.Property;
 namespace Based.Content.StorageUnit;
 
 // Up to Based 1.2.2 the loft, the east room and the south room had a grid each, and vanilla cannot place an item across
-// two grids. From 1.3 they are one grid (Based#88). The east room's grid became that grid with its GUID and origin, so
+// two grids. From 1.2.3 they are one grid (Based#88). The east room's grid became that grid with its GUID and origin, so
 // what stands there loads as it is. What a save holds on the loft's or the south room's old grid is moved onto it here,
 // before vanilla looks the grid up, with its origin tile shifted by the offset between the grids' origins. Once saved,
 // the item is on the upper grid for good.
