@@ -77,21 +77,32 @@ public static class StorageWorld
     private const float SwitchHeight = 1.2f;
     // Each new room's wall switch is a networked copy of Unit 1's; its lamps follow it through these ids.
     private const string LoftSwitch = "loft-switch", EastSwitch = "east-switch", SouthSwitch = "south-switch";
-    // Saved id of the loft's property extension; renaming it loses what stands in the loft.
-    public const string LoftExtensionId = "storage-loft-floor";
-    // A tile is centred on its coordinate, 0.5 m square, and every grid is turned by 180°: tile (x, y) has its centre
-    // at origin - (x/2, 0, y/2). The upper floor's grids share one set of lines: across x on the loft's west wall
-    // (-8.75) and the hall's east wall (3.25), across z on the north and south walls of Unit6 and Unit5 (113.8, 103.8).
-    // Walls and railings stand on these lines, so every tile ends at one. The loft grid's tile (0, 0) lies at the loft's
-    // north-east corner, so all its tiles have coordinates from 0 up, the range the heatmap colours.
-    private const float LoftGridX = -2.5f, GridZ = 113.55f, GalleryEdge = 103.8f;
+    // The upper floor has one grid. The loft's night builds it with the loft's tiles; the walkway with the east room
+    // and the south room add theirs when they are done, so an item can stand across the lines between them. Its id is
+    // the one the east room's own grid had up to Based 1.2.2, so that grid's GUID, and what stands on it in a save,
+    // stay. Renaming it loses what stands upstairs. StorageGridMigration moves what stood on the loft's and the south
+    // room's own grids of then onto it.
+    public const string UpperGridExtensionId = "storage-east-floor";
+    // The ids of the loft's and the south room's own grids up to Based 1.2.2; old saves hold items on their GUIDs.
+    internal const string OldLoftGridId = "storage-loft-floor", OldSouthGridId = "storage-south-floor";
+    // Vanilla's floor is grid 0 of the property; the loft's extension builds the upper grid right after it.
+    internal const int UpperGridIndex = 1;
+    // Tile (x, y) of the loft's old grid is tile (x + 11, y) of the upper grid, tile (x, y) of the south room's old
+    // grid is tile (x, y + 20).
+    internal const int LoftShiftX = 11, SouthShiftY = 20;
+    // A tile is centred on its coordinate, 0.5 m square, and the grid is turned by 180°: tile (x, y) has its centre at
+    // origin - (x/2, 0, y/2). The lines run across x on the loft's west wall (-8.75) and the hall's east wall (3.25),
+    // across z on the north and south walls of Unit6 and Unit5 (113.8, 103.8). Walls and railings stand on these lines,
+    // so every tile ends at one. Tile (0, 0) lies at the east room's north-east corner, so all tiles have coordinates
+    // from 0 up, the range the heatmap colours.
+    private const float GridZ = 113.55f, GalleryEdge = 103.8f;
     // The bars of the gallery's railing, and its unseen wall up to the line.
     private const float GalleryRailZ = 103.76f;
     // The upper floor's walls and railings lie within 1 cm of the line; these hold them there.
     private const float WallSkin = .004f;
 
     // B: the walkway east of the loft (x -2.05 .. 0.25) and Unit5 behind it, up to the hall's east wall.
-    public const string EastExtensionId = "storage-east-floor";
+    public const string EastExtensionId = "storage-east-room";
     private const float EastFront = .25f, EastWall = 3.25f, SiteWallHeight = LoftCeiling - UpperY, EastGridX = 3.0f;
     private const string Wood = "wood planks medium brown mat", Trim = "wood brown", Brick = "brick dark light orange";
 
@@ -134,7 +145,7 @@ public static class StorageWorld
 
     // C: the walkway south of B (x -2.05 .. 0.25) and the three units of Unit4 east of it. The elevator stands between
     // them and B's room; its shaft behind it stays closed.
-    public const string SouthExtensionId = "storage-south-floor";
+    public const string SouthExtensionId = "storage-south-room";
     private const float SouthEnd = 94f, SouthUnitNorth = 101.5f, SouthGridZ = GridZ - 10f;
     private const float ElevatorWest = .71f;
     // Unit4 and the walkway end 0.3 m and 0.2 m short of the grid's lines; a wall on each line closes them there: across
@@ -147,7 +158,7 @@ public static class StorageWorld
     private const float SouthLampX = 1.1f;
 
     // Order of the states; each level includes all lower ones.
-    private static readonly string[] States = { "a-stair", "a-door", "a-complete", "b-open", "b-complete", "c-open", "c-complete" };
+    internal static readonly string[] States = { "a-stair", "a-door", "a-complete", "b-open", "b-complete", "c-open", "c-complete" };
 
     private static bool _registered;
 
@@ -173,6 +184,7 @@ public static class StorageWorld
         if (!MapExpansionsApi.Register(Create()))
             throw new InvalidOperationException("Based could not register the Storage Unit world states; inspect the MapExpansions validation errors.");
         _registered = true;
+        MapExpansionsApi.WorldStateApplied += StorageGridMigration.CheckUpperGridIndex;
         StorageDock.Register();
     }
 
@@ -468,17 +480,16 @@ public static class StorageWorld
         // On the room's north wall beside the way in from the walkway, facing south into the room.
         state.Copies.Add(WallSwitch(SouthSwitch, EastFront + .3f, SouthRoomNorth - SwitchProud, -90));
 
-        // Tile (x, y) covers world x 2.75-x/2 .. 3.25-x/2 and z 103.3-y/2 .. 103.8-y/2, from the east wall to the kerb
-        // (x -1.75) and from B's grid to the south end wall (z 94.3), without the elevator's box (x 0.25 .. 3.25,
+        // On the upper grid, tiles y 20 .. 38 cover world z 103.3-(y-20)/2 .. 103.8-(y-20)/2, from the east wall to the
+        // kerb (x -1.75) and from B's tiles to the south end wall (z 94.3), without the elevator's box (x 0.25 .. 3.25,
         // z 101.3 .. 103.8).
         var property = new PropertyExtensionDefinition
         {
-            Id = SouthExtensionId, PropertyCode = "storageunit", GridIndex = 0,
-            GridOrigin = new Vector3(EastGridX, UpperY, SouthGridZ),
+            Id = SouthExtensionId, PropertyCode = "storageunit", GridIndex = UpperGridIndex,
         };
         for (int x = 0; x <= 9; x++)
             for (int y = 0; y <= 18; y++)
-                if (!(x <= 5 && y <= 4)) property.Tiles.Add(new GridCoordinate(x, y));
+                if (!(x <= 5 && y <= 4)) property.Tiles.Add(new GridCoordinate(x, y + SouthShiftY));
         property.Bounds.Add(BoundsOf(FacesBack, UpperY - .1f, SouthEnd, EastWall, LoftCeiling, UnitSouth));
         state.PropertyExtensions.Add(property);
     }
@@ -561,13 +572,12 @@ public static class StorageWorld
         // On Unit 5's south wall at the corner where the walkway leads in, facing north into the room.
         state.Copies.Add(WallSwitch(EastSwitch, EastFront + .3f, UnitSouth + LiningGap + SwitchProud, 90));
 
-        // The walkway and the east room on a grid of their own, on the loft's lines: tile (x, y) covers world
-        // x 2.75-x/2 .. 3.25-x/2 and z 113.3-y/2 .. 113.8-y/2, from the east wall to the loft's edge (x -2.25) and from
-        // the north wall to Unit5's south wall and the walkway's south end (z 103.8).
+        // The walkway and the east room on the upper grid beside the loft: tile (x, y) covers world x 2.75-x/2 ..
+        // 3.25-x/2 and z 113.3-y/2 .. 113.8-y/2, from the east wall to the loft's edge (x -2.25) and from the north wall
+        // to Unit5's south wall and the walkway's south end (z 103.8).
         var property = new PropertyExtensionDefinition
         {
-            Id = EastExtensionId, PropertyCode = "storageunit", GridIndex = 0,
-            GridOrigin = new Vector3(EastGridX, UpperY, GridZ),
+            Id = EastExtensionId, PropertyCode = "storageunit", GridIndex = UpperGridIndex,
         };
         for (int x = 0; x <= 10; x++)
             for (int y = 0; y <= 19; y++)
@@ -606,18 +616,18 @@ public static class StorageWorld
         state.Copies.Add(WallSwitch(LoftSwitch, UnitWest + LiningGap + SwitchProud, WindowSouth - .35f, 180));
 
         // The loft belongs to the property, so employees reach what stands in it.
-        // Its own grid lies on the loft floor: tile (x, y) covers world x -2.75-x/2 .. -2.25-x/2 and
-        // z 113.3-y/2 .. 113.8-y/2. The tiles fill the loft from the west wall (x -8.75) to the walkway's faces
-        // (x -2.25) and from the north wall to the railing (z 103.8), without the corner the door swings through
-        // (x -8.75 .. -7.25, z 104.8 .. 106.3).
+        // Its extension builds the upper floor's grid, which stays the same from here on so the build never rebuilds
+        // it under what stands on it. Tiles x 11 .. 23 cover world x 2.75-x/2 .. 3.25-x/2 and z 113.3-y/2 ..
+        // 113.8-y/2: the loft from the west wall (x -8.75) to the walkway's faces (x -2.25) and from the north wall to
+        // the railing (z 103.8), without the corner the door swings through (x -8.75 .. -7.25, z 104.8 .. 106.3).
         var property = new PropertyExtensionDefinition
         {
-            Id = LoftExtensionId, PropertyCode = "storageunit", GridIndex = 0,
-            GridOrigin = new Vector3(LoftGridX, UpperY, GridZ),
+            Id = UpperGridExtensionId, PropertyCode = "storageunit", GridIndex = 0,
+            GridOrigin = new Vector3(EastGridX, UpperY, GridZ),
         };
         for (int x = 0; x <= 12; x++)
             for (int y = 0; y <= 19; y++)
-                if (!(x >= 10 && y >= 15 && y <= 17)) property.Tiles.Add(new GridCoordinate(x, y));
+                if (!(x >= 10 && y >= 15 && y <= 17)) property.Tiles.Add(new GridCoordinate(x + LoftShiftX, y));
         property.Bounds.Add(BoundsOf(UnitWest, UpperY - .1f, UnitSouth - .2f, FacesBack, LoftCeiling, UnitNorth));
         state.PropertyExtensions.Add(property);
     }

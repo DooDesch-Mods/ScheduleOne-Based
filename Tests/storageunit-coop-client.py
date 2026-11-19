@@ -20,7 +20,7 @@ check("upper floor applied 'c-complete'", bool(last(r"world state: 'based_storag
 check("bay applied 'complete'", bool(last(r"world state: 'based_storage_bay' applied 'complete'")), last(r"world state: 'based_storage_bay' applied"))
 check("bay 2 appended as slot 1 with its GUID", bool(last(r"hall-bay-2' appended slot 1 on 'storageunit', GUID 84da8f54")), last(r"hall-bay-2'"))
 check("bay 1 moved", bool(last(r"moves: 'based_storage_bay/complete/bay-1' to \(-7.20, 0.10, 102.35\)")), last(r"moves: 'based_storage_bay"))
-check("loft grid built on the client", bool(last(r"storage-loft-floor' built grid \d+ of 'storageunit'")), last(r"storage-loft-floor"))
+check("loft grid built on the client", bool(last(r"storage-east-floor' built grid \d+ of 'storageunit'")), last(r"storage-east-floor"))
 print("info  client: grid culled at build - %s" % (last(r"woke at the scene root")[-200:] or "no line, the parent was active"))
 bad = [l for l in lines if re.search(r"based_storage.*failed|\[ERROR\].*(Based|MapExpansions)", l)]
 check("no Based or MapExpansions error", not bad, bad[-1] if bad else "none")

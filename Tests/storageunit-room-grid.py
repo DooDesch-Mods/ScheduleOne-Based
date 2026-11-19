@@ -1,7 +1,8 @@
 """
-In-game check of a finished room on the Storage Unit's upper floor (stage B 'east' or C 'south'): its extension builds
-a grid of its own, the grids before it survive the change, items placed on the new grid stand in the room, a botanist
-reaches them, and every tile has a walking path. With --after-reload the same after save and reload.
+In-game check of a finished room on the Storage Unit's upper floor (stage B 'east' or C 'south'): its extension adds
+its tiles to the upper floor's one grid, which the loft's extension built and which survives the change, items placed
+on that grid stand in the room, a botanist reaches them, and every tile has a walking path. With --after-reload the
+same after save and reload.
 
 Needs Debug builds of MapExpansions (`mxreach`) and Based (`baseddiag phase`) in a running test slot and a save where
 the player owns the Storage Unit. Uses MapExpansions' Tests/employee-reach.py for the console helpers.
@@ -19,13 +20,16 @@ import time
 CODE = "storageunit"
 UPPER_Y = 3.25
 ITEMS = ("smallstoragerack", "dryingrack")
-# Per room: the build to jump to, its world state, its extension, the grids built before it, the room's extent on the
-# upper floor (x, z) and the probes the state's navigation checks.
+# The extension that builds the upper floor's grid with the loft's tiles.
+UPPER_EXT = "storage-east-floor"
+# Per room: the build to jump to, its world state, its extension, the room's extent on the upper floor (x, z), the
+# probes the state's navigation checks and the upper grid's tiles in the room (one per item) where mxreach at
+# builds.
 ROOMS = {
-    "east": dict(phase="ray.storageunit-east:complete", state="b-complete", ext="storage-east-floor",
-                 before=("storage-loft-floor",), x=(-2.3, 3.3), z=(103.7, 113.9), probes=8),
-    "south": dict(phase="ray.storageunit-south:complete", state="c-complete", ext="storage-south-floor",
-                  before=("storage-loft-floor", "storage-east-floor"), x=(-2.3, 3.3), z=(93.9, 103.8), probes=11),
+    "east": dict(phase="ray.storageunit-east:complete", state="b-complete", ext="storage-east-room",
+                 x=(-2.3, 3.3), z=(103.7, 113.9), probes=8, spots=((1, 4), (1, 12))),
+    "south": dict(phase="ray.storageunit-south:complete", state="c-complete", ext="storage-south-room",
+                  x=(-2.3, 3.3), z=(93.9, 103.8), probes=11, spots=((1, 28), (1, 34))),
 }
 
 
@@ -41,9 +45,18 @@ def grid_lines(lines, ext):
     return [l.strip()[-260:] for l in lines if re.search(r"property extension: '.*%s' built grid \d+ of '%s'" % (ext, CODE), l)]
 
 
+def tile_lines(lines, ext):
+    return [l.strip()[-300:] for l in lines if re.search(r"property extension: '.*/%s' on '%s': \d+ added tiles" % (ext, CODE), l)]
+
+
 def grid_index(line):
     m = re.search(r"built grid (\d+) of", line or "")
     return int(m.group(1)) if m else None
+
+
+def grid_guid(line):
+    m = re.search(r"GUID ([0-9a-fA-F-]{36})", line or "")
+    return m.group(1).lower() if m else None
 
 
 def latest(run, mark, lines, test, why):
@@ -111,21 +124,24 @@ def main():
     lines = run.lines(mark)
     failed = next((l.strip()[-260:] for l in lines if "%s' failed" % room["state"] in l), "")
     run.check("state %s applied without rollback" % room["state"], not failed, failed or "no failure line")
-    built = latest(run, mark, lines, lambda l: bool(grid_lines([l], room["ext"])), "the extension")
+    built = latest(run, mark, lines, lambda l: bool(grid_lines([l], UPPER_EXT)), "the upper grid")
     index = grid_index(built)
-    if not run.check("the %s extension built a grid of its own" % args.room, index is not None, built or "no 'built grid' line"):
+    if not run.check("the loft's extension built the upper grid", index is not None, built or "no 'built grid' line"):
         return run.summary()
     print("      " + built, flush=True)
+    added = latest(run, mark, lines, lambda l: bool(tile_lines([l], room["ext"])), "the room's tiles")
+    run.check("the %s extension added its tiles to the upper grid" % args.room,
+              grid_guid(added) is not None and grid_guid(added) == grid_guid(built), added or "no 'added tiles' line")
     # Only the bake summary; the NavMesh sample cache line after it names the state too.
     nav = latest(run, mark, lines, lambda l: re.search(r"%s' baked \d+ agent types" % re.escape(room["state"]), l), "the navigation")
     want = "%d probes connected" % room["probes"]
     run.check("navigation baked with every probe connected", want in nav, nav or "no bake line")
 
     run.cmd("addemployee botanist %s" % CODE, wait=5.0)
-    for item in ITEMS:
-        log = run.cmd("mxreach place %s %s wing 0 %d" % (CODE, item, index), wait=2.0)
-        placed = next((l.strip()[-260:] for l in log if "mxreach place: built " + item in l and "of grid %d " % index in l), "")
-        run.check("built %s on grid %d" % (item, index), bool(placed), placed or pick(log, "mxreach place"))
+    for item, (x, y) in zip(ITEMS, room["spots"]):
+        log = run.cmd("mxreach at %s %s %d %d 0 %d" % (CODE, item, x, y, index), wait=2.0)
+        placed = next((l.strip()[-260:] for l in log if "mxreach at: built " + item in l and "of grid %d " % index in l), "")
+        run.check("built %s at tile %d,%d of grid %d" % (item, x, y, index), bool(placed), placed or pick(log, "mxreach at"))
     check_room(run, room, "fresh")
 
     if args.after_reload:
@@ -145,11 +161,12 @@ def main():
         if run.check("reload ready", ready, "" if ready else str(last)):
             time.sleep(5)
             lines = run.lines(mark)
-            again = (grid_lines(lines, room["ext"]) or [""])[-1]
-            run.check("after reload: the %s grid is built again with the same index" % args.room, grid_index(again) == index, again or "no 'built grid' line")
-            for ext in room["before"]:
-                other = (grid_lines(lines, ext) or [""])[-1]
-                run.check("after reload: %s is built too" % ext, grid_index(other) is not None, other or "no 'built grid' line")
+            again = (grid_lines(lines, UPPER_EXT) or [""])[-1]
+            run.check("after reload: the upper grid is built again with the same index and GUID",
+                      grid_index(again) == index and grid_guid(again) == grid_guid(built), again or "no 'built grid' line")
+            tiles = (tile_lines(lines, room["ext"]) or [""])[-1]
+            run.check("after reload: the %s tiles are on the upper grid again" % args.room,
+                      grid_guid(tiles) is not None and grid_guid(tiles) == grid_guid(built), tiles or "no 'added tiles' line")
             broken = next((l.strip()[-260:] for l in lines if "heatmap of '%s' keeps its old" % CODE in l), "")
             run.check("after reload: the heatmap took every grid", not broken, broken or "no heatmap failure")
             check_room(run, room, "after reload")
