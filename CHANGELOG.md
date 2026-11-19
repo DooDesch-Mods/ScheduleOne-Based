@@ -4,6 +4,13 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.2.3] - 2026-11-19
+
+### Fixed
+- The upstairs rooms of the Storage Unit count as one build area: racks and other items fit across the lines
+  between them.
+- Items already placed upstairs keep their spot when you load an older save.
+
 ## [1.2.2] - 2026-11-18
 
 ### Fixed
