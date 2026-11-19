@@ -52,6 +52,14 @@ RACKS = [
     ("smallstoragerack", 17, 8, 0, "loft"),
     ("smallstoragerack", 4, 32, 0, "south room"),
 ]
+# --furniture (Based#92): every grid item type with its own loader, in each part of the upper floor. Each item takes the
+# first candidate tile whose footprint lies free on the upper grid.
+FURNITURE_ITEMS = ("mushroombed", "mushroomspawnstation", "dryingrack", "smallstoragerack")
+REGIONS = {
+    "loft": [(x, y) for y in (1, 6, 11) for x in (12, 15, 18, 21)],
+    "east room": [(x, y) for y in (1, 6, 12, 16) for x in (1, 4, 7)],
+    "south room": [(x, y) for y in (26, 30, 34) for x in (1, 4, 7)] + [(7, 21), (7, 24)],
+}
 # The grids Based 1.2.2 built for the loft and the south room, and how far their tiles lie from the upper grid's.
 OLD = {"loft": ("storage-loft-floor", (11, 0), "loft's"), "south room": ("storage-south-floor", (0, 20), "south room's")}
 
@@ -172,6 +180,9 @@ def main():
     ap.add_argument("--slot", default="mptest")
     ap.add_argument("--save", type=int, default=5)
     ap.add_argument("--ghost-only", action="store_true")
+    ap.add_argument("--skip-ghost", action="store_true", help="skip step 1 (the placement ghost across the lines)")
+    ap.add_argument("--furniture", action="store_true",
+                    help="also build a mushroom bed, spawn station, drying rack and small rack in each room (Based#92)")
     ap.add_argument("--mapexpansions", default=r"F:\Projects\Mods\Schedule1\_wt-MapExpansions-combo",
                     help="MapExpansions checkout whose Tests/employee-reach.py is used")
     args = ap.parse_args()
@@ -187,22 +198,42 @@ def main():
     run.check("world state applied without rollback", not failed, failed or "no failure line")
 
     run.cmd("give largestoragerack 1", wait=1.5)
-    for name, spec in LINES.items():
+    for name, spec in ({} if args.skip_ghost else LINES).items():
         ghost_line(run, name, spec, reach)
     # Off the lines, so the player does not stand on the tiles the racks are built on next.
     run.g.call("teleport", {"x": -6.5, "y": 4.45, "z": 111.0}, timeout_ms=8000)
     if args.ghost_only:
         return run.summary()
 
-    built = []
-    for item, x, y, rot, what in RACKS:
+    def build(item, x, y, rot):
+        # All lines since the command: when the bridge sends a command twice, the first run builds and the second finds
+        # the tiles occupied, and only the second's lines come back from run.cmd.
+        since = run.mark()
         log = run.cmd("mxreach at %s %s %d %d %d 1" % (CODE, item, x, y, rot), wait=2.0)
-        line = next((l.strip()[-300:] for l in log if "mxreach at: built " + item in l and "of grid 1 " in l), "")
+        built_at = "mxreach at: built %s at tile %d,%d rot %d of grid 1 " % (item, x, y, rot)
+        line = next((l.strip()[-300:] for l in run.lines(since) if built_at in l), "")
         m = re.search(r"at \((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\), guid ([0-9a-fA-F-]{36})", line)
-        if run.check("built %s %s at tile %d,%d rot %d of the upper grid" % (item, what, x, y, rot), bool(m),
-                     line or pick(log, "mxreach at")):
+        return m, line or pick(log, "mxreach at")
+
+    built, wanted = [], len(RACKS)
+    for item, x, y, rot, what in RACKS:
+        m, line = build(item, x, y, rot)
+        if run.check("built %s %s at tile %d,%d rot %d of the upper grid" % (item, what, x, y, rot), bool(m), line):
             built.append(dict(item=item, what=what, pos=tuple(float(m.group(i)) for i in (1, 2, 3)), guid=m.group(4)))
-    if len(built) != len(RACKS):
+    if args.furniture:
+        for what, candidates in REGIONS.items():
+            for item in FURNITURE_ITEMS:
+                wanted += 1
+                m, line, tile = None, "", None
+                for x, y in candidates:
+                    m, line = build(item, x, y, 0)
+                    if m:
+                        tile = (x, y)
+                        break
+                if run.check("built %s in the %s of the upper grid%s" % (item, what, " at tile %d,%d" % tile if tile else ""),
+                             bool(m), line):
+                    built.append(dict(item=item, what=what, pos=tuple(float(m.group(i)) for i in (1, 2, 3)), guid=m.group(4)))
+    if len(built) != wanted:
         return run.summary()
 
     run.g.call("save_now", {}, timeout_ms=60000)
@@ -226,7 +257,9 @@ def main():
     for r in built:
         if r["what"] not in OLD:
             continue
-        moved = next((l.strip()[-300:] for l in lines if "grid item %s moved from the %s old grid" % (r["guid"], OLD[r["what"]][2]) in l), "")
+        # From 1.2.4 the line names the saved data type after the GUID: "grid item <guid> (MushroomBedData) moved ...".
+        moved_re = re.compile(r"grid item %s (\(\w+\) )?moved from the %s old grid" % (re.escape(r["guid"]), re.escape(OLD[r["what"]][2])))
+        moved = next((l.strip()[-300:] for l in lines if moved_re.search(l)), "")
         run.check("after reload: Based moved the %s rack from the old grid onto the upper grid" % r["what"], bool(moved),
                   moved or "no 'moved from' line for %s" % r["guid"])
     missing = [l.strip()[-260:] for l in lines if re.search(r"Failed to find grid|could not be moved onto the upper", l)]
@@ -238,6 +271,27 @@ def main():
         for r in (r for r in built if r["item"] == item):
             run.check("after reload: the %s %s stands where it stood %s" % (item, r["what"], r["pos"]),
                       stands(found, r["pos"]), "found %s" % found)
+
+    # What the game writes after this load: an item that did not load is no longer in the file.
+    before = time.time()
+    run.g.call("save_now", {}, timeout_ms=60000)
+    time.sleep(3)
+    files = sorted(glob.glob(os.path.join(SAVES, "*", "SaveGame_%d" % args.save, "Properties", "Storage Unit.json")),
+                   key=os.path.getmtime, reverse=True)
+    fresh = files[0] if files and os.path.getmtime(files[0]) >= before - 1 else None
+    if run.check("after the second save: the game wrote the Storage Unit file again", bool(fresh),
+                 fresh or "newest file %s" % (files[0] if files else "none")):
+        with open(fresh, encoding="utf-8") as handle:
+            saved = {}
+            for obj in json.load(handle).get("Objects") or []:
+                base = json.loads(obj["BaseData"])
+                saved[base.get("GUID")] = base
+        upper = stable_guid(UPPER_EXT)
+        for r in built:
+            base = saved.get(r["guid"])
+            run.check("after the second save: the file holds the %s %s on the upper grid" % (r["item"], r["what"]),
+                      bool(base) and base.get("GridGUID") == upper,
+                      "missing" if not base else "grid %s tile %s" % (base.get("GridGUID"), base.get("OriginCoordinate")))
     return run.summary()
 
 
