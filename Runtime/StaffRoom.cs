@@ -15,7 +15,14 @@ internal static class StaffRoom
     private const string HolderName = "Based_StaffPlaces";
     private static readonly Dictionary<string, int> VanillaLimits = new(StringComparer.Ordinal);
 
-    internal static void Reset() => VanillaLimits.Clear();
+    // Properties without a Based site, each logged once per load.
+    private static readonly HashSet<string> NotOurs = new(StringComparer.Ordinal);
+
+    internal static void Reset()
+    {
+        VanillaLimits.Clear();
+        NotOurs.Clear();
+    }
 
     internal static void Apply(SiteDefinition site)
     {
@@ -52,7 +59,11 @@ internal static class StaffRoom
     internal static void EnsurePlaces(Property property)
     {
         var site = Mod.Sites.FirstOrDefault(s => s.Base.PropertyId == property.PropertyCode);
-        if (site == null) return;
+        if (site == null)
+        {
+            if (NotOurs.Add(property.PropertyCode)) Mod.Log("Employees of " + property.PropertyCode + " keep the game's places: Based does not expand it.");
+            return;
+        }
         int vanilla = VanillaLimit(property);
         int needed = Math.Max(Math.Max(site.MaxStaffLimit(vanilla), property.EmployeeCapacity), property.Employees.Count + 1);
         if (needed > (property.EmployeeIdlePoints?.Length ?? 0)) AddPlaces(site, property, needed);
@@ -113,6 +124,9 @@ internal static class StaffRoom
 [HarmonyPatch(typeof(Employee), nameof(Employee.AssignProperty))]
 internal static class EmployeePlaceOnEveryPeer
 {
+    // After the usual prefixes of other mods, so a capacity they raise in theirs gets its places too, and before
+    // Actually Working Employees, whose last prefix shares the points only when there are still too few.
+    [HarmonyPriority(Priority.VeryLow)]
     private static void Prefix(Property prop)
     {
         if (prop == null)
