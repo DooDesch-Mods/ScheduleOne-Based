@@ -4,6 +4,12 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.2.5] - 2026-11-20
+
+### Fixed
+- Hiring into the finished Sweatshop with Actually Working Employees installed no longer throws errors or loses
+  employee spots.
+
 ## [1.2.4] - 2026-11-19
 
 ### Fixed
