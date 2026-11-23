@@ -219,7 +219,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     StaffTrack.LoadState();
                     break;
                 case "aim" when args.Count > 3:
-                    Aim(F(args[1]), F(args[2]), F(args[3]), args.Count > 4 && args[4] != "-" ? F(args[4]) : null, args.Count > 5 ? F(args[5]) : null);
+                    Aim(F(args[1]), F(args[2]), F(args[3]), args.Count > 4 && args[4] != "-" ? F(args[4]) : null, args.Count > 5 && args[5] != "-" ? F(args[5]) : null, args.Count > 6 ? args[6] : null);
                     break;
                 case "ghost" when args.Count == 1:
                     // ghost = the active placement ghost's grid, footprint tiles and verdict
@@ -638,11 +638,11 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     // The game's own pickup of the equipped trash grabber, on the pieces nearest the player.
     private static float F(string text) => float.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
 
-    // aim x y z [pitch] [yaw]: turns the player toward a world point and equips the first buildable in the hotbar, so the
-    // game's own placement ghost asks the grids about the tiles there every frame. The ghost stands holdDistance in
-    // front of the camera, closer the steeper the look; pitch is degrees below the horizon ("-" aims at the point), yaw the
-    // ghost's own turn.
-    private static void Aim(float x, float y, float z, float? pitch, float? yaw)
+    // aim x y z [pitch] [yaw] [item]: turns the player toward a world point and equips the first buildable in the hotbar
+    // (or the one with that item id), so the game's own placement ghost asks the grids or walls there every frame. The
+    // ghost stands holdDistance in front of the camera, closer the steeper the look; pitch is degrees below the horizon
+    // ("-" aims at the point), yaw the ghost's own turn ("-" leaves it).
+    private static void Aim(float x, float y, float z, float? pitch, float? yaw, string? item = null)
     {
         var camera = Il2CppScheduleOne.DevUtilities.PlayerSingleton<Il2CppScheduleOne.PlayerScripts.PlayerCamera>.Instance;
         var inventory = Il2CppScheduleOne.DevUtilities.PlayerSingleton<Il2CppScheduleOne.PlayerScripts.PlayerInventory>.Instance;
@@ -656,16 +656,29 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         player.transform.rotation = Quaternion.Euler(0f, Mathf.Atan2(flat.x, flat.z) * Mathf.Rad2Deg, 0f);
         float down = pitch ?? Mathf.Atan2(camera.transform.position.y - y, flat.magnitude) * Mathf.Rad2Deg;
         camera.transform.localRotation = Quaternion.Euler(down, 0f, 0f);
+        // An open phone menu (a phone app that opened itself on load, for one) turns equipping off, and no ghost would
+        // appear; it closes the way Tab closes it.
+        var menu = Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.UI.GameplayMenu>.Instance;
+        if (menu != null && menu.IsOpen)
+        {
+            menu.Close();
+            Mod.Log("baseddiag aim: closed the open phone menu so the item can be equipped.");
+        }
+        if (!inventory.EquippingEnabled) Mod.Warn("baseddiag aim: equipping is turned off (a menu or screen is open); no placement ghost will appear.");
         string? equipped = null;
         for (int i = 0; i < inventory.hotbarSlots.Count && equipped == null; i++)
         {
             var slot = inventory.hotbarSlots[i];
             var def = slot?.ItemInstance?.Definition;
             if (def == null || def.TryCast<Il2CppScheduleOne.ItemFramework.BuildableItemDefinition>() == null) continue;
-            if (!slot!.IsSelected) inventory.Equip(slot);
+            if (item != null && !string.Equals(def.ID, item, StringComparison.OrdinalIgnoreCase)) continue;
+            // A slot that was already selected when the item arrived holds no live equippable, so the build never
+            // starts; deselecting first makes Equip build a fresh one.
+            if (slot!.IsSelected) slot.Deselect();
+            inventory.Equip(slot);
             equipped = "'" + def.ID + "' in hotbar slot " + i;
         }
-        if (equipped == null) { Mod.Warn("baseddiag aim: the hotbar holds no buildable item; give one first."); return; }
+        if (equipped == null) { Mod.Warn("baseddiag aim: the hotbar holds no buildable item" + (item != null ? " '" + item + "'" : "") + "; give one first."); return; }
         if (yaw is float turn) MelonLoader.MelonCoroutines.Start(TurnGhost(turn));
         Mod.Log($"baseddiag aim: looking at {target.ToString("F2")} from {camera.transform.position.ToString("F2")} (pitch {down:F1}), equipped {equipped}.");
     }
@@ -691,8 +704,39 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     // it lies on, and whether the game accepts the spot (BuildUpdate_Grid._validPosition, the red or white box).
     private static void Ghost()
     {
-        var build = UnityEngine.Object.FindObjectOfType<Il2CppScheduleOne.Building.BuildUpdate_Grid>();
-        if (build == null) { Mod.Log("baseddiag ghost: no grid placement ghost is active."); return; }
+        // The ghost's logic sits on the build handler the BuildManager made for the equipped item.
+        var manager = Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.Building.BuildManager>.Instance;
+        var handler = manager != null ? manager.currentBuildHandler : null;
+        if (handler == null)
+        {
+            var inv = Il2CppScheduleOne.DevUtilities.PlayerSingleton<Il2CppScheduleOne.PlayerScripts.PlayerInventory>.Instance;
+            string equip = "no inventory";
+            if (inv != null)
+            {
+                var held = new List<string>();
+                var container = inv.EquipContainer;
+                if (container != null) for (int i = 0; i < container.childCount; i++) held.Add(container.GetChild(i).name);
+                var selected = inv.equippedSlot?.ItemInstance?.Definition?.ID ?? "nothing";
+                equip = $"equipping enabled {inv.EquippingEnabled}, slot {inv.EquippedSlotIndex} holds {selected}, container " +
+                        (container == null ? "missing" : (container.gameObject.activeInHierarchy ? "active" : "inactive") + " [" + string.Join(", ", held) + "]");
+            }
+            Mod.Log("baseddiag ghost: no grid or wall placement ghost is active (build manager " + (manager == null ? "missing" : "building " + manager.isBuilding) + "; " + equip + ").");
+            return;
+        }
+        var build = handler.GetComponent<Il2CppScheduleOne.Building.BuildUpdate_Grid>();
+        if (build == null)
+        {
+            var wall = handler.GetComponent<Il2CppScheduleOne.Building.BuildUpdate_Surface>();
+            if (wall == null)
+            {
+                var kinds = new List<string>();
+                foreach (var c in handler.GetComponents<Component>()) if (c != null) kinds.Add(c.GetIl2CppType().Name);
+                Mod.Log("baseddiag ghost: build handler '" + handler.name + "' has neither grid nor wall placement [" + string.Join(", ", kinds) + "].");
+                return;
+            }
+            WallGhost(wall);
+            return;
+        }
         var tile = build.closestIntersection?.tile;
         if (tile == null || tile.OwnerGrid == null)
         {
@@ -718,6 +762,29 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         }
         Mod.Log($"baseddiag ghost: at {build.GhostModel.transform.position.ToString("F2")}, rotation {build._rotation:F0}, grid '{grid.name}', " +
                 $"{pairs.Count} footprint tiles [{string.Join("; ", feet)}], valid {build._validPosition}.");
+    }
+
+    // The wall placement's own answer (BuildUpdate_Surface.validPosition, the red or white ghost), with the collider the
+    // look ray hits, the Surface the game finds above it, and each of the game's conditions on that Surface.
+    private static void WallGhost(Il2CppScheduleOne.Building.BuildUpdate_Surface wall)
+    {
+        var camera = Il2CppScheduleOne.DevUtilities.PlayerSingleton<Il2CppScheduleOne.PlayerScripts.PlayerCamera>.Instance;
+        string hit = "nothing", surface = "none";
+        if (camera != null && camera.LookRaycast_ExcludeBuildables(wall.detectionRange, out var ray, wall.DetectionMask))
+        {
+            hit = PathOf(ray.collider.transform) + " at " + ray.point.ToString("F2") + " normal " + ray.normal.ToString("F2");
+            var found = ray.collider.GetComponentInParent<Il2CppScheduleOne.Building.Surface>();
+            if (found != null)
+            {
+                bool typeOk = wall.BuildableItemClass.ValidSurfaceTypes.Contains(found.SurfaceType);
+                bool owned = found.ParentProperty != null && found.ParentProperty.IsOwned;
+                bool point = found.IsPointValid(ray.point, ray.collider);
+                surface = $"'{PathOf(found.transform)}' type {found.SurfaceType} ok {typeOk}, property " +
+                          $"{found.ParentProperty?.PropertyCode ?? "none"} owned {owned}, face ok {point}";
+            }
+        }
+        else if (camera == null) Mod.Warn("baseddiag ghost: no player camera; the look ray is not cast.");
+        Mod.Log($"baseddiag ghost: wall item '{wall.ItemInstance?.ID}', valid {wall.validPosition}, hit {hit}, surface {surface}.");
     }
 
     private static void Pickup(int count)
