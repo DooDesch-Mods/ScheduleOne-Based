@@ -673,8 +673,11 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             if (def == null || def.TryCast<Il2CppScheduleOne.ItemFramework.BuildableItemDefinition>() == null) continue;
             if (item != null && !string.Equals(def.ID, item, StringComparison.OrdinalIgnoreCase)) continue;
             // A slot that was already selected when the item arrived holds no live equippable, so the build never
-            // starts; deselecting first makes Equip build a fresh one.
-            if (slot!.IsSelected) slot.Deselect();
+            // starts; deselecting first makes Equip build a fresh one. A selected slot with a running build keeps it, so
+            // its ghost (and the turn below) stays the same object.
+            var building = Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.Building.BuildManager>.Instance?.currentBuildHandler != null;
+            if (slot!.IsSelected && building) { equipped = "'" + def.ID + "' in hotbar slot " + i + " (already held)"; break; }
+            if (slot.IsSelected) slot.Deselect();
             inventory.Equip(slot);
             equipped = "'" + def.ID + "' in hotbar slot " + i;
         }
@@ -686,9 +689,12 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     // The ghost exists a frame after the item is equipped; its rotation is the build's own, set the way R turns it.
     private static System.Collections.IEnumerator TurnGhost(float yaw)
     {
+        // The ghost of the build handler the BuildManager holds now: aim re-equips, and the previous ghost lives until the
+        // frame ends, so a scene search could turn the one about to be destroyed.
         for (int i = 0; i < 30; i++)
         {
-            var build = UnityEngine.Object.FindObjectOfType<Il2CppScheduleOne.Building.BuildUpdate_Grid>();
+            var handler = Il2CppScheduleOne.DevUtilities.NetworkSingleton<Il2CppScheduleOne.Building.BuildManager>.Instance?.currentBuildHandler;
+            var build = handler != null ? handler.GetComponent<Il2CppScheduleOne.Building.BuildUpdate_Grid>() : null;
             if (build != null)
             {
                 build._rotation = yaw;

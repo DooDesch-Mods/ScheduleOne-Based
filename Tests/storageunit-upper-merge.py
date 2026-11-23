@@ -97,7 +97,9 @@ def ghost_line(run, name, spec, reach):
     time.sleep(1.5)
     seen, shot = [], None
     for x, z in spec["aims"]:
-        run.cmd("baseddiag aim %.2f %.2f %.2f - %d" % (x, UPPER_Y, z, spec["yaw"]), wait=1.5)
+        # The rack is named: aim equips the first buildable otherwise, and a wall lamp left in the hotbar by another
+        # check would show a wall ghost instead.
+        run.cmd("baseddiag aim %.2f %.2f %.2f - %d largestoragerack" % (x, UPPER_Y, z, spec["yaw"]), wait=1.5)
         log = run.cmd("baseddiag ghost", wait=0.5)
         ghost = next((g for g in (parse_ghost(l) for l in log) if g), None)
         if ghost is None:
