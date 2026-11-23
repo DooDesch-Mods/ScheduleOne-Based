@@ -27,14 +27,15 @@ What these four add, from hand test 3 (the checks of round 102 passed on that bu
 Needs Debug builds of MapExpansions and Based in a running test slot and a save where the player owns the Bungalow.
 Uses MapExpansions' Tests/employee-reach.py for the console helpers.
 
-    python _wt-Based-bungalow/Tests/bungalow-checks.py [--slot mptest] [--only grid,zfight,lines,switches,litter,batch,place,stair,walls]
-        [--mapexpansions _wt-MapExpansions-bungalow-int]
+    python _wt-Based-bungalow/Tests/bungalow-checks.py [--slot mptest] [--only grid,zfight,lines,switches,litter,batch,place,stair,walls,cake]
+        [--mapexpansions _wt-MapExpansions-bungalow-int] [--shots <folder for the cake shots>]
 """
 import argparse
 import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -90,7 +91,15 @@ def wall_strip(line):
     """The sunroom's slab runs on from the west room's last grid line at x -176.5 to the house wall at -176.17, where the
     house's own grid has no tile; this strip under the wall is the one floor edge allowed off the lines."""
     return ("edge at (-176.500," in line and "out (1.000," in line and "based_bungalow_sunroom" in line
-            and "slab-collision" in line and "goes on past" in line) or door_balcony(line) or terrace_strip(line)
+            and "slab-collision" in line and "goes on past" in line) or door_balcony(line) or terrace_strip(line) \
+        or landing_opening(line)
+
+
+def landing_opening(line):
+    """West of the stair's top (x -169.85 to -168.35) the balcony's south edge opens onto the landing, the walkway
+    from the stair to the balcony; the landing has no grid, so its floor runs on past the line."""
+    m = re.search(r"edge at \((-[\d.]+),[-\d.]+,112\.850\) out \(-?0\.000,0\.000,-1\.000\): floor '[^']*landing", line)
+    return bool(m) and -169.85 < float(m.group(1)) < -168.35 and "goes on past" in line
 
 
 def terrace_strip(line):
@@ -303,6 +312,73 @@ def place(run, slot):
     run.cmd("baseddiag ghost drop", wait=1.0)
 
 
+# The birthday cake on the kitchen counter: where the camera looks from for the label and the room, and the floor tiles
+# beside the counter that must still take an item (player x, z, floor y, target x, y, z).
+CAKE_AT = (-175.45, 119.95)
+CAKE_LABEL_SHOT = ((-174.35, -2.25, 119.95), (-175.45, -2.6, 119.95))
+CAKE_ROOM_SHOT = ((-172.2, -1.95, 117.6), (-175.45, -2.65, 119.95))
+CAKE_TILES = [
+    ("in front of the cake's counter", -173.0, 119.6, -3.7, -174.6, -3.7, 119.6),
+    ("beside the sink in front of the counter", -173.0, 119.1, -3.7, -174.6, -3.7, 119.1),
+]
+
+
+def shot_to(slot, eye, target, dest, keep=False):
+    args = ["cam", "shot", "--eye", *eye, "--target", *target, "--hud", "show", "--settle", "30", "--sight", "off"]
+    code, out = s1(slot, *(args + (["--keep"] if keep else [])))
+    m = re.search(r'"path":\s*"([^"]+)"', out)
+    if not m:
+        return "no shot; cam %d %s" % (code, out[-160:])
+    src = m.group(1).replace("\\\\", "\\")
+    shutil.copyfile(src, dest)
+    return dest
+
+
+def cake(run, slot, shots):
+    os.makedirs(shots, exist_ok=True)
+    code, out = s1(slot, "log", "--grep", "Birthday cake placed", "-n", "3")
+    placed = [l.strip() for l in out.splitlines() if "Birthday cake placed" in l]
+    run.check("cake: placed on the counter", bool(placed), placed[-1:] or out[-160:])
+
+    # It stands only on 23 November: another day hides it, the birthday shows it again.
+    for date, state, word in (("05-01", "cake hidden", "hidden"), ("11-23", "cake shown", "shown")):
+        mark = run.mark()
+        run.cmd("baseddiag cake date %s" % date, wait=2.5)
+        logged = [l.strip() for l in run.lines(mark) if "Birthday cake %s: the date is" % word in l and "-%s (forced)" % date in l]
+        describe = next((l.strip() for l in run.cmd("baseddiag cake", wait=1.0) if "baseddiag: date" in l), "")
+        run.check("cake: forced date %s, %s" % (date, state), bool(logged) and state in describe,
+                  (logged[-1:] or ["no '%s' line" % word]) + [describe[-160:]])
+    describe = next((l.strip() for l in run.cmd("baseddiag cake", wait=1.0) if "cake shown at" in l), "")
+    m = re.search(r"cake shown at \((-?[\d.]+), (-?[\d.]+), (-?[\d.]+)\)", describe)
+    near = bool(m) and abs(float(m.group(1)) - CAKE_AT[0]) < .05 and abs(float(m.group(3)) - CAKE_AT[1]) < .05
+    run.check("cake: stands at its spot on the counter", near, describe[-160:] or "no 'cake shown at' line")
+
+    s1(slot, "tp", -173.4, -2.7, CAKE_AT[1])
+    mark = run.mark()
+    close = shot_to(slot, *CAKE_LABEL_SHOT, os.path.join(shots, "cake-closeup.png"), keep=True)
+    time.sleep(1.0)
+    shown = [l.strip() for l in run.lines(mark) if "Birthday cake label shown" in l]
+    run.check("cake: looking at it shows the label", bool(shown), shown[-1:] or "no label line; shot " + close)
+    room = shot_to(slot, *CAKE_ROOM_SHOT, os.path.join(shots, "cake-room.png"))
+    run.check("cake: close-up and room shots taken", close.endswith(".png") and room.endswith(".png"), [close, room])
+
+    run.cmd("baseddiag ghost hush", wait=1.0)
+    log = run.cmd("baseddiag ghost %s" % PLACE_ITEM, wait=2.0)
+    if not any("baseddiag ghost: holding" in l or "baseddiag ghost: gave" in l for l in log):
+        run.check("cake: ghost %s in hand" % PLACE_ITEM, False, [l.strip()[-160:] for l in log if "baseddiag ghost" in l][-2:])
+        return
+    for name, px, pz, fy, tx, ty, tz in CAKE_TILES:
+        s1(slot, "tp", px, round(fy + 1.0, 3), pz)
+        s1(slot, "cam", "shot", "--eye", px, round(fy + 1.785, 3), pz, "--target", tx, ty, tz,
+           "--hud", "show", "--settle", "30", "--sight", "off", "--keep")
+        read = run.cmd("baseddiag ghost read", wait=1.5)
+        verdict = next((l.strip() for l in read if "baseddiag ghost: valid" in l), "")
+        run.check("cake: ghost valid %s" % name, "valid True" in verdict, verdict[-260:] or "no ghost line")
+    s1(slot, "cam", "release")
+    run.cmd("baseddiag ghost drop", wait=1.0)
+    run.cmd("baseddiag cake date off", wait=1.0)
+
+
 def walls(run):
     """The outer walls after the step storey-roof to complete, as the night's sleep takes it."""
     stage(run, "storey", "storey-roof")
@@ -373,6 +449,8 @@ def main():
     ap.add_argument("--only", default="grid,zfight,lines,switches,litter")
     ap.add_argument("--mapexpansions", default=r"F:\Projects\Mods\Schedule1\_wt-MapExpansions-bungalow-int",
                     help="MapExpansions checkout whose Tests/employee-reach.py is used")
+    ap.add_argument("--shots", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"),
+                    help="folder for the cake group's two screenshots")
     args = ap.parse_args()
     only = set(args.only.split(","))
     reach = load_reach(args.mapexpansions)
@@ -410,6 +488,8 @@ def main():
         stair(run, args.slot)
     if "walls" in only:
         walls(run)
+    if "cake" in only:
+        cake(run, args.slot, args.shots)
     return run.summary()
 
 
