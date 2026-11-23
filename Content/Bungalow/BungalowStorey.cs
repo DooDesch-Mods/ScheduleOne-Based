@@ -161,8 +161,10 @@ public static class BungalowStorey
         Solid(geometry, "stair-footing", Concrete, StairFoot - .35f, -4.3f, LandingSouth - .15f, StairFoot + .75f, -3.86f, LandingNorth + .15f);
         // The two balcony railings share the corner post, which the south run sets.
         const float corner = .03f;
-        Railing(geometry, "balcony-south", true, BalconySouth + corner, LandingEast, BalconyEast - corner + .025f);
-        Railing(geometry, "balcony-east", false, BalconyEast - corner, BalconySouth + corner - .025f, NorthRoomSouth, firstPost: false);
+        // The railings stand 3 cm inside the balcony's edge; their unseen walls start on the edge line and stand outside it,
+        // so the outer row of tiles stays free.
+        Railing(geometry, "balcony-south", true, BalconySouth + corner, LandingEast, BalconyEast - corner + .025f, guardShift: -.08f);
+        Railing(geometry, "balcony-east", false, BalconyEast - corner, BalconySouth + corner - .025f, NorthRoomSouth, firstPost: false, guardShift: .08f);
 
         // Until the walls stand, the open edges of the floor are guarded: by a site railing on the first night, by the
         // frame and an unseen wall behind it on the second.
@@ -555,8 +557,11 @@ public static class BungalowStorey
             rail.Exclude.Add("Colliders");
             Face(rail, "bar", Metal, source.x - length, source.y - .02f, source.z - .02f, source.x, source.y + .02f, source.z + .02f);
             // The rails are drawn without colliders; an unseen wall along the top rail keeps a jump from carrying over it.
+            // Near the landing the north rail's wall rises past the balcony's floor, so it stands 3 cm towards the stair
+            // and stays out of the balcony's southern row of tiles.
+            float shift = side == "north" ? -.03f : 0f;
             if (name == "top")
-                Block(rail, "guard", source.x - length, source.y - .5f, source.z - .05f, source.x, source.y + 1.07f, source.z + .05f);
+                Block(rail, "guard", source.x - length, source.y - .5f, source.z - .05f + shift, source.x, source.y + 1.07f, source.z + .05f + shift);
             state.Copies.Add(rail);
         }
     }
@@ -633,9 +638,10 @@ public static class BungalowStorey
     // Posts and two rails of dark steel, with an unseen wall to head height that keeps a jump from carrying over them.
     // The rails end inside the end posts and stop 1 cm under the posts' tops, so no rail face lies in a post's face.
     // Without its first or last post the run starts or ends in a post another run sets; its rails then stop clear of that
-    // run's rails.
+    // run's rails. guardShift moves the unseen wall across the run, so a railing that stands just inside a grid's edge
+    // keeps its wall outside the edge's tiles.
     private static void Railing(CopyDefinition geometry, string id, bool alongX, float cross, float start, float end,
-        bool firstPost = true, bool lastPost = true)
+        bool firstPost = true, bool lastPost = true, float guardShift = 0f)
     {
         const float half = .025f;
         float top = UpperFloor + RailHeight;
@@ -651,8 +657,9 @@ public static class BungalowStorey
         foreach (var (name, y) in new[] { ("top", top - .05f), ("middle", UpperFloor + .5f), ("low", UpperFloor + .1f) })
             if (alongX) Face(geometry, id + "-rail-" + name, Metal, from, y, cross - .02f, to, y + .04f, cross + .02f);
             else Face(geometry, id + "-rail-" + name, Metal, cross - .02f, y, from, cross + .02f, y + .04f, to);
-        Block(geometry, id + "-guard", alongX ? start : cross - .05f, UpperFloor, alongX ? cross - .05f : start,
-            alongX ? end : cross + .05f, UpperFloor + GuardHeight, alongX ? cross + .05f : end);
+        float guard = cross + guardShift;
+        Block(geometry, id + "-guard", alongX ? start : guard - .05f, UpperFloor, alongX ? guard - .05f : start,
+            alongX ? end : guard + .05f, UpperFloor + GuardHeight, alongX ? guard + .05f : end);
     }
 
     private static void Post(CopyDefinition copy, string id, float x, float z, float bottom, float top) =>

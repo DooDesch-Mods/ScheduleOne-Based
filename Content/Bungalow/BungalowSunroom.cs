@@ -230,7 +230,12 @@ public static class BungalowSunroom
                     extension.Tiles.Add(new GridCoordinate(x, y));
             extension.Bounds.Add(BoundsOf(West, Floor - .3f, South, House, Floor + 3f, North));
             state.PropertyExtensions.Add(extension);
+        }
 
+        // Once the frames stand the crew works inside on the slab, so its walking map is baked from then on; before, the
+        // map lies on the gravel 0.3 m under the slab.
+        if (stage >= 1)
+        {
             state.NavigationBounds = BoundsOf(West - .2f, Floor - .3f, South - .2f, -174.4f, -1f, North + .2f);
             state.NavigationAgents.AddRange(new[] { "Humanoid", "Ignore Costs", "Employee" });
             // The house floor behind the sliding door; the seam check samples 0.6 m to each side of its west edge.
@@ -240,7 +245,10 @@ public static class BungalowSunroom
             state.NavigationProbes.Add(new Vector3(-182.5f, Floor, 109.8f));
             state.NavigationProbes.Add(new Vector3(-182.5f, Floor, 121.1f));
             state.NavigationProbes.Add(new Vector3(-177f, Floor, 121.1f));
+        }
 
+        if (stage == 2)
+        {
             // A networked copy, so the switch works and every peer sees the same state. The storey's west switch copies the
             // same original; an own mesh keeps both drawn while both are in view.
             var wallSwitch = new CopyDefinition
@@ -344,7 +352,8 @@ public static class BungalowSunroom
     }
 
     // Trim boards close the roof's three free edges, laid out level from the roof's top edge at the house and tilted to its
-    // slope, so each lies along its edge and its top stands 2 to 4 mm over the roof's top. The two side boards run from the
+    // slope, so each lies along its edge and its top stands 4 to 7 mm over the roof's top: the west board lies on the
+    // frames' long bars, and 2 mm over them would read as one plane with their tops. The two side boards run from the
     // house to past the west edge and stand 4 cm out, 5 mm further than the gable rails under them, so the two outer faces
     // do not share a plane. The west board covers the ends of the frames' long bars, which are deeper than the frames'
     // border; it runs between the side boards and ends inside them, so the corners close without two faces in one plane.
@@ -358,7 +367,7 @@ public static class BungalowSunroom
         float top = pivot.y, bottom = top - RoofDepth, westEnd = House - FrameWidth * RoofScale;
         Face(trims, "trim-south", Metal, westEnd - .035f, bottom - .03f, South - .04f, House - .002f, top + .004f, South + .002f);
         Face(trims, "trim-north", Metal, westEnd - .035f, bottom - .03f, North - .002f, House - .002f, top + .004f, North + .04f);
-        Face(trims, "trim-west", Metal, westEnd - .03f, bottom - .025f, South - .035f, westEnd + .002f, top + .002f, North + .035f);
+        Face(trims, "trim-west", Metal, westEnd - .03f, bottom - .025f, South - .035f, westEnd + .002f, top + .007f, North + .035f);
         return trims;
     }
 
