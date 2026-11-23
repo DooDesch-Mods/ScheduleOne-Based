@@ -156,6 +156,7 @@ public sealed class Mod : MelonMod
             Content.StorageUnit.StorageVfx.Reset();
             Content.Bungalow.BungalowVfx.Reset();
             Content.Bungalow.BungalowPlaque.Reset();
+            Content.Bungalow.BungalowCake.Reset();
             Content.StorageUnit.StorageLadder.Reset();
             RayMenu.Reset();
             StaffRoom.Reset();
@@ -275,6 +276,8 @@ public sealed class Mod : MelonMod
             catch (Exception error) { Contain("bungalow doors", error); }
             try { Content.Bungalow.BungalowPlaque.Tick(); }
             catch (Exception error) { Contain("sunroom plaque", error); }
+            try { Content.Bungalow.BungalowCake.Tick(); }
+            catch (Exception error) { Contain("birthday cake", error); }
         }
         catch (Exception error) { Contain("runtime update", error); }
     }

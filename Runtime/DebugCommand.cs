@@ -50,6 +50,10 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     }
                     Mod.Log("baseddiag: " + Content.Bungalow.BungalowPlaque.Describe());
                     break;
+                case "cake":
+                    if (args.Count > 2 && args[1] == "date") Mod.Log("baseddiag: " + Content.Bungalow.BungalowCake.ForceDate(args[2]) + ".");
+                    else Mod.Log("baseddiag: " + Content.Bungalow.BungalowCake.Describe());
+                    break;
                 case "status":
                     Mod.Log("baseddiag: " + BuildPlan.State(_site));
                     break;
