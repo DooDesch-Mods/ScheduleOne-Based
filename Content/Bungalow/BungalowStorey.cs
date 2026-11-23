@@ -166,6 +166,7 @@ public static class BungalowStorey
         // The roof's shadow hull would darken the open floor; once the roof is back, the original and the copy cast both
         // storeys' shadows.
         if (level < 5) Rule(state, "shadow", "ShadowCaster", ObjectEffect.Remove, house);
+        GraffitiSpot(state, level);
 
         var geometry = new CopyDefinition
         {
@@ -660,6 +661,25 @@ public static class BungalowStorey
         state.NavigationProbes.Add(new Vector3(-171f, UpperFloor, 113.8f));
         state.NavigationProbes.Add(new Vector3(-173f, UpperFloor, 118.5f));
         state.NavigationProbes.Add(new Vector3(-167f, UpperFloor, 118.5f));
+    }
+
+    // The game's graffiti spot on the house's roof, a networked object outside the house. While the roof is off, the spot
+    // would hang over the open floor, so its collider and drawing are switched off. Once the roof stands again 3 m higher,
+    // the spot itself moves up with it and sits on the same place of the copied roof, with any graffiti painted on it.
+    private const string GraffitiSpotName = "SpraySurface (75)";
+    private const string GraffitiSpotPath = "@Managers/@Graffiti/Spray surfaces/" + GraffitiSpotName;
+
+    private static void GraffitiSpot(WorldStateDefinition state, int level)
+    {
+        if (level < 5)
+            state.Rules.Add(new ObjectRule
+            {
+                Id = "graffiti-spot", Name = GraffitiSpotName, Side = WorldSide.Main, Effect = ObjectEffect.Remove,
+                Area = BoundsOf(-173.5f, -1f, 109.5f, -169.5f, 2.5f, 115f)
+            });
+        else
+            // Optional: another mod may have removed the spot; the storey stands without it.
+            state.Moves.Add(new ObjectMoveDefinition { Id = "graffiti-spot", Path = GraffitiSpotPath, Offset = new Vector3(0f, Lift, 0f), Optional = true });
     }
 
     private static void Rule(WorldStateDefinition state, string id, string name, ObjectEffect effect, Bounds area) =>
