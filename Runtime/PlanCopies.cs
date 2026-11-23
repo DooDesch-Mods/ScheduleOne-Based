@@ -39,6 +39,7 @@ internal static class PlanCopies
         _handler = null;
         _missingReported = _offered = false;
         RayAgentMenu.Reset();
+        RayMenuGuard.Reset();
     }
 
     // Runs once a second while a save is loaded.
@@ -112,6 +113,7 @@ internal static class PlanCopies
         var entry = new DialogueChoiceData { Guid = Guid.NewGuid().ToString(), ChoiceLabel = OfferLabel, ChoiceText = Text.T("I lost my building plans.") };
         // Before the farewell, which vanilla keeps last.
         choices.Insert(Math.Max(0, choices.Count - 1), entry);
+        RayMenuGuard.Added(controller, entry);
         Mod.Log("Ray's menu lists the building plan copies.");
     }
 

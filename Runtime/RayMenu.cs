@@ -113,6 +113,7 @@ internal static class RayMenu
         var entry = new DialogueChoiceData { Guid = Guid.NewGuid().ToString(), ChoiceLabel = OfferLabel, ChoiceText = Text.T(Entry) };
         // Before the farewell, which vanilla keeps last.
         choices.Insert(Math.Max(0, choices.Count - 1), entry);
+        RayMenuGuard.Added(controller, entry);
         Mod.Log("Ray's menu lists the expansion entry.");
     }
 
