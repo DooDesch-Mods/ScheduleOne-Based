@@ -16,6 +16,9 @@ project adheres to Semantic Versioning.
 ### Changed
 - MapExpansions 1.5.0 or newer is now required.
 
+### Fixed
+- Wall items like the Modern Wall Lamp can be placed on the upstairs walls of the Storage Unit and the Bungalow storey.
+
 ## [1.2.5] - 2026-11-20
 
 ### Fixed
