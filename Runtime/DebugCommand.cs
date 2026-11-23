@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | rain [on|dry|off|state] | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate | gridedges [code] | zfight [filter] [x y z radius]";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | rain [on|dry|off|state] | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate | aim <x> <y> <z> [pitch|-] [yaw] | ghost [<itemId>|read|drop|hush] | gridedges [code] | zfight [filter] [x y z radius]";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -213,6 +213,13 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     break;
                 case "loadstate":
                     StaffTrack.LoadState();
+                    break;
+                case "aim" when args.Count > 3:
+                    Aim(F(args[1]), F(args[2]), F(args[3]), args.Count > 4 && args[4] != "-" ? F(args[4]) : null, args.Count > 5 ? F(args[5]) : null);
+                    break;
+                case "ghost" when args.Count == 1:
+                    // ghost = the active placement ghost's grid, footprint tiles and verdict
+                    Ghost();
                     break;
                 case "ghost":
                     // ghost <itemId> = hold it, ghost read = the placement ghost's verdict, ghost drop = hands free
@@ -625,6 +632,90 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // The game's own pickup of the equipped trash grabber, on the pieces nearest the player.
+    private static float F(string text) => float.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
+
+    // aim x y z [pitch] [yaw]: turns the player toward a world point and equips the first buildable in the hotbar, so the
+    // game's own placement ghost asks the grids about the tiles there every frame. The ghost stands holdDistance in
+    // front of the camera, closer the steeper the look; pitch is degrees below the horizon ("-" aims at the point), yaw the
+    // ghost's own turn.
+    private static void Aim(float x, float y, float z, float? pitch, float? yaw)
+    {
+        var camera = Il2CppScheduleOne.DevUtilities.PlayerSingleton<Il2CppScheduleOne.PlayerScripts.PlayerCamera>.Instance;
+        var inventory = Il2CppScheduleOne.DevUtilities.PlayerSingleton<Il2CppScheduleOne.PlayerScripts.PlayerInventory>.Instance;
+        var player = Il2CppScheduleOne.PlayerScripts.Player.Local;
+        if (camera == null) { Mod.Warn("baseddiag aim: no player camera."); return; }
+        if (inventory == null) { Mod.Warn("baseddiag aim: no player inventory."); return; }
+        if (player == null) { Mod.Warn("baseddiag aim: no local player."); return; }
+        var target = new Vector3(x, y, z);
+        var flat = target - camera.transform.position;
+        flat.y = 0f;
+        player.transform.rotation = Quaternion.Euler(0f, Mathf.Atan2(flat.x, flat.z) * Mathf.Rad2Deg, 0f);
+        float down = pitch ?? Mathf.Atan2(camera.transform.position.y - y, flat.magnitude) * Mathf.Rad2Deg;
+        camera.transform.localRotation = Quaternion.Euler(down, 0f, 0f);
+        string? equipped = null;
+        for (int i = 0; i < inventory.hotbarSlots.Count && equipped == null; i++)
+        {
+            var slot = inventory.hotbarSlots[i];
+            var def = slot?.ItemInstance?.Definition;
+            if (def == null || def.TryCast<Il2CppScheduleOne.ItemFramework.BuildableItemDefinition>() == null) continue;
+            if (!slot!.IsSelected) inventory.Equip(slot);
+            equipped = "'" + def.ID + "' in hotbar slot " + i;
+        }
+        if (equipped == null) { Mod.Warn("baseddiag aim: the hotbar holds no buildable item; give one first."); return; }
+        if (yaw is float turn) MelonLoader.MelonCoroutines.Start(TurnGhost(turn));
+        Mod.Log($"baseddiag aim: looking at {target.ToString("F2")} from {camera.transform.position.ToString("F2")} (pitch {down:F1}), equipped {equipped}.");
+    }
+
+    // The ghost exists a frame after the item is equipped; its rotation is the build's own, set the way R turns it.
+    private static System.Collections.IEnumerator TurnGhost(float yaw)
+    {
+        for (int i = 0; i < 30; i++)
+        {
+            var build = UnityEngine.Object.FindObjectOfType<Il2CppScheduleOne.Building.BuildUpdate_Grid>();
+            if (build != null)
+            {
+                build._rotation = yaw;
+                Mod.Log($"baseddiag aim: ghost turned to {yaw:F0} degrees.");
+                yield break;
+            }
+            yield return null;
+        }
+        Mod.Warn("baseddiag aim: no placement ghost appeared to turn.");
+    }
+
+    // Where the game's placement ghost stands, which tile of which grid it snapped to, every footprint tile with the grid
+    // it lies on, and whether the game accepts the spot (BuildUpdate_Grid._validPosition, the red or white box).
+    private static void Ghost()
+    {
+        var build = UnityEngine.Object.FindObjectOfType<Il2CppScheduleOne.Building.BuildUpdate_Grid>();
+        if (build == null) { Mod.Log("baseddiag ghost: no grid placement ghost is active."); return; }
+        var tile = build.closestIntersection?.tile;
+        if (tile == null || tile.OwnerGrid == null)
+        {
+            Mod.Log($"baseddiag ghost: at {build.GhostModel?.transform.position.ToString("F2") ?? "none"}, no tile under the ghost, valid {build._validPosition}.");
+            return;
+        }
+        var grid = tile.OwnerGrid;
+        var feet = new List<string>();
+        var pairs = build.BuildableItemClass.CoordinateFootprintTilePairs;
+        for (int i = 0; i < pairs.Count; i++)
+        {
+            var foot = pairs[i].footprintTile;
+            var on = grid.GetTile(grid.GetMatchedCoordinate(foot));
+            string other = "";
+            if (on == null)
+                foreach (var g in grid._parentProperty.Grids)
+                {
+                    if (g == null || g.Pointer == grid.Pointer || Mathf.Abs(g.transform.position.y - grid.transform.position.y) > .5f) continue;
+                    if (g.GetTile(g.GetMatchedCoordinate(foot)) != null) { other = " on grid '" + g.name + "'"; break; }
+                }
+            var p = foot.transform.position;
+            feet.Add($"({p.x:F2},{p.z:F2}) {(on != null ? "tile" : "missing" + other)}");
+        }
+        Mod.Log($"baseddiag ghost: at {build.GhostModel.transform.position.ToString("F2")}, rotation {build._rotation:F0}, grid '{grid.name}', " +
+                $"{pairs.Count} footprint tiles [{string.Join("; ", feet)}], valid {build._validPosition}.");
+    }
+
     private static void Pickup(int count)
     {
         var grabber = UnityEngine.Object.FindObjectOfType<Il2CppScheduleOne.Equipping.Equippable_TrashGrabber>();
