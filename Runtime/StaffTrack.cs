@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Based.Content;
+using Based.Content.Ming;
 using UnityEngine;
 
 namespace Based.Runtime;
@@ -17,7 +18,7 @@ internal static class StaffTrack
     // Above this height an employee counts as upstairs, below the lower one as downstairs; between the two they are on
     // the stairs and keep the floor they came from.
     private const float UpperFloor = 2.6f, LowerFloor = 1.0f, FloorSplit = 2.0f;
-    private const float SampleSeconds = .25f, WarpMetres = 2.5f, StallSeconds = 4f, StallMetres = .3f;
+    private const float SampleSeconds = .25f, WarpMetres = 2.5f, StallSeconds = 4f, StallMetres = .3f, FallMetres = .6f;
 
     private static bool _running, _stop;
 
@@ -26,12 +27,12 @@ internal static class StaffTrack
         internal string Name = "";
         internal Vector3 Last, Anchor;
         internal float AnchorTime, MinY = float.MaxValue, MaxY = float.MinValue, LongestStall;
-        internal bool Up, Stalled, Known;
-        internal int Samples, UpSamples, Changes, Warps, Stalls;
+        internal bool Up, Stalled, Known, Under;
+        internal int Samples, UpSamples, Changes, Warps, Stalls, Falls, UnderSamples;
         internal Vector3 LongestStallAt;
     }
 
-    private static Il2CppScheduleOne.Property.Property Property(SiteDefinition site) =>
+    internal static Il2CppScheduleOne.Property.Property Property(SiteDefinition site) =>
         Il2CppScheduleOne.DevUtilities.Singleton<Il2CppScheduleOne.Property.PropertyManager>.Instance.GetProperty(site.Base.PropertyId)
         ?? throw new InvalidOperationException("The property is not loaded.");
 
@@ -93,7 +94,7 @@ internal static class StaffTrack
         foreach (var t in traces.Values)
         {
             Mod.Log($"baseddiag track: summary {t.Name}: {t.Samples} samples, upstairs {(t.Samples == 0 ? 0 : 100 * t.UpSamples / t.Samples)}%, " +
-                    $"floor changes {t.Changes}, warps {t.Warps}, stalls {t.Stalls}, longest stall {t.LongestStall:0.0} s{(t.Stalls > 0 ? " at " + At(t.LongestStallAt) : "")}, " +
+                    $"floor changes {t.Changes}, warps {t.Warps}, falls {t.Falls}, under the wing floor {t.UnderSamples}, stalls {t.Stalls}, longest stall {t.LongestStall:0.0} s{(t.Stalls > 0 ? " at " + At(t.LongestStallAt) : "")}, " +
                     $"y {t.MinY:0.00} to {t.MaxY:0.00}");
         }
         if (traces.Count == 0) Mod.Warn("baseddiag track: no employee was sampled");
@@ -106,6 +107,7 @@ internal static class StaffTrack
         try
         {
             float now = Time.time;
+            bool sweatshop = string.Equals(property.PropertyCode, "sweatshop", StringComparison.OrdinalIgnoreCase);
             foreach (var employee in property.Employees)
             {
                 if (employee == null) continue;
@@ -114,7 +116,8 @@ internal static class StaffTrack
                 {
                     // The interop wrapper reports the list's element type, so the role comes from a cast.
                     string role = employee.TryCast<Il2CppScheduleOne.Employees.Botanist>() != null ? "Botanist"
-                        : employee.TryCast<Il2CppScheduleOne.Employees.Packager>() != null ? "Packager" : "Employee";
+                        : employee.TryCast<Il2CppScheduleOne.Employees.Packager>() != null ? "Packager"
+                        : employee.TryCast<Il2CppScheduleOne.Employees.Chemist>() != null ? "Chemist" : "Employee";
                     t = new Trace { Name = employee.FirstName + " (" + role + ")" };
                     traces[employee.Pointer] = t;
                 }
@@ -130,6 +133,15 @@ internal static class StaffTrack
                 t.MinY = Mathf.Min(t.MinY, p.y);
                 t.MaxY = Mathf.Max(t.MaxY, p.y);
                 float step = Vector3.Distance(p, t.Last);
+                // Stairs lower a walker by about a quarter metre per sample; more than FallMetres is a fall.
+                float drop = t.Last.y - p.y;
+                if (drop > FallMetres)
+                {
+                    t.Falls++;
+                    var agent = employee.GetComponentInChildren<UnityEngine.AI.NavMeshAgent>();
+                    Mod.Warn($"baseddiag track: {t.Name} fell {drop:0.0} m in {SampleSeconds} s from {At(t.Last)} to {At(p)}, " +
+                             $"on navmesh {(agent != null && agent.isOnNavMesh)}, agent enabled {(agent != null && agent.enabled)}");
+                }
                 if (step > WarpMetres)
                 {
                     t.Warps++;
@@ -138,6 +150,22 @@ internal static class StaffTrack
                 if (!t.Up && p.y > UpperFloor) { t.Up = true; t.Changes++; Mod.Log($"baseddiag track: {t.Name} went up, now at {At(p)}"); }
                 else if (t.Up && p.y < LowerFloor) { t.Up = false; t.Changes++; Mod.Log($"baseddiag track: {t.Name} went down, now at {At(p)}"); }
                 if (t.Up) t.UpSamples++;
+                // The Sweatshop's wing floor is a thin slab over lower ground; an employee inside its outline but well
+                // below the slab has dropped through it.
+                bool under = sweatshop && p.y < MingWorld.FloorY - FallMetres
+                    && MingWorld.Wing.Contains(new Vector3(p.x, MingWorld.Wing.center.y, p.z));
+                if (under)
+                {
+                    t.UnderSamples++;
+                    if (!t.Under)
+                    {
+                        var agent = employee.GetComponentInChildren<UnityEngine.AI.NavMeshAgent>();
+                        Mod.Warn($"baseddiag track: {t.Name} is under the wing floor at {At(p)}, " +
+                                 $"on navmesh {(agent != null && agent.isOnNavMesh)}, agent enabled {(agent != null && agent.enabled)}");
+                    }
+                }
+                else if (t.Under) Mod.Log($"baseddiag track: {t.Name} is back above the wing floor at {At(p)}");
+                t.Under = under;
                 var movement = employee.Movement;
                 bool moving = movement != null && movement.IsMoving;
                 if (!moving || Vector3.Distance(p, t.Anchor) > StallMetres)
