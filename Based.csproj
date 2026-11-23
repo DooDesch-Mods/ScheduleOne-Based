@@ -112,6 +112,9 @@
     <EmbeddedResource Include="Assets/quest-icon.png" LogicalName="Based.Assets.quest-icon.png" />
     <EmbeddedResource Include="Assets/folder-icon.png" LogicalName="Based.Assets.folder-icon.png" />
     <EmbeddedResource Include="Assets/sunroom-plaque.png" LogicalName="Based.Assets.sunroom-plaque.png" />
+    <!-- Birthday cake from Kenney's Food Kit (CC0, Assets/cake/License.txt), converted from its GLB. -->
+    <EmbeddedResource Include="Assets/cake/cake-birthday.mesh" LogicalName="Based.Assets.cake.cake-birthday.mesh" />
+    <EmbeddedResource Include="Assets/cake/cake-colormap.png" LogicalName="Based.Assets.cake.cake-colormap.png" />
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">

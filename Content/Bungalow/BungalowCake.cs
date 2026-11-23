@@ -1,5 +1,11 @@
 using System;
+using System.IO;
+using System.Reflection;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Interaction;
+using Il2CppScheduleOne.PlayerScripts;
+using Il2CppScheduleOne.UI;
 using UnityEngine;
 using UnityEngine.Events;
 using Object = UnityEngine.Object;
@@ -9,6 +15,8 @@ namespace Based.Content.Bungalow;
 // A small birthday cake for the tester izy on the Bungalow's kitchen counter. The counter is vanilla and lies outside
 // every build grid, so the cake takes no buildable space. It stands there only on 23 November. Every peer builds its own
 // copy and reads its own clock: nothing is saved or synced.
+// The model is the birthday cake from Kenney's Food Kit (CC0, Assets/cake/License.txt): its mesh, converted from the GLB,
+// and its colour atlas are embedded resources.
 // Its only collider is a trigger that carries a label-only InteractableObject, so the player sees "Happy birthday, izy!"
 // when looking at it while walking, placing and employees pass through it. It has no BuildableItem, so the planner's
 // blocker list never lists it.
@@ -17,22 +25,27 @@ internal static class BungalowCake
     private const string Name = "Based_BirthdayCake";
     private const string CounterPath = "@Properties/Bungalow/bungalow/Bench/Cube";
     private const string Message = "Happy birthday, izy!";
+    private const string MeshResource = "Based.Assets.cake.cake-birthday.mesh";
+    private const string TextureResource = "Based.Assets.cake.cake-colormap.png";
     private const float CheckInterval = 1f;
 
     // Between the sink (z 118.07..119.33) and the counter's corner, under the wall cabinets (bottom near y -2.0).
     private const float AtX = -175.45f, AtZ = 119.95f;
 
-    private const float BottomRadius = .13f, BottomHeight = .1f;
-    private const float TopRadius = .09f, TopHeight = .08f;
-    private const float RimHeight = .014f, RimOverhang = .006f;
-    private const float CandleRadius = .006f, CandleHeight = .06f;
+    // The model is 0.639 units across and 0.364 tall with its candles; this scale makes a 26 cm cake about 10 cm high.
+    private const float Diameter = .26f, ModelDiameter = .6392f, Scale = Diameter / ModelDiameter;
+    // The label floats this far above the candle tips.
+    private const float LabelAbove = .07f;
 
     private const float LightIntensity = .35f, LightRange = .9f;
 
     private static GameObject? _cake;
     private static Light? _light;
-    private static float _next, _nextHoverLog;
-    private static bool _missingLogged;
+    private static Transform? _labelPoint;
+    private static Vector3 _labelAnchor;
+    private static float _next, _nextHoverLog, _lastShift;
+    private static bool _shiftMeasured, _waitLogged;
+    private static bool _missingLogged, _buildFailed;
 
     // izy's birthday. The cake shows on this day of every year by the local clock of each peer and hides on every other
     // day; the check runs every second, so it appears and goes at local midnight without a reload.
@@ -76,6 +89,8 @@ internal static class BungalowCake
             if (!_cake.activeSelf) _cake.SetActive(true);
             return;
         }
+        // A missing resource or shader does not come back in this session; the build is not tried again.
+        if (_buildFailed) return;
         var counter = GameObject.Find(CounterPath);
         if (counter == null)
         {
@@ -93,6 +108,7 @@ internal static class BungalowCake
         var at = new Vector3(AtX, renderer.bounds.max.y, AtZ);
         _cake = Build(at);
         if (_cake != null) Mod.Log("Birthday cake placed at " + at + " with the label '" + Message + "'.");
+        else _buildFailed = true;
     }
 
     private static GameObject? Build(Vector3 at)
@@ -100,128 +116,164 @@ internal static class BungalowCake
         var lit = Shader.Find("Universal Render Pipeline/Lit");
         if (lit == null)
         {
-            if (!_missingLogged) Mod.Warn("Birthday cake skipped: the URP Lit shader is not loaded.");
-            _missingLogged = true;
+            Mod.Warn("Birthday cake skipped: the URP Lit shader is not loaded.");
             return null;
         }
-        var unlit = Shader.Find("Universal Render Pipeline/Unlit");
+        var mesh = LoadMesh();
+        if (mesh == null) return null;
+        var texture = LoadTexture();
+        if (texture == null)
+        {
+            Object.Destroy(mesh);
+            return null;
+        }
 
         var root = new GameObject(Name);
         root.transform.position = at;
 
-        var plate = Material(lit, "Based_CakePlate", new Color(.82f, .84f, .86f), .5f);
-        var frosting = Material(lit, "Based_CakeFrosting", new Color(.96f, .94f, .9f), .25f);
-        var pink = Material(lit, "Based_CakePink", new Color(.95f, .45f, .62f), .35f);
-        var candle = Material(lit, "Based_CakeCandle", new Color(.55f, .75f, .95f), .3f);
-        var flameColor = new Color(1f, .72f, .3f);
-        var flame = unlit != null ? new Material(unlit) { name = "Based_CakeFlame" } : Material(lit, "Based_CakeFlame", flameColor, 0f);
-        flame.SetColor("_BaseColor", flameColor);
-        if (unlit == null)
-        {
-            flame.EnableKeyword("_EMISSION");
-            flame.SetColor("_EmissionColor", flameColor * 2f);
-        }
+        var model = new GameObject("Model");
+        model.transform.SetParent(root.transform, false);
+        model.transform.localScale = Vector3.one * Scale;
+        model.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var material = new Material(lit) { name = "Based_CakeKenney" };
+        material.SetTexture("_BaseMap", texture);
+        material.SetColor("_BaseColor", Color.white);
+        material.SetFloat("_Smoothness", .25f);
+        material.SetFloat("_Metallic", 0f);
+        // The Kenney material is double-sided.
+        material.SetFloat("_Cull", 0f);
+        var meshRenderer = model.AddComponent<MeshRenderer>();
+        meshRenderer.sharedMaterial = material;
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
-        float y = 0f;
-        Disc(root, "Plate", .16f, .008f, ref y, plate);
-        float bottomBase = y;
-        Disc(root, "Bottom", BottomRadius, BottomHeight, ref y, frosting);
-        Rim(root, "BottomRim", BottomRadius + RimOverhang, y, pink);
-        Drips(root, "BottomDrip", BottomRadius, y, 10, pink);
-        Disc(root, "Top", TopRadius, TopHeight, ref y, frosting);
-        Rim(root, "TopRim", TopRadius + RimOverhang, y, pink);
-        Drips(root, "TopDrip", TopRadius, y, 8, pink);
-        float candleBase = y;
-        Disc(root, "Candle", CandleRadius, CandleHeight, ref y, candle);
+        float top = mesh.bounds.max.y * Scale;
 
-        var flameObject = Part(root, PrimitiveType.Sphere, "Flame", flame);
-        flameObject.transform.localScale = new Vector3(.012f, .024f, .012f);
-        flameObject.transform.localPosition = new Vector3(0f, y + .012f, 0f);
-        _light = flameObject.AddComponent<Light>();
+        var flame = new GameObject("CandleLight");
+        flame.transform.SetParent(root.transform, false);
+        flame.transform.localPosition = new Vector3(0f, top + .01f, 0f);
+        _light = flame.AddComponent<Light>();
         _light.type = LightType.Point;
-        _light.color = flameColor;
+        _light.color = new Color(1f, .72f, .3f);
         _light.range = LightRange;
         _light.intensity = LightIntensity;
         _light.shadows = LightShadows.None;
 
-        // The label trigger spans the whole cake; the prompt shows just above the flame.
+        // The label trigger spans the whole cake; the prompt shows centred just above the candles.
         var label = new GameObject("Label");
         label.transform.SetParent(root.transform, false);
         int doorLayer = LayerMask.NameToLayer("Door");
         label.layer = doorLayer >= 0 ? doorLayer : 0;
         var box = label.AddComponent<BoxCollider>();
         box.isTrigger = true;
-        box.center = new Vector3(0f, (y + .03f) / 2f, 0f);
-        box.size = new Vector3(BottomRadius * 2f + .04f, y + .03f, BottomRadius * 2f + .04f);
+        box.center = new Vector3(0f, (top + .02f) / 2f, 0f);
+        box.size = new Vector3(Diameter + .04f, top + .02f, Diameter + .04f);
         var point = new GameObject("LabelPoint");
         point.transform.SetParent(root.transform, false);
-        point.transform.localPosition = new Vector3(0f, y + .08f, 0f);
+        point.transform.localPosition = new Vector3(0f, top + LabelAbove, 0f);
+        _labelPoint = point.transform;
+        _labelAnchor = point.transform.position;
         var interaction = label.AddComponent<InteractableObject>();
         interaction.SetMessage(Message);
         interaction.SetInteractableState(InteractableObject.EInteractableState.Label);
         interaction.MaxInteractionRange = 2.5f;
         interaction.displayLocationPoint = point.transform;
-        // The game calls this every frame the player looks at the cake; one line per look shows the label was reached.
+        // The game calls this every frame the player looks at the cake, just before it places the prompt; one line per
+        // look shows the label was reached.
         interaction.onHovered.AddListener((UnityAction)(() =>
         {
-            if (Time.unscaledTime >= _nextHoverLog) Mod.Log("Birthday cake label shown: '" + Message + "'.");
-            _nextHoverLog = Time.unscaledTime + 10f;
+            CentreLabel();
+            if (Time.unscaledTime < _nextHoverLog) return;
+            // The first frames of a look still carry another prompt's layout; the line waits until the shift is measured.
+            if (_shiftMeasured)
+            {
+                Mod.Log("Birthday cake label shown: '" + Message + "', centred over the cake (text moved " + _lastShift.ToString("0") + " px).");
+                _nextHoverLog = Time.unscaledTime + 10f;
+            }
+            else if (!_waitLogged)
+            {
+                _waitLogged = true;
+                Mod.Log("Birthday cake label shown: '" + Message + "', centring waits for the prompt's layout.");
+            }
         }));
-        Mod.Log("Birthday cake built: tiers from " + bottomBase + " to " + candleBase + " above the counter, label on layer " + label.layer + ".");
+        Mod.Log("Birthday cake built: Kenney model " + Diameter * 100f + " cm across, " + top.ToString("0.000") + " m high with its candles, "
+                + mesh.vertexCount + " vertices, label on layer " + label.layer + ".");
         return root;
     }
 
-    private static Material Material(Shader shader, string name, Color color, float smoothness)
+    // The game's prompt starts at the projected point and runs to the right, so its text would sit right of the cake.
+    // The prompt keeps its layout from the last frame; the point moves left by the distance from the prompt's anchor to
+    // its text's centre, measured on screen, so the text's centre lands over the cake's centre.
+    private static void CentreLabel()
     {
-        var material = new Material(shader) { name = name };
-        material.SetColor("_BaseColor", color);
-        material.SetFloat("_Smoothness", smoothness);
-        material.SetFloat("_Metallic", 0f);
-        return material;
-    }
-
-    private static GameObject Part(GameObject root, PrimitiveType type, string name, Material material)
-    {
-        var part = GameObject.CreatePrimitive(type);
-        part.name = name;
-        Object.Destroy(part.GetComponent<Collider>());
-        part.transform.SetParent(root.transform, false);
-        var renderer = part.GetComponent<MeshRenderer>();
-        renderer.sharedMaterial = material;
-        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        return part;
-    }
-
-    // Unity's cylinder is two units tall, so a height h is a y scale of h / 2. The disc sits on y and moves y to its top.
-    private static void Disc(GameObject root, string name, float radius, float height, ref float y, Material material)
-    {
-        var part = Part(root, PrimitiveType.Cylinder, name, material);
-        part.transform.localScale = new Vector3(radius * 2f, height / 2f, radius * 2f);
-        part.transform.localPosition = new Vector3(0f, y + height / 2f, 0f);
-        y += height;
-    }
-
-    // A thin pink band just under the tier's top edge, slightly wider than the tier. Its top stays 1.5 mm under the
-    // tier's top, so the two faces never share a plane.
-    private static void Rim(GameObject root, string name, float radius, float top, Material material)
-    {
-        var part = Part(root, PrimitiveType.Cylinder, name, material);
-        part.transform.localScale = new Vector3(radius * 2f, RimHeight / 2f, radius * 2f);
-        part.transform.localPosition = new Vector3(0f, top - .0015f - RimHeight / 2f, 0f);
-    }
-
-    // Short pink drips down the tier's side, of alternating length.
-    private static void Drips(GameObject root, string name, float radius, float top, int count, Material material)
-    {
-        for (int i = 0; i < count; i++)
+        if (_labelPoint == null) return;
+        var canvas = Singleton<InteractionCanvas>.Instance;
+        var camera = PlayerSingleton<PlayerCamera>.Instance;
+        if (canvas == null || camera == null || camera.Camera == null) return;
+        var text = canvas.MessageText;
+        var screen = camera.Camera.WorldToScreenPoint(_labelAnchor);
+        if (screen.z <= 0f) return;
+        // Before the prompt has shown this message once, its layout belongs to another prompt; the shift stays as it was.
+        if (text != null && text.text == Message && canvas.Container.gameObject.activeInHierarchy)
         {
-            float angle = (i + .5f) * Mathf.PI * 2f / count;
-            float length = i % 2 == 0 ? .03f : .018f;
-            var part = Part(root, PrimitiveType.Capsule, name + i, material);
-            part.transform.localScale = new Vector3(.014f, length / 2f, .008f);
-            part.transform.localPosition = new Vector3(Mathf.Cos(angle) * (radius + .002f), top - RimHeight - length / 2f + .006f, Mathf.Sin(angle) * (radius + .002f));
-            part.transform.localRotation = Quaternion.Euler(0f, -angle * Mathf.Rad2Deg + 90f, 0f);
+            var centre = text.rectTransform.TransformPoint(text.textBounds.center);
+            _lastShift = centre.x - canvas.Container.position.x;
+            _shiftMeasured = true;
         }
+        screen.x -= _lastShift;
+        _labelPoint.position = camera.Camera.ScreenToWorldPoint(screen);
+    }
+
+    private static Mesh? LoadMesh()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(MeshResource);
+        if (stream == null)
+        {
+            Mod.Warn("Birthday cake skipped: the resource " + MeshResource + " is missing.");
+            return null;
+        }
+        using var reader = new BinaryReader(stream);
+        if (new string(reader.ReadChars(4)) != "BCK1")
+        {
+            Mod.Warn("Birthday cake skipped: " + MeshResource + " is not a cake mesh.");
+            return null;
+        }
+        int vertexCount = reader.ReadInt32(), indexCount = reader.ReadInt32();
+        var positions = new Vector3[vertexCount];
+        var normals = new Vector3[vertexCount];
+        var uvs = new Vector2[vertexCount];
+        var indices = new int[indexCount];
+        for (int i = 0; i < vertexCount; i++) positions[i] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+        for (int i = 0; i < vertexCount; i++) normals[i] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+        for (int i = 0; i < vertexCount; i++) uvs[i] = new Vector2(reader.ReadSingle(), reader.ReadSingle());
+        for (int i = 0; i < indexCount; i++) indices[i] = reader.ReadUInt16();
+        var mesh = new Mesh { name = "Based_CakeKenney" };
+        mesh.vertices = (Il2CppStructArray<Vector3>)positions;
+        mesh.normals = (Il2CppStructArray<Vector3>)normals;
+        mesh.uv = (Il2CppStructArray<Vector2>)uvs;
+        mesh.triangles = (Il2CppStructArray<int>)indices;
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private static Texture2D? LoadTexture()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(TextureResource);
+        if (stream == null)
+        {
+            Mod.Warn("Birthday cake skipped: the resource " + TextureResource + " is missing.");
+            return null;
+        }
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        // The atlas is a grid of flat colour cells; point filtering keeps neighbouring cells from bleeding in, as in the GLB.
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+        if (!ImageConversion.LoadImage(texture, (Il2CppStructArray<byte>)buffer.ToArray(), false))
+        {
+            Mod.Warn("Birthday cake skipped: its colour atlas could not be decoded.");
+            Object.Destroy(texture);
+            return null;
+        }
+        return texture;
     }
 
     // A new scene destroys the cake; the next tick builds it again.
@@ -229,6 +281,8 @@ internal static class BungalowCake
     {
         _cake = null;
         _light = null;
+        _labelPoint = null;
+        _shiftMeasured = _waitLogged = false;
         _next = 0;
         _missingLogged = false;
         _shown = null;
@@ -253,5 +307,5 @@ internal static class BungalowCake
     internal static string Describe() =>
         "date " + Today.ToString("yyyy-MM-dd") + (ForcedDate.HasValue ? " (forced)" : "") + ", " +
         (_cake == null ? "cake absent" : (_cake.activeSelf ? "cake shown" : "cake hidden") + " at " + _cake.transform.position +
-            ", light " + (_light != null ? _light.intensity.ToString("0.00") : "none"));
+            ", light " + (_light != null ? _light.intensity.ToString("0.00") : "none") + ", label shift " + _lastShift.ToString("0") + " px");
 }
