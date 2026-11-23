@@ -64,6 +64,10 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "ray":
                     PlanCopies.DebugTalk(args.Count > 1 ? args[1] : "");
                     break;
+                case "raythief":
+                    if (args.Count > 1 && args[1] == "status") RayMenuGuard.DebugThiefStatus();
+                    else RayMenuGuard.DebugThief();
+                    break;
                 case "blockers":
                     Mod.DebugBlockers(_site);
                     break;
