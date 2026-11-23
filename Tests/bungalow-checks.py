@@ -95,6 +95,12 @@ def wall_strip(line):
         or landing_opening(line)
 
 
+def player_item(line):
+    """Furniture the save holds in the house (the property's "Contents Container") stands on the vanilla grids; the
+    probe meets it where a wall would be, but it is the player's, not a wall of the build."""
+    return "Contents Container/" in line
+
+
 def landing_opening(line):
     """West of the stair's top (x -169.85 to -168.35) the balcony's south edge opens onto the landing, the walkway
     from the stair to the balcony; the landing has no grid, so its floor runs on past the line."""
@@ -129,10 +135,12 @@ def grids(run, pick, label):
         name = "%s: grid %s '%s' edges on the lines" % (label, grid.group(1), grid.group(2)) if grid else label + ": grid"
         offs = [l.strip() for l in log if grid and ("gridedges grid %s " % grid.group(1)) in l and
                 re.search(r"off [-\d.]+ cm|reaches more than|goes on past", l)]
-        real = [o for o in offs if not wall_strip(o)]
+        real = [o for o in offs if not wall_strip(o) and not player_item(o)]
         for o in offs:
             if wall_strip(o):
                 print("INFO  %s: allowed strip %s" % (label, o[-160:]), flush=True)
+            elif player_item(o):
+                print("INFO  %s: the save's own furniture, not a wall: %s" % (label, o[-160:]), flush=True)
         run.check(name, " PASS:" in v or (offs and not real), [o[-200:] for o in real[:4]] or v)
     return extents
 

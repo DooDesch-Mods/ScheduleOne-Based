@@ -95,6 +95,33 @@ public static class BungalowStorey
     };
     private const int FloorTiles = 12;
 
+    // The copied walls upstairs carry no surfaces of their own, so each room's inner faces get wall surfaces, in
+    // stretches between the doors and windows of the copied shell. The ids are saved with what hangs on them.
+    private static readonly (string Floor, string Id, PropertySurfaceFace Face, float Plane, float From, float To)[] RoomWalls =
+    {
+        ("bungalow-storey-south", "south-room-west-wall-south", PropertySurfaceFace.Right, -176f, 109.4f, DoorSouth - .05f),
+        ("bungalow-storey-south", "south-room-west-wall-north", PropertySurfaceFace.Right, -176f, DoorNorth + .05f, 115.3f),
+        ("bungalow-storey-south", "south-room-south-wall", PropertySurfaceFace.Front, 109.35f, -175.95f, -170.05f),
+        ("bungalow-storey-south", "south-room-east-wall-south", PropertySurfaceFace.Left, -170f, 109.4f, 110.7f),
+        ("bungalow-storey-south", "south-room-east-wall-middle", PropertySurfaceFace.Left, -170f, 111.95f, 113.15f),
+        ("bungalow-storey-south", "south-room-east-wall-north", PropertySurfaceFace.Left, -170f, 114.5f, 115.3f),
+        ("bungalow-storey-south", "south-room-north-wall", PropertySurfaceFace.Back, 115.35f, -174.2f, -171.8f),
+        ("bungalow-storey-north", "north-room-west-wall-south", PropertySurfaceFace.Right, -176f, 115.55f, 117.6f),
+        ("bungalow-storey-north", "north-room-west-wall-north", PropertySurfaceFace.Right, -176f, 119.18f, 121.45f),
+        ("bungalow-storey-north", "north-room-north-wall-west", PropertySurfaceFace.Back, 121.5f, -175.95f, -172.43f),
+        ("bungalow-storey-north", "north-room-north-wall-east", PropertySurfaceFace.Back, 121.5f, -170.85f, -170.05f),
+        ("bungalow-storey-north", "north-room-east-wall-south", PropertySurfaceFace.Left, -170f, 115.55f, 117.92f),
+        ("bungalow-storey-north", "north-room-east-wall-north", PropertySurfaceFace.Left, -170f, 119.08f, 121.45f),
+        ("bungalow-storey-north", "north-room-south-wall", PropertySurfaceFace.Front, 115.5f, -174.2f, -171.8f),
+        ("bungalow-storey-east", "east-room-west-wall-south", PropertySurfaceFace.Right, -169.85f, 115.55f, 117.92f),
+        ("bungalow-storey-east", "east-room-west-wall-north", PropertySurfaceFace.Right, -169.85f, 119.08f, 121.45f),
+        ("bungalow-storey-east", "east-room-north-wall", PropertySurfaceFace.Back, 121.5f, -169.8f, -163.9f),
+        ("bungalow-storey-east", "east-room-east-wall-south", PropertySurfaceFace.Left, InEast, 115.55f, 117.6f),
+        ("bungalow-storey-east", "east-room-east-wall-north", PropertySurfaceFace.Left, InEast, 119.4f, 121.45f),
+        ("bungalow-storey-east", "east-room-south-wall-west", PropertySurfaceFace.Front, 115.5f, -169.8f, -167.79f),
+        ("bungalow-storey-east", "east-room-south-wall-east", PropertySurfaceFace.Front, 115.5f, -165.99f, -163.9f)
+    };
+
     private static bool _registered;
 
     public static void Register()
@@ -579,6 +606,9 @@ public static class BungalowStorey
                 for (int y = 0; y < FloorTiles; y++)
                     extension.Tiles.Add(new GridCoordinate(x, y));
             extension.Bounds.Add(BoundsOf(floor.West, UpperFloor - .1f, floor.South, floor.East, UpperFloor + 2.95f, floor.North));
+            foreach (var wall in RoomWalls)
+                if (wall.Floor == floor.Id)
+                    WallSurfaces.Add(extension, wall.Id, wall.Face, wall.Plane, wall.From, wall.To, UpperFloor + .05f, FrameTop - .05f);
             state.PropertyExtensions.Add(extension);
         }
         // The terrace repeats the south room's grid: tile x runs south from the door's north end, tile y east from the
