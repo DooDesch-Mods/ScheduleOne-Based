@@ -677,15 +677,19 @@ public static class StorageWorld
         state.NavigationExistingFloor.Add(BoundsOf(-8.75f, -.3f, south, east, 3f, UnitNorth));
         // The first two straddle the seam at the stair's foot: the world's ground, then the lowest point of the stair's
         // own walking map (the agent's radius takes off the steps below it). Then the landing, the loft behind its
-        // door, the far corner of the loft and its middle.
+        // door, the far corner of the loft and its middle. A probe never stands on a site prop's block: on the door's
+        // night the crew's pallet covers the far corner and its table the middle, so both probes stand beside them.
+        bool loftSite = level == 2;
         state.NavigationProbes.Add(new Vector3(-9.84f, 0f, 98.4f));
         state.NavigationProbes.Add(new Vector3(-9.84f, .91f, 100.5f));
         state.NavigationProbes.Add(new Vector3(-9.6f, LandingTop, 105.5f));
         state.NavigationProbes.Add(new Vector3(-8.1f, UpperY, 105.45f));
-        state.NavigationProbes.Add(new Vector3(-3f, UpperY, 112.8f));
-        state.NavigationProbes.Add(new Vector3(-5.5f, UpperY, 109f));
-        // The walkway through the old wall, then the middle of the east room.
-        if (level >= 4) state.NavigationProbes.Add(new Vector3(-.9f, UpperY, 109f));
+        state.NavigationProbes.Add(loftSite ? new Vector3(-4.9f, UpperY, 112.3f) : new Vector3(-3f, UpperY, 112.8f));
+        state.NavigationProbes.Add(loftSite ? new Vector3(-5.5f, UpperY, 110.4f) : new Vector3(-5.5f, UpperY, 109f));
+        // The walkway through the old wall, then the middle of the east room. On the walkway's own night its table
+        // covers the first spot, so the probe stands north of the table.
+        if (level == 4) state.NavigationProbes.Add(new Vector3(-1f, UpperY, 111f));
+        else if (level >= 5) state.NavigationProbes.Add(new Vector3(-.9f, UpperY, 109f));
         if (level >= 5) state.NavigationProbes.Add(new Vector3(1.75f, UpperY, 109f));
         // The walkway beside the elevator, its south end, and the middle of the south room.
         if (level >= 6)

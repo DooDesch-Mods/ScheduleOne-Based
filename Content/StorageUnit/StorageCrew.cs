@@ -56,11 +56,13 @@ internal sealed class StorageCrew : ConstructionCrew
             new[] { St(-0.35f, Loft, 110.6f, 0.15f, Loft + 1.5f, 110.6f) }
         }),
         // The south room is open; it is finished today. Foreman and carpenter work in the south room at the table
-        // (2.7, 98.6) and the pallet (2.4, 95); the fitter stands on the walkway beside the elevator.
+        // (2.6, 98.3, west edge x 2.05) and the pallet (2.4, 95.15); the fitter stands on the walkway beside the
+        // elevator. The barrel stack (west face x 1.62, z 99.67 .. 101.13) and the cinderblocks at (1.63, 97.42) and
+        // (1.6, 98.2) take the walking map off the strip west of them, so the stations there keep an agent's radius off.
         ["south-open"] = (6, new[]
         {
-            new[] { St(1.6f, Loft, 99.5f, 2.5f, Loft + Bench, 98.9f), St(1.6f, Loft, 100.4f, 2.5f, Loft + Bench, 99.5f) },
-            new[] { St(2.0f, Loft, 96.5f, 2.0f, Loft + Bench, 95.9f), St(1.7f, Loft, 98.3f, 2.3f, Loft + Bench, 98.3f) },
+            new[] { St(1.6f, Loft, 99.5f, 2.5f, Loft + Bench, 98.9f), St(1.2f, Loft, 100.4f, 1.9f, Loft + Bench, 100.4f) },
+            new[] { St(2.0f, Loft, 96.5f, 2.0f, Loft + Bench, 95.9f), St(1.6f, Loft, 98.8f, 2.3f, Loft + Bench, 98.8f) },
             new[] { St(-0.3f, Loft, 102.6f, 0.56f, Loft + 1.4f, 102.6f) }
         })
     };
