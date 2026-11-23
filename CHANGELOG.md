@@ -4,6 +4,15 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.3.1] - 2026-11-23
+
+### Fixed
+- Ray's menu shows "I want to expand one of my properties." and "I lost my building plans." again when another mod
+  removed them. Based names that mod in the log.
+- Bungalow sunroom: wall items (lamps, shelves, signs) can be hung on the house wall inside the sunroom.
+- Bungalow storey: the roof's graffiti spot sits on top of the new storey and can be sprayed again.
+- Storage Unit: the construction crew reaches all its work spots in the loft, on the walkway and in the south room.
+
 ## [1.3.0] - 2026-11-23
 
 ### Added
