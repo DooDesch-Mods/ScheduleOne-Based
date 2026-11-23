@@ -491,8 +491,16 @@ public static class StorageWorld
             for (int y = 0; y <= 18; y++)
                 if (!(x <= 5 && y <= 4)) property.Tiles.Add(new GridCoordinate(x, y + SouthShiftY));
         property.Bounds.Add(BoundsOf(FacesBack, UpperY - .1f, SouthEnd, EastWall, LoftCeiling, UnitSouth));
+        // The room's walls take wall items: the east wall up to the elevator's box, the south end wall, and the
+        // elevator's south face east of the way in.
+        WallSurfaces.Add(property, "south-room-east-wall", PropertySurfaceFace.Left, EastWall - LiningGap, SouthWall + .05f, SouthRoomNorth - .05f, WallBottom, WallTop);
+        WallSurfaces.Add(property, "south-room-south-wall", PropertySurfaceFace.Front, SouthWall, KerbEdge + .05f, EastWall - .05f, WallBottom, WallTop);
+        WallSurfaces.Add(property, "south-room-north-wall", PropertySurfaceFace.Back, SouthRoomNorth, EastFront + .05f, EastWall - .05f, WallBottom, WallTop);
         state.PropertyExtensions.Add(property);
     }
+
+    // Wall surfaces upstairs run from just above the floor to just below the ceiling.
+    private const float WallBottom = UpperY + .05f, WallTop = LoftCeiling - .05f;
 
     // B, night 1: the roller-door faces between the loft and the walkway go, and a plank wall closes the walkway to the
     // south, where C has not been built yet.
@@ -583,6 +591,10 @@ public static class StorageWorld
             for (int y = 0; y <= 19; y++)
                 property.Tiles.Add(new GridCoordinate(x, y));
         property.Bounds.Add(BoundsOf(FacesBack, UpperY - .1f, UnitSouth - .2f, EastWall, LoftCeiling, UnitNorth));
+        // Wall items hang on the east room's east, north and south walls and on the walkway's north end.
+        WallSurfaces.Add(property, "east-room-east-wall", PropertySurfaceFace.Left, EastWall - LiningGap, UnitSouth + .05f, UnitNorth - .05f, WallBottom, WallTop);
+        WallSurfaces.Add(property, "east-room-north-wall", PropertySurfaceFace.Back, UnitNorth - LiningGap, FacesBack + .05f, EastWall - .05f, WallBottom, WallTop);
+        WallSurfaces.Add(property, "east-room-south-wall", PropertySurfaceFace.Front, UnitSouth + LiningGap, EastFront + .05f, EastWall - .05f, WallBottom, WallTop);
         state.PropertyExtensions.Add(property);
     }
 
@@ -629,6 +641,9 @@ public static class StorageWorld
             for (int y = 0; y <= 19; y++)
                 if (!(x >= 10 && y >= 15 && y <= 17)) property.Tiles.Add(new GridCoordinate(x + LoftShiftX, y));
         property.Bounds.Add(BoundsOf(UnitWest, UpperY - .1f, UnitSouth - .2f, FacesBack, LoftCeiling, UnitNorth));
+        // Wall items hang on the loft's west wall north of the door's swing and on its north wall.
+        WallSurfaces.Add(property, "loft-west-wall", PropertySurfaceFace.Right, UnitWest + LiningGap, LandingNorth + .05f, UnitNorth - .05f, WallBottom, WallTop);
+        WallSurfaces.Add(property, "loft-north-wall", PropertySurfaceFace.Back, UnitNorth - LiningGap, UnitWest + .05f, FacesBack - .05f, WallBottom, WallTop);
         state.PropertyExtensions.Add(property);
     }
 
