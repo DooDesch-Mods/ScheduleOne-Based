@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | rain [on|dry|off|state] | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | chemist [setup [wing] [product] [mixer] [qty]] | loadstate | aim <x> <y> <z> [pitch|-] [yaw] | ghost [<itemId>|read|drop|hush] | gridedges [code] | zfight [filter] [x y z radius]";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | rain [on|dry|off|state] | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | chemist [setup [wing] [product] [mixer] [qty]] | loadstate | aim <x> <y> <z> [pitch|-] [yaw] | ghost [<itemId>|read|drop|hush] | pickscan [code] | pick <x> <y> <z> | pickaround <x> <y> <z> | gridedges [code] | zfight [filter] [x y z radius]";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -235,6 +235,22 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "ghost":
                     // ghost <itemId> = hold it, ghost read = the placement ghost's verdict, ghost drop = hands free
                     GhostProbe.Handle(args);
+                    break;
+                case "pickscan":
+                    // pickscan <property code> [all] = tiles whose station space or overhead holds a collider (Based#127)
+                    SelectProbe.Scan(args.Count > 1 ? args[1] : _site.PropertyName.ToLowerInvariant(), args.Count > 2 && args[2] == "all");
+                    break;
+                case "pick" when args.Count > 3:
+                    // pick x y z = what the game's assign-mode object selector hovers when looking at that point
+                    SelectProbe.Pick(new Vector3(F(args[1]), F(args[2]), F(args[3])));
+                    break;
+                case "pickaround" when args.Count > 3:
+                    // pickaround x y z = the selector's look cast at the nearest buildable from eight standpoints around it
+                    SelectProbe.Around(new Vector3(F(args[1]), F(args[2]), F(args[3])));
+                    break;
+                case "pickpoint" when args.Count > 3:
+                    // pickpoint x y z = can the clipboard and the selector reach a worker standing at that floor point
+                    SelectProbe.Point(new Vector3(F(args[1]), F(args[2]), F(args[3])));
                     break;
                 case "gridedges":
                     // gridedges <property code> = every outer grid edge against the walls and floor ends there
