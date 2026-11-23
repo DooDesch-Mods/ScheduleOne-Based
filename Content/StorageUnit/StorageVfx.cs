@@ -71,7 +71,7 @@ internal static class StorageVfx
         "mode " + Current + ", live " + (Live.Count == 0 ? "none" : string.Join(", ", Live.Select(p => p.Key + " at "
             + (p.Value == null ? "destroyed" : p.Value.transform.position + " with " + Particles(p.Value) + " particle(s)"))));
 
-    private static int Particles(GameObject effect)
+    internal static int Particles(GameObject effect)
     {
         int count = 0;
         foreach (var system in effect.GetComponentsInChildren<ParticleSystem>(true)) count += system.particleCount;
@@ -90,7 +90,7 @@ internal static class StorageVfx
         _shown = "";
     }
 
-    private static bool IsNight()
+    internal static bool IsNight()
     {
         if (!NetworkSingleton<TimeManager>.InstanceExists) return false;
         int time = NetworkSingleton<TimeManager>.Instance.CurrentTime;
@@ -99,10 +99,20 @@ internal static class StorageVfx
 
     private static void Spawn(string id, string path, Vector3 at, float yaw)
     {
+        var clone = Place("Based_StorageVfx_" + id, path, at, yaw, id == FireId);
+        if (clone != null) Live[id] = clone;
+    }
+
+    internal const string Fire = FireTemplate, Sparks = SparksTemplate;
+
+    // Clones a running effect of the map to the spot, with the scripts that keep it going and nothing else. A fire gets
+    // a point light. Null when the source is not in the scene; that is logged once per source.
+    internal static GameObject? Place(string name, string path, Vector3 at, float yaw, bool fireLight)
+    {
         var template = Template(path);
-        if (template == null) return;
+        if (template == null) return null;
         var clone = Object.Instantiate(template);
-        clone.name = "Based_StorageVfx_" + id;
+        clone.name = name;
         clone.transform.SetParent(null, false);
         clone.transform.position = at;
         clone.transform.rotation = Quaternion.Euler(0, yaw, 0) * template.transform.rotation;
@@ -130,9 +140,9 @@ internal static class StorageVfx
             removed++;
         }
         // The fire lights the yard around the barrel; the recycler's fire has no light of its own.
-        if (id == FireId)
+        if (fireLight)
         {
-            var glow = new GameObject("Based_StorageVfx_fire-light");
+            var glow = new GameObject(name + "-light");
             glow.transform.SetParent(clone.transform, false);
             glow.transform.position = at + new Vector3(0, .5f, 0);
             var light = glow.AddComponent<Light>();
@@ -147,8 +157,8 @@ internal static class StorageVfx
         clone.SetActive(true);
         foreach (var system in clone.GetComponentsInChildren<ParticleSystem>(true)) system.Play(true);
         int renderers = clone.GetComponentsInChildren<Renderer>(true).Length;
-        Live[id] = clone;
-        Mod.Log("Storage site effect " + id + " placed at " + at + " from " + path + ": " + renderers + " renderer(s), " + kept + " script(s) kept, " + removed + " removed.");
+        Mod.Log("Site effect " + name + " placed at " + at + " from " + path + ": " + renderers + " renderer(s), " + kept + " script(s) kept, " + removed + " removed.");
+        return clone;
     }
 
     private static void Remove(string id)

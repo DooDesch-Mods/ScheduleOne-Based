@@ -1,0 +1,195 @@
+using Based.Core;
+
+namespace Based.Content.Bungalow;
+
+public static class BungalowDefinition
+{
+    public const string BaseId = "ray.bungalow";
+    public const string PermitId = "ray.bungalow-permit";
+    public const string StoreyId = "ray.bungalow-storey";
+    public const string SunroomId = "ray.bungalow-sunroom";
+    public const string CarportId = "ray.bungalow-carport";
+    public const string DeckId = "ray.bungalow-deck";
+    public const string CarportExpansionId = "based_bungalow_carport";
+    public const string DeckExpansionId = "based_bungalow_deck";
+    public const string SunroomExpansionId = "based_bungalow_sunroom";
+    public const string StoreyExpansionId = "based_bungalow_storey";
+    public const int PermitPrice = 1500;
+    public const int StoreyPrice = 6000;
+    public const int SunroomPrice = 4000;
+    public const int CarportPrice = 1500;
+    public const int DeckPrice = 2000;
+
+    public static BaseDefinition Create() =>
+        new(BaseId, "bungalow", new[]
+        {
+            new UpgradeDefinition(PermitId, PermitPrice, 0, 0, Array.Empty<string>(),
+                Array.Empty<ConstructionPhase>(), Array.Empty<UpgradeEffect>()),
+            // The roof comes off on the first night and goes back on with the fifth; rain on any night in between soaks
+            // the open floor.
+            new UpgradeDefinition(StoreyId, 0, StoreyPrice, 6, new[] { PermitId }, new[]
+            {
+                new ConstructionPhase("storey-floor", 1, BungalowStorey.FloorState, OpenToRain: true),
+                new ConstructionPhase("storey-frame", 2, BungalowStorey.FrameState, OpenToRain: true),
+                new ConstructionPhase("storey-walls", 3, BungalowStorey.WallsState, OpenToRain: true),
+                new ConstructionPhase("storey-rafters", 4, BungalowStorey.RaftersState, OpenToRain: true),
+                new ConstructionPhase("storey-roof", 5, BungalowStorey.RoofState)
+            }, new[] { new UpgradeEffect("world-state", StoreyExpansionId, "complete") }, OpenToRainOnOrderDay: true),
+            new UpgradeDefinition(SunroomId, 0, SunroomPrice, 3, new[] { PermitId }, new[]
+            {
+                new ConstructionPhase("sunroom-base", 1, BungalowSunroom.BaseState),
+                new ConstructionPhase("sunroom-glass", 2, BungalowSunroom.FrameState)
+            }, new[] { new UpgradeEffect("world-state", SunroomExpansionId, "complete") }),
+            new UpgradeDefinition(CarportId, 0, CarportPrice, 2, new[] { PermitId },
+                new[] { new ConstructionPhase("carport-posts", 1, BungalowCarport.PostsState) }, new[] { new UpgradeEffect("world-state", CarportExpansionId, "complete") }),
+            new UpgradeDefinition(DeckId, 0, DeckPrice, 2, new[] { PermitId },
+                new[] { new ConstructionPhase("deck-stilts", 1, BungalowDeck.StiltsState) },
+                new[] { new UpgradeEffect("world-state", DeckExpansionId, "complete") })
+        });
+}
+
+// Ray sells the builds of the Bungalow: one permit, then one of four builds at a time.
+internal static class BungalowSite
+{
+    internal const string VendorContainerId = "based_bungalow_plan";
+
+    public static SiteDefinition Create() => new()
+    {
+        Base = BungalowDefinition.Create(),
+        UpgradeId = BungalowDefinition.PermitId,
+        Menu = true,
+        PropertyName = "Bungalow",
+        VendorNpcId = Runtime.PlanCopies.RayId,
+        VendorContainerId = VendorContainerId,
+        VendorLine = "Sure thing. Here's what the lot allows.",
+        Title = "Expansion: Bungalow",
+        FolderItemId = "based_bungalow_folder",
+        BoardSurfaceId = "based-bungalow-plan-board",
+        BuyFirst = "Buy the Bungalow first.",
+        QuestMarker = new UnityEngine.Vector3(-170f, -3.7f, 115.5f),
+        PhaseTitles = new Dictionary<string, string>
+        {
+            ["storey-floor"] = "Floor",
+            ["storey-frame"] = "Frame",
+            ["storey-walls"] = "Walls",
+            ["storey-rafters"] = "Rafters",
+            ["storey-roof"] = "Roof and interior",
+            ["carport-posts"] = "Posts",
+            ["sunroom-base"] = "Foundation",
+            ["sunroom-glass"] = "Frames",
+            ["deck-stilts"] = "Stilts"
+        },
+        Plan = new PlanRoom[]
+        {
+            new(PlanRoomKind.Existing, -176f, 109.35f, -170f, 115.35f),
+            new(PlanRoomKind.Existing, -176f, 115.5f, -170f, 121.5f),
+            new(PlanRoomKind.Existing, -170f, 115.5f, -163.85f, 121.5f, "Bungalow")
+        },
+        // In the west room, clear of the carport bays south of the house.
+        StaffPlaces = new StaffPlace[]
+        {
+            new UnityEngine.Vector3(-174.5f, -3.7f, 110.5f),
+            new UnityEngine.Vector3(-173.5f, -3.7f, 110.5f),
+            new UnityEngine.Vector3(-172.5f, -3.7f, 110.5f),
+            new UnityEngine.Vector3(-174.5f, -3.7f, 111.5f),
+            new UnityEngine.Vector3(-173.5f, -3.7f, 111.5f)
+        },
+        RegisterWorld = () =>
+        {
+            BungalowCarport.Register();
+            BungalowDeck.Register();
+            BungalowSunroom.Register();
+            BungalowStorey.Register();
+        },
+        Crew = BungalowCrew.Instance,
+        FollowUps = new[]
+        {
+            new SiteFollowUp(BungalowDefinition.StoreyId, "Second storey: Bungalow", "Ready to move in",
+                new[] { "Three more employees can work here." })
+            {
+                Name = "Second storey",
+                QuestType = typeof(BungalowStoreyQuest),
+                OrderEntry = "Order the second storey from Ray",
+                Staff = 3,
+                Floor = BungalowStorey.UpperFloor,
+                Plan = new PlanRoom[]
+                {
+                    new(PlanRoomKind.New, -176f, 109.35f, -170f, 115.35f),
+                    new(PlanRoomKind.New, -176f, 115.5f, -170f, 121.5f),
+                    new(PlanRoomKind.New, -169.85f, 115.5f, -163.85f, 121.5f, "Second storey")
+                }
+            },
+            new SiteFollowUp(BungalowDefinition.SunroomId, "Sunroom: Bungalow", "Ready to move in",
+                new[] { "Two more employees can work here." })
+            {
+                Name = "Sunroom",
+                QuestType = typeof(BungalowSunroomQuest),
+                OrderEntry = "Order the sunroom from Ray",
+                Staff = 2,
+                Floor = -3.7f,
+                Plan = new PlanRoom[]
+                {
+                    new(PlanRoomKind.Existing, -176f, 109.35f, -170f, 115.35f),
+                    new(PlanRoomKind.Existing, -176f, 115.5f, -170f, 121.5f),
+                    new(PlanRoomKind.Existing, -170f, 115.5f, -163.85f, 121.5f, "Bungalow"),
+                    new(PlanRoomKind.New, -183f, 109.35f, -176.17f, 121.35f, "Sunroom")
+                }
+            },
+            new SiteFollowUp(BungalowDefinition.CarportId, "Double carport: Bungalow", "Ready for deliveries",
+                new[] { "A second delivery spot under the roof." })
+            {
+                Name = "Double carport",
+                QuestType = typeof(BungalowCarportQuest),
+                OrderEntry = "Order the double carport from Ray",
+                // The gravel under the roof, between the posts.
+                Floor = -4f,
+                Plan = new PlanRoom[]
+                {
+                    new(PlanRoomKind.Existing, -176f, 109.35f, -170f, 115.35f),
+                    new(PlanRoomKind.Existing, -176f, 115.5f, -170f, 121.5f),
+                    new(PlanRoomKind.Existing, -170f, 115.5f, -163.85f, 121.5f, "Bungalow"),
+                    new(PlanRoomKind.New, -168.4f, 104.6f, -162.3f, 110.7f, "Double carport")
+                }
+            },
+            new SiteFollowUp(BungalowDefinition.DeckId, "Slope deck: Bungalow", "Finished",
+                new[] { "A deck over the slope behind the house." })
+            {
+                Name = "Slope deck",
+                QuestType = typeof(BungalowDeckQuest),
+                OrderEntry = "Order the slope deck from Ray",
+                Floor = -3.7f,
+                Plan = new PlanRoom[]
+                {
+                    new(PlanRoomKind.Existing, -176f, 109.35f, -170f, 115.35f),
+                    new(PlanRoomKind.Existing, -176f, 115.5f, -170f, 121.5f),
+                    new(PlanRoomKind.Existing, -170f, 115.5f, -163.85f, 121.5f, "Bungalow"),
+                    new(PlanRoomKind.New, -194f, 107.85f, -188f, 117.85f, "Slope deck")
+                }
+            }
+        }
+    };
+}
+
+public sealed class BungalowStoreyQuest : Based.Runtime.ConstructionQuest
+{
+    protected override string BaseId => BungalowDefinition.BaseId;
+    protected override string? UpgradeId => BungalowDefinition.StoreyId;
+}
+
+public sealed class BungalowSunroomQuest : Based.Runtime.ConstructionQuest
+{
+    protected override string BaseId => BungalowDefinition.BaseId;
+    protected override string? UpgradeId => BungalowDefinition.SunroomId;
+}
+
+public sealed class BungalowDeckQuest : Based.Runtime.ConstructionQuest
+{
+    protected override string BaseId => BungalowDefinition.BaseId;
+    protected override string? UpgradeId => BungalowDefinition.DeckId;
+}
+
+public sealed class BungalowCarportQuest : Based.Runtime.ConstructionQuest
+{
+    protected override string BaseId => BungalowDefinition.BaseId;
+    protected override string? UpgradeId => BungalowDefinition.CarportId;
+}

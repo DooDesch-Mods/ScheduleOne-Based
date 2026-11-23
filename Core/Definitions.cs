@@ -9,13 +9,15 @@ public sealed record UpgradeDefinition(
     int ConstructionCycles,
     IReadOnlyList<string> Prerequisites,
     IReadOnlyList<ConstructionPhase> Phases,
-    IReadOnlyList<UpgradeEffect> Effects)
+    IReadOnlyList<UpgradeEffect> Effects,
+    bool OpenToRainOnOrderDay = false)
 {
     // A permit is rights without construction: buying it completes it.
     public bool IsPermit => ConstructionCycles == 0;
 }
 
-public sealed record ConstructionPhase(string Id, int AfterSleepCycles, string WorldStateId);
+// OpenToRain: the build stands without a roof in this phase, so rain on a night spent in it can cost one night.
+public sealed record ConstructionPhase(string Id, int AfterSleepCycles, string WorldStateId, bool OpenToRain = false);
 public sealed record UpgradeEffect(string Kind, string TargetId, string StateId);
 public sealed record AppliedEffect(string BaseId, string UpgradeId, UpgradeEffect Effect);
 

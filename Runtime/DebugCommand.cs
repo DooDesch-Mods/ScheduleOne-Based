@@ -14,7 +14,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
 {
     public override string CommandWord => "baseddiag";
     public override string CommandDescription => "Based construction state and isolated runtime diagnostics.";
-    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> | hold <slot> | stayers | walkers | staff | advance | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate | aim <x> <y> <z> [pitch|-] [yaw] | ghost";
+    public override string ExampleUsage => "baseddiag [site=<id>] status | sites | plan | ray [office|street] | creator | dock | dockroute [build|route|routes|work|deliver] | room | workers | hammer [seconds|set <time>] | network | packdoorway | phase <id> [upgrade] | hold <slot> | stayers | walkers | staff | advance | rain [on|dry|off|state] | lights | lightset <what> <value> | journal [off] | vfx [on|off|force] | walk <x> <z> [<x> <z> ...] | litter [<upgrade>|drop <upgrade>|pickup [n]] | ladder | climb [seconds] | fixtures | tip [state|cash <n>|product [i]|set <n>|wallet <n>] | folder slot <n> | equip | track [seconds|stop] | route <sourceId> <up|down> <destinationId> <up|down> [filterId] | route unfilter | contents [idPart] | loadstate | aim <x> <y> <z> [pitch|-] [yaw] | ghost [<itemId>|read|drop|hush] | gridedges [code] | zfight [filter] [x y z radius]";
 
     // The site a command works on; "site=<id>" anywhere in the arguments picks it, without one it is the first site.
     private static SiteDefinition _site = null!;
@@ -37,6 +37,22 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
             {
                 case "sites":
                     Sites();
+                    break;
+                case "door":
+                    Mod.Log("baseddiag: " + Content.Bungalow.BungalowDoors.Debug(args));
+                    break;
+                case "plaque":
+                    // plaque x y z lean = moves the live sunroom plaque until the next scene; plaque alone only reports.
+                    if (args.Count > 4)
+                    {
+                        float P(int i) => float.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture);
+                        Content.Bungalow.BungalowPlaque.DebugMove(new UnityEngine.Vector3(P(1), P(2), P(3)), P(4));
+                    }
+                    Mod.Log("baseddiag: " + Content.Bungalow.BungalowPlaque.Describe());
+                    break;
+                case "cake":
+                    if (args.Count > 2 && args[1] == "date") Mod.Log("baseddiag: " + Content.Bungalow.BungalowCake.ForceDate(args[2]) + ".");
+                    else Mod.Log("baseddiag: " + Content.Bungalow.BungalowCake.Describe());
                     break;
                 case "status":
                     Mod.Log("baseddiag: " + BuildPlan.State(_site));
@@ -96,8 +112,11 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                             _ => throw new ArgumentException("baseddiag vfx [on|off|force]")
                         };
                         Content.StorageUnit.StorageVfx.Refresh();
+                        Content.Bungalow.BungalowVfx.Refresh();
                     }
                     Mod.Log("baseddiag: storage effects " + Content.StorageUnit.StorageVfx.Describe());
+                    Mod.Log("baseddiag: bungalow effects " + Content.Bungalow.BungalowVfx.Describe());
+                    Mod.Log("baseddiag: bungalow effects " + Content.Bungalow.BungalowVfx.Describe());
                     break;
                 case "creator":
                     // A joining test client without saved looks starts in the character creator; finish it with the defaults.
@@ -114,6 +133,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "advance":
                     Mod.DebugAdvance();
                     Mod.Log("baseddiag: one sleep cycle requested; revision " + Mod.Engine.Revision + ".");
+                    break;
+                case "rain":
+                    Rain(args);
                     break;
                 case "dock":
                     DockProbe.Execute(args.Skip(1).ToArray());
@@ -139,7 +161,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     else PackTestDoorway();
                     break;
                 case "phase":
-                    JumpToPhase(args.Count > 1 ? args[1] : "");
+                    JumpToPhase(args.Count > 1 ? args[1] : "", args.Count > 2 ? args[2] : "");
                     break;
                 case "hold":
                     Hold(args.Count > 1 ? int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 0);
@@ -199,8 +221,24 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                 case "aim" when args.Count > 3:
                     Aim(F(args[1]), F(args[2]), F(args[3]), args.Count > 4 && args[4] != "-" ? F(args[4]) : null, args.Count > 5 ? F(args[5]) : null);
                     break;
-                case "ghost":
+                case "ghost" when args.Count == 1:
+                    // ghost = the active placement ghost's grid, footprint tiles and verdict
                     Ghost();
+                    break;
+                case "ghost":
+                    // ghost <itemId> = hold it, ghost read = the placement ghost's verdict, ghost drop = hands free
+                    GhostProbe.Handle(args);
+                    break;
+                case "gridedges":
+                    // gridedges <property code> = every outer grid edge against the walls and floor ends there
+                    BuildChecks.GridEdges(args.Count > 1 ? args[1] : _site.PropertyName.ToLowerInvariant());
+                    break;
+                case "zfight":
+                    // zfight <path filter> [x y z radius] = faces of two parts in one plane
+                    var at = args.Count > 5
+                        ? new Vector3(float.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture), float.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture), float.Parse(args[4], System.Globalization.CultureInfo.InvariantCulture))
+                        : new Vector3(-176f, -2f, 113f);
+                    BuildChecks.ZFight(args.Count > 1 ? args[1] : "based_", at, args.Count > 5 ? float.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture) : 24f);
                     break;
                 default:
                     throw new ArgumentException(ExampleUsage);
@@ -770,6 +808,30 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         Mod.Log("baseddiag: " + running + " stay-in-building events running, " + stuck + " without a usable door.");
     }
 
+    // rain on: every night counts as rainy; dry: every night counts as dry; off: the game's weather decides again.
+    private static void Rain(List<string> args)
+    {
+        string mode = args.Count > 1 ? args[1].ToLowerInvariant() : "state";
+        switch (mode)
+        {
+            case "on": NightRain.Forced = true; break;
+            case "dry": NightRain.Forced = false; break;
+            case "off": NightRain.Forced = null; break;
+            case "state": break;
+            default: throw new ArgumentException("baseddiag rain [on|dry|off|state]");
+        }
+        Mod.Log("baseddiag: rain " + (mode == "state" ? "state" : mode + " set") + "; " + NightRain.Describe() + ".");
+        foreach (var site in Mod.Sites)
+            foreach (var upgrade in site.Base.Upgrades)
+            {
+                var state = Mod.Engine.GetUpgrade(site.Base.Id, upgrade.Id);
+                if (state.Stage != UpgradeStage.Constructing && !state.RainDelayed) continue;
+                Mod.Log("baseddiag: rain " + site.Base.Id + "/" + upgrade.Id + ": stage=" + state.Stage + ", cycles=" + state.CompletedCycles + "/"
+                    + upgrade.ConstructionCycles + ", openToRain=" + Mod.Engine.IsOpenToRain(site.Base.Id, upgrade.Id) + ", delayed=" + state.RainDelayed
+                    + (state.RainDelayed ? " (cycle " + state.RainDelayedCycle + ")" : "") + ".");
+            }
+    }
+
     private static void Hammer(List<string> args)
     {
         if (args.Count > 2 && args[1] == "set")
@@ -959,16 +1021,18 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
     }
 
     // Moves the upgrade straight to a stage, so one run can look at every construction state.
-    // "phase <phase>" moves the site's first upgrade; "phase <upgradeId>:<phase>" moves a follow-up. A follow-up finishes
-    // everything it needs first and resets the site's other builds, since the engine allows one construction per base.
-    private static void JumpToPhase(string argument)
+    // "phase <phase>" moves the site's first upgrade; "phase <upgradeId>:<phase>" or "phase <phase> <upgrade>" moves a
+    // follow-up, named in full or by its last part ("carport" for "ray.bungalow-carport"). A follow-up finishes
+    // everything it needs first and resets a build still under construction, since the engine allows one per base.
+    private static void JumpToPhase(string argument, string upgradeArg)
     {
         if (!NativeBus.IsHost) throw new InvalidOperationException("Only the host can change the construction state.");
         int colon = argument.LastIndexOf(':');
-        string upgradeId = colon > 0 ? argument.Substring(0, colon) : _site.UpgradeId;
+        if (colon > 0) upgradeArg = argument.Substring(0, colon);
         string phase = colon > 0 ? argument.Substring(colon + 1) : argument;
-        if (!_site.BuildIds.Contains(upgradeId))
-            throw new ArgumentException("baseddiag phase [upgradeId:]phase; " + _site.Base.Id + " builds " + string.Join(", ", _site.BuildIds));
+        string upgradeId = upgradeArg.Length == 0 ? _site.UpgradeId
+            : _site.BuildIds.FirstOrDefault(id => id == upgradeArg || id.EndsWith("-" + upgradeArg, StringComparison.Ordinal))
+              ?? throw new ArgumentException("baseddiag phase [upgradeId:]phase; " + _site.Base.Id + " builds " + string.Join(", ", _site.BuildIds));
         var state = Mod.Engine.ExportState();
         var upgrade = state.Upgrades.First(u => u.BaseId == _site.Base.Id && u.UpgradeId == upgradeId);
         var definition = _site.UpgradeOf(upgradeId);
@@ -988,7 +1052,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     other.Stage = UpgradeStage.Complete;
                     other.CompletedCycles = _site.UpgradeOf(other.UpgradeId).ConstructionCycles;
                 }
-                else
+                else if (other.Stage == UpgradeStage.Constructing)
                 {
                     other.Stage = UpgradeStage.RightsMissing;
                     other.CompletedCycles = 0;
@@ -996,7 +1060,7 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
                     other.ConstructionPaid = 0;
                 }
             }
-            Mod.Log("baseddiag: phase: " + upgradeId + " needs " + (needed.Count == 0 ? "nothing" : string.Join(", ", needed)) + "; those are complete, the other builds reset.");
+            Mod.Log("baseddiag: phase: " + upgradeId + " needs " + (needed.Count == 0 ? "nothing" : string.Join(", ", needed)) + "; those are complete, builds under construction reset, finished ones stay.");
         }
         // The named stages around the construction, and each phase at the night it starts.
         var stages = new List<(string Id, UpgradeStage Stage, int Cycles)>
@@ -1014,6 +1078,9 @@ public sealed class BasedDebugCommand : BaseConsoleCommand
         upgrade.CompletedCycles = cycles;
         if (stage == UpgradeStage.RightsMissing) upgrade.RightsPaid = 0;
         if (stage < UpgradeStage.Constructing) upgrade.ConstructionPaid = 0;
+        // A jump starts the build fresh at that night, so no earlier night was lost to rain.
+        upgrade.RainDelayed = false;
+        upgrade.RainDelayedCycle = 0;
         state.Revision++;
         Mod.DebugClearFailure();
         Mod.Engine.RestoreState(state);

@@ -116,7 +116,20 @@ internal static class BuildPlan
         if (_gameStateLeft)
         {
             _gameStateLeft = false;
-            Close("the game left its UI state (Escape)");
+            // Right-click or Escape on a build of a menu goes back to the list of builds; on the list it closes the plan.
+            if (Site != null && Site.Menu && _selected.Length > 0)
+            {
+                _selected = "";
+                _notice = "";
+                _gameStatePushed = false;
+                PushGameState();
+                Mod.PlanShows(Site, Shown(Site, wall: false));
+                _lastPushed = "";
+                _nextPush = 0f;
+                Mod.Log("Construction plan of " + Site.Base.Id + " went back to the list of builds (right-click or Escape).");
+                return;
+            }
+            Close("the game left its UI state (right-click or Escape)");
             return;
         }
         if (Site == null || Time.unscaledTime < _nextPush) return;
@@ -298,6 +311,8 @@ internal static class BuildPlan
         var expansion = Mod.Engine.GetUpgrade(site.Base.Id, site.UpgradeId);
         string phase = Mod.Engine.CurrentPhase(state.BaseId, state.UpgradeId) ?? "";
         int nights = Math.Max(0, upgrade.ConstructionCycles - state.CompletedCycles);
+        // The night rain took is part of this build's work.
+        int totalNights = upgrade.ConstructionCycles + (state.RainDelayed ? 1 : 0);
         bool ordering = state.Stage is UpgradeStage.RightsMissing or UpgradeStage.RightsOwned;
         bool permit = upgrade.IsPermit;
         string reason = site.Menu && followUp != null ? LockReason(site, upgradeId) : "";
@@ -340,9 +355,9 @@ internal static class BuildPlan
             constructionLabel = Text.T("Construction"),
             construction = Price(upgrade.ConstructionPrice),
             constructionPaid = state.Stage >= UpgradeStage.Constructing,
-            duration = permit ? "" : upgrade.ConstructionCycles == 1 ? Text.T("One night of work") : Text.T("{0} nights of work", upgrade.ConstructionCycles),
+            duration = permit ? "" : totalNights == 1 ? Text.T("One night of work") : Text.T("{0} nights of work", totalNights),
             cash = Text.T("Cash only"),
-            notes = Notes(site, followUp, upgrade, state.Stage),
+            notes = Notes(site, followUp, upgrade, state.Stage, state.RainDelayed),
             notice = broken ? Text.T("Construction paused because the expansion could not be applied.")
                 : !owned ? Text.T(site.BuyFirst)
                 : Mod.HeldBy.Length > 0 && Mod.Constructing(site) != null ? Text.T("On hold: move {0} off the red walls.", Text.Items(Mod.HeldBy))
@@ -356,12 +371,13 @@ internal static class BuildPlan
         });
     }
 
-    private static string[] Notes(SiteDefinition site, SiteFollowUp? followUp, UpgradeDefinition upgrade, UpgradeStage stage)
+    private static string[] Notes(SiteDefinition site, SiteFollowUp? followUp, UpgradeDefinition upgrade, UpgradeStage stage, bool rainDelayed)
     {
         if (stage == UpgradeStage.Complete) return Array.Empty<string>();
         var notes = (followUp?.Notes ?? site.Restrictions).Select(r => Text.T(r)).ToList();
         if (stage == UpgradeStage.Constructing)
             notes.Add(Text.T(upgrade.Phases.Count > 0 ? "The crew finishes one stage each night you sleep." : "The crew builds it the night you sleep."));
+        if (stage == UpgradeStage.Constructing && rainDelayed) notes.Add(Text.T("Rain cost this build one night."));
         return notes.ToArray();
     }
 

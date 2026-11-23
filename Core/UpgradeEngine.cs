@@ -118,6 +118,8 @@ public sealed class UpgradeEngine
                 state.ConstructionPaid = request.Amount;
                 state.Stage = UpgradeStage.Constructing;
                 state.LastSleepCycle = _state.LastSleepCycle;
+                state.RainDelayed = false;
+                state.RainDelayedCycle = 0;
             }
             _state.Revision++;
             _purchaseVersion++;
@@ -194,12 +196,53 @@ public sealed class UpgradeEngine
             _state.LastSleepCycle = cycle;
             foreach (var state in _state.Upgrades.Where(s => s.Stage == UpgradeStage.Constructing))
             {
-                state.CompletedCycles++;
                 state.LastSleepCycle = cycle;
-                if (state.CompletedCycles >= FindDefinition(state.BaseId, state.UpgradeId).ConstructionCycles) state.Stage = UpgradeStage.Complete;
+                // Rain took this night: the build stays where it was.
+                if (state.RainDelayed && state.RainDelayedCycle == cycle) continue;
+                state.CompletedCycles++;
+                if (state.CompletedCycles >= FindDefinition(state.BaseId, state.UpgradeId).ConstructionCycles)
+                {
+                    state.Stage = UpgradeStage.Complete;
+                    state.RainDelayed = false;
+                    state.RainDelayedCycle = 0;
+                }
             }
             _state.Revision++;
             return new(true, "sleep-processed", _state.Revision);
+        }
+    }
+
+    // True while the running build stands without a roof: its current phase is open to rain, or no phase has
+    // started and the upgrade is open on the order day.
+    public bool IsOpenToRain(string baseId, string upgradeId)
+    {
+        lock (_gate)
+        {
+            var state = FindState(baseId, upgradeId);
+            if (state.Stage != UpgradeStage.Constructing) return false;
+            var definition = FindDefinition(baseId, upgradeId);
+            var phase = definition.Phases.LastOrDefault(p => p.AfterSleepCycles <= state.CompletedCycles);
+            return phase?.OpenToRain ?? definition.OpenToRainOnOrderDay;
+        }
+    }
+
+    // Rain costs a build one night, once per build. Call it for the night about to be processed and then
+    // call AdvanceSleep for the same cycle: that sleep leaves this build where it is.
+    public TransitionResult DelayForRain(string baseId, string upgradeId, long cycle)
+    {
+        lock (_gate)
+        {
+            if (!_authority.CanMutate) return new(false, "host-required", _state.Revision);
+            if (cycle < 0) return new(false, "invalid-cycle", _state.Revision);
+            if (cycle <= _state.LastSleepCycle) return new(false, "cycle-already-processed", _state.Revision);
+            var state = FindState(baseId, upgradeId);
+            if (state.Stage != UpgradeStage.Constructing) return new(false, "not-constructing", _state.Revision);
+            if (state.RainDelayed) return new(false, "already-delayed", _state.Revision);
+            if (!IsOpenToRain(baseId, upgradeId)) return new(false, "not-open-to-rain", _state.Revision);
+            state.RainDelayed = true;
+            state.RainDelayedCycle = cycle;
+            _state.Revision++;
+            return new(true, "rain-delayed", _state.Revision);
         }
     }
 
@@ -356,6 +399,12 @@ public sealed class UpgradeEngine
                 upgrade.Stage < UpgradeStage.Constructing && upgrade.ConstructionPaid != 0)
                 throw new ArgumentException("Saved payments and ownership disagree.");
             AdaptCycleCount(upgrade, definition, warnings);
+            if (upgrade.RainDelayed && upgrade.Stage != UpgradeStage.Constructing)
+            {
+                warnings.Add("Cleared the rain delay of " + upgrade.BaseId + "/" + upgrade.UpgradeId + ": it is not under construction.");
+                upgrade.RainDelayed = false;
+                upgrade.RainDelayedCycle = 0;
+            }
         }
         foreach (var b in _definitions.Values)
             foreach (var definition in b.Upgrades)
