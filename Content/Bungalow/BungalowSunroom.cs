@@ -229,6 +229,7 @@ public static class BungalowSunroom
                 for (int y = TileYMin; y <= TileYMax; y++)
                     extension.Tiles.Add(new GridCoordinate(x, y));
             extension.Bounds.Add(BoundsOf(West, Floor - .3f, South, House, Floor + 3f, North));
+            HouseWallSurfaces(extension);
             state.PropertyExtensions.Add(extension);
         }
 
@@ -271,6 +272,24 @@ public static class BungalowSunroom
         }
         state.Copies.Add(geometry);
         return state;
+    }
+
+    // The house's outer wall is the sunroom's one solid wall, but its own surface faces into the house, so wall items get
+    // surfaces of their own on the sunroom side. They leave out the corner posts, the sliding door, the copied switch
+    // beside it, the outdoor tap under the switch, and the kitchen window with the strip above it; the glass fronts get
+    // none, like the game's own windows.
+    private const float WallBottom = Floor + .05f, WallTop = RoofAtHouse - .05f;
+    private const float CornerSouth = 109.40f, SwitchNorth = 112.95f, TapNorth = 113.40f, TapTop = -3.0f;
+    private const float WindowSouth = 117.65f, WindowNorth = 119.13f, WindowBottom = -2.44f;
+
+    private static void HouseWallSurfaces(PropertyExtensionDefinition extension)
+    {
+        const PropertySurfaceFace face = PropertySurfaceFace.Left;
+        WallSurfaces.Add(extension, "sunroom-house-wall-south", face, House, CornerSouth, DoorSouth - .05f, WallBottom, WallTop);
+        WallSurfaces.Add(extension, "sunroom-house-wall-tap", face, House, SwitchNorth, TapNorth, TapTop, WallTop);
+        WallSurfaces.Add(extension, "sunroom-house-wall-middle", face, House, TapNorth, WindowSouth - .05f, WallBottom, WallTop);
+        WallSurfaces.Add(extension, "sunroom-house-wall-sill", face, House, WindowSouth, WindowNorth, WallBottom, WindowBottom - .05f);
+        WallSurfaces.Add(extension, "sunroom-house-wall-north", face, House, WindowNorth + .05f, North - .05f, WallBottom, WallTop);
     }
 
     // The roof's mid-plane rises from the top of the west front to under the house's eave.
