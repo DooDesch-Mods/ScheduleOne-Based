@@ -3,7 +3,7 @@ In-game check of Based#101: a wall item (Modern Wall Lamp) can be placed on ever
 
 The game's wall ghost (BuildUpdate_Surface) is valid only where its look ray hits a collider with a Surface in its
 parents, of a type the item takes, on an owned property, on the surface's allowed face. This completes the Storage
-Unit's upper floor, the Bungalow's storey and the Sweatshop's wing, gives the player a Modern Wall Lamp, and for each
+Unit's upper floor, the Bungalow's storey and sunroom and the Sweatshop's wing, gives the player a Modern Wall Lamp, and for each
 wall stands 1.5 m in front of it, aims the lamp's ghost at the wall (`baseddiag aim ... modernwalllamp`) and reads it
 back (`baseddiag ghost`): the ghost must be valid, and the readout names the collider the ray hit and its Surface.
 A vanilla wall of the Bungalow's ground floor is the control.
@@ -12,7 +12,7 @@ Needs Debug builds of MapExpansions and Based in a running test slot and a save 
 Unit, the Bungalow and the Sweatshop (template `played`). Uses MapExpansions' Tests/employee-reach.py for the console
 helpers.
 
-    python _wt-Based-<topic>/Tests/wall-items.py [--slot mptest] [--only storage,bungalow,sweatshop,control]
+    python _wt-Based-<topic>/Tests/wall-items.py [--slot mptest] [--only storage,bungalow,sunroom,sweatshop,control]
         [--mapexpansions MapExpansions] [--shots <folder>]
 """
 import argparse
@@ -46,6 +46,18 @@ SITES = {
         ("Bungalow storey north-east room north wall", (-166.9, 121.5), (0, -1)),
         ("Bungalow storey north-east room east wall", (-163.85, 120.5), (-1, 0)),
     ]),
+    # The sunroom (Content/Bungalow/BungalowSunroom.cs): glass fronts on three sides, the house's outer wall on the east.
+    # The glass takes no wall item, like the game's own windows.
+    "sunroom": dict(cmds=["baseddiag site=bungalow phase complete", "baseddiag site=bungalow phase complete sunroom"],
+                    floor=-3.70, walls=[
+        ("Bungalow sunroom house wall (middle)", (-176.17, 115.5), (-1, 0)),
+        ("Bungalow sunroom house wall (south of the door)", (-176.17, 109.8), (-1, 0)),
+        ("Bungalow sunroom house wall (north of the window)", (-176.17, 120.3), (-1, 0)),
+        ("Bungalow sunroom house wall (under the window)", (-176.17, 118.4, -3.0), (-1, 0)),
+        ("Bungalow sunroom west front (glass)", (-183.05, 117.0), (1, 0), False),
+        ("Bungalow sunroom south end (glass)", (-179.5, 109.30), (0, 1), False),
+        ("Bungalow sunroom north end (glass)", (-179.5, 121.40), (0, -1), False),
+    ]),
     "sweatshop": dict(cmds=["baseddiag site=sweatshop phase complete"], floor=-0.25, walls=[
         ("Sweatshop wing east wall", (-53.99, 140.2), (-1, 0)),
         ("Sweatshop wing north wall", (-58.5, 145.0), (0, -1)),
@@ -66,12 +78,14 @@ def load_reach(root):
     return module
 
 
-def wall(run, pick, name, floor, at, inward, shots):
-    x, z = at
+def wall(run, pick, name, floor, at, inward, shots, placeable=True):
+    # at: (x, z), aimed 1.5 m above the floor, or (x, z, y) for a point at another height.
+    x, z = at[0], at[1]
+    y = at[2] if len(at) > 2 else floor + 1.5
     stand = (x + 1.5 * inward[0], floor + 1.2, z + 1.5 * inward[1])
     run.g.call("teleport", {"x": stand[0], "y": stand[1], "z": stand[2]}, timeout_ms=8000)
     time.sleep(1.0)
-    aim = run.cmd("baseddiag aim %.2f %.2f %.2f - - %s" % (x, floor + 1.5, z, ITEM), wait=1.5)
+    aim = run.cmd("baseddiag aim %.2f %.2f %.2f - - %s" % (x, y, z, ITEM), wait=1.5)
     log = run.cmd("baseddiag ghost", wait=0.5)
     ghost = next((m for m in (GHOST.search(l.strip()) for l in log) if m), None)
     if ghost is None:
@@ -84,7 +98,8 @@ def wall(run, pick, name, floor, at, inward, shots):
         if taken and os.path.isfile(taken):
             shot = os.path.join(shots, re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") + ".png")
             shutil.copy(taken, shot)
-    run.check("%s: Modern Wall Lamp placeable" % name, ghost.group(1) == ITEM and ghost.group(2) == "True",
+    run.check("%s: Modern Wall Lamp %s" % (name, "placeable" if placeable else "not placeable"),
+              ghost.group(1) == ITEM and ghost.group(2) == ("True" if placeable else "False"),
               "item %s, valid %s, hit %s, surface %s%s" % (ghost.group(1), ghost.group(2), ghost.group(3),
                                                           ghost.group(4), (", shot " + shot) if shot else ""))
 
@@ -110,8 +125,8 @@ def main():
             log = run.cmd(command, wait=10.0)
             run.check("%s: %s" % (key, command), any("construction moved to" in l or "nothing to" in l or
                                                      "are complete" in l for l in log), pick(log, "baseddiag"))
-        for name, at, inward in site["walls"]:
-            wall(run, pick, name, site["floor"], at, inward, args.shots)
+        for name, at, inward, *placeable in site["walls"]:
+            wall(run, pick, name, site["floor"], at, inward, args.shots, *placeable)
     return run.summary()
 
 
