@@ -4,6 +4,15 @@ All notable changes to Based are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to Semantic Versioning.
 
+## [1.3.2] - 2026-11-27
+
+### Fixed
+- A save with a started build now says the construction is paused when a required mod is missing, and names the mod.
+  The build and the money stay in the save.
+- Bungalow: employees wait on the gravel beside the outside stair instead of getting stuck under it.
+- Bungalow: the carport's second loading bay is marked "2" instead of a second "1".
+- Sweatshop: the graffiti spot on the south wall sits on the finished wall instead of floating in front of it.
+
 ## [1.3.1] - 2026-11-23
 
 ### Fixed
