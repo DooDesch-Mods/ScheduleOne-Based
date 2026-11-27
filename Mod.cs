@@ -39,6 +39,9 @@ public sealed class Mod : MelonMod
     private const float RequestInterval = 5f, ProgressInterval = 2f;
     private const float PlanRequestTimeout = 3f;
     private const float HoldCheckInterval = 1f;
+    // Counted from the moment the loading screen is closed: it still fades out then, and a notice sent during the fade
+    // is gone before it is seen.
+    private const float PausedNoticeDelay = 5f;
 
     // Built on first use, not in the type initializer: the site types need S1API, and the missing-mods check has to
     // run first so a missing S1API still reaches the player.
@@ -72,6 +75,10 @@ public sealed class Mod : MelonMod
     private static SiteDefinition? _planRequest;
     private static float _planRequestedAt, _nextBind, _nextRequest, _nextProgress, _nextHoldCheck, _loadedAt = -1;
     private static bool _main, _snapshotReceived, _worldDirty = true, _initialized, _waitingNetwork, _saveWarningShown;
+    // A loaded save holds started construction while required mods are missing; the player hears it once the game is loaded.
+    private static string _pausedNotice = "";
+    // When the loading screen was last seen closed; -1 while it is open.
+    private static float _screenClearAt = -1;
     private static string _lastWorld = "", _lastAck = "";
 
     private sealed class HostAuthority : IAuthority
@@ -205,6 +212,8 @@ public sealed class Mod : MelonMod
             ContainedErrors.Clear();
             Failure = "";
             _saveWarningShown = false;
+            _pausedNotice = "";
+            _screenClearAt = -1;
         }
         else if (sceneName == "Main")
         {
@@ -435,6 +444,12 @@ public sealed class Mod : MelonMod
             if (LoadManager.Instance?.IsGameLoaded != true || Time.unscaledTime < _nextBind) return;
             if (_loadedAt < 0) _loadedAt = Time.unscaledTime;
             _nextBind = Time.unscaledTime + 1f;
+            // The game counts as loaded while "Generating NPC Mugshots" still runs under the loading screen; with a large
+            // mod set that outlasts any fixed delay, so the delay starts once the loading screen is closed.
+            var loading = LoadingScreen.Instance;
+            if (loading != null && loading.IsOpen) _screenClearAt = -1;
+            else if (_screenClearAt < 0) _screenClearAt = Time.unscaledTime;
+            if (_pausedNotice.Length > 0 && _screenClearAt >= 0 && Time.unscaledTime - _screenClearAt >= PausedNoticeDelay) ShowPausedNotice();
             foreach (var vendor in NoticeVendors)
             {
                 if (NoticeBound.Contains(vendor.NpcId)) continue;
@@ -450,6 +465,17 @@ public sealed class Mod : MelonMod
             }
         }
         catch (Exception error) { Contain("missing mods notice", error); }
+    }
+
+    // Without it the property looks as if it was never ordered and the money as if it was lost (issue #132). The
+    // build and its payments stay in the save and come back with the missing mod.
+    private static void ShowPausedNotice()
+    {
+        if (!Notices.Send(_pausedNotice, MissingMods.Line, null, 15f, true)) return;
+        Log("Construction notice shown: " + _pausedNotice + ": " + MissingMods.Line);
+        // This notice already says saving is off, so a refused save right after it does not show the same box again.
+        if (_pausedNotice == Text.T("Construction paused, saving is off")) _saveWarningShown = true;
+        _pausedNotice = "";
     }
 
     private static Vendor? AddVendorChoice(SiteDefinition site, string line, Action chosen)
@@ -689,7 +715,16 @@ public sealed class Mod : MelonMod
         {
             // Started work has world that cannot be built now, and saving would drop what stands in that room.
             if (state.Upgrades.Any(u => u.Stage is UpgradeStage.Constructing or UpgradeStage.Complete))
+            {
                 Fail("loading Based save", new InvalidOperationException("Construction has started and required mods are missing. " + MissingMods.Line));
+                _pausedNotice = Text.T("Construction paused, saving is off");
+            }
+            else if (state.Upgrades.Any(u => u.Stage == UpgradeStage.RightsOwned || u.RightsPaid > 0 || u.ConstructionPaid > 0))
+            {
+                // Bought rights build nothing yet, so saving stays on and keeps them in the save as loaded.
+                Log("Saved Based state has paid rights and no construction; it stays as it is until the required mods are back.");
+                _pausedNotice = Text.T("Expansion paused");
+            }
             else Log("Saved Based state has no construction; it stays as it is until the required mods are back.");
             return;
         }
@@ -942,7 +977,8 @@ public sealed class Mod : MelonMod
         _saveWarningShown = true;
         try
         {
-            Notices.Send("Based", Text.T("Saving is off: the expansion could not be applied."), null, 8f, false);
+            if (MissingMods.Any) Notices.Send(Text.T("Construction paused, saving is off"), MissingMods.Line, null, 8f, false);
+            else Notices.Send("Based", Text.T("Saving is off: the expansion could not be applied."), null, 8f, false);
         }
         catch (Exception error) { Warn("Save warning could not be shown: " + error.Message); }
     }

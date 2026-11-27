@@ -33,6 +33,8 @@ internal static class Text
         ["Construction on hold"] = "Baustopp",
         ["You can keep using the room."] = "Du kannst das Zimmer weiter nutzen.",
         ["Saving is off: the expansion could not be applied."] = "Speichern ist aus: Der Ausbau konnte nicht angewendet werden.",
+        ["Construction paused, saving is off"] = "Bau angehalten, Speichern ist aus",
+        ["Expansion paused"] = "Ausbau angehalten",
         ["The crew finishes one stage each night you sleep."] = "Jede Nacht, die du schläfst, schafft der Trupp einen Abschnitt.",
         ["Order the construction from Mrs. Ming"] = "Beauftrage den Bau bei Mrs. Ming",
         ["{0}, one night left"] = "{0}, noch eine Nacht",
