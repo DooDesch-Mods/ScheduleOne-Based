@@ -1,5 +1,6 @@
 using MapExpansions;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace Based.Content.Bungalow;
 
@@ -68,6 +69,63 @@ public static class BungalowCarport
         if (!MapExpansionsApi.Register(Create()))
             throw new InvalidOperationException("Based could not register the Bungalow carport; inspect the MapExpansions validation errors.");
         _registered = true;
+        MapExpansionsApi.WorldStateApplied += NumberSecondBay;
+    }
+
+    // The second bay is a copy of the Bungalow's own dock, so its ground marking reads "1" as well. The game paints the
+    // number with one decal material per bay number; the copy takes the "2" of a vanilla second bay (the Barn's). The
+    // template stays the Bungalow's dock, whose parking and access points fit this spot.
+    private const string MarkingPrefix = "Loading dock decal mat ";
+    private const string SecondBayMarking = MarkingPrefix + "2";
+
+    private static void NumberSecondBay(string expansion, string? state)
+    {
+        if (expansion != BungalowDefinition.CarportExpansionId || state != "complete") return;
+        Il2CppScheduleOne.Property.Property? bungalow = null;
+        foreach (var candidate in Il2CppScheduleOne.Property.Property.Properties)
+            if (candidate != null && candidate.PropertyCode == "bungalow") { bungalow = candidate; break; }
+        if (bungalow == null)
+        {
+            Mod.Warn("Bungalow carport: the property is not in the scene; the second bay keeps its \"1\" marking.");
+            return;
+        }
+        if (bungalow.LoadingDocks == null || bungalow.LoadingDocks.Length < 2 || bungalow.LoadingDocks[1] == null)
+        {
+            Mod.Warn("Bungalow carport: the property has " + (bungalow.LoadingDocks?.Length ?? 0) + " loading docks; the second bay's marking is not renumbered.");
+            return;
+        }
+        var marking = FindMarking(SecondBayMarking);
+        if (marking == null)
+        {
+            Mod.Warn("Bungalow carport: no vanilla dock uses '" + SecondBayMarking + "'; the second bay keeps its \"1\" marking.");
+            return;
+        }
+        int swapped = 0, kept = 0;
+        foreach (var decal in bungalow.LoadingDocks[1].GetComponentsInChildren<DecalProjector>(true))
+        {
+            var material = decal.material;
+            if (material == null || !material.name.StartsWith(MarkingPrefix, StringComparison.Ordinal)) { kept++; continue; }
+            if (material.name.StartsWith(SecondBayMarking, StringComparison.Ordinal)) { kept++; continue; }
+            decal.material = marking;
+            swapped++;
+        }
+        if (swapped == 0) Mod.Warn("Bungalow carport: the second bay has no number decal to renumber (" + kept + " decals kept).");
+        else Mod.Log("Bungalow carport: the second bay's marking reads \"2\" (" + swapped + " decal(s) set, " + kept + " kept).");
+    }
+
+    private static Material? FindMarking(string name)
+    {
+        foreach (var property in Il2CppScheduleOne.Property.Property.Properties)
+        {
+            if (property?.LoadingDocks == null) continue;
+            foreach (var dock in property.LoadingDocks)
+            {
+                if (dock == null) continue;
+                foreach (var decal in dock.GetComponentsInChildren<DecalProjector>(true))
+                    if (decal.material != null && decal.material.name.StartsWith(name, StringComparison.Ordinal)) return decal.material;
+            }
+        }
+        return null;
     }
 
     // The first night fells the pines and sets the posts; the kit stands in the second bay. The second puts the roof on

@@ -97,6 +97,9 @@ public static class DockProbe
                 if (dock == null) { Mod.Warn($"dock inspect {property.PropertyCode}[{i}] is null"); continue; }
                 var lot = dock.Parking;
                 Mod.Log($"dock inspect {property.PropertyCode}[{i}] guid={dock.GUID} pos={V(dock.transform.position)} yaw={dock.transform.eulerAngles.y:F3} occupied={dock.IsInUse} parking={lot != null} spots={lot?.ParkingSpots?.Count ?? 0}");
+                // The ground marking: one decal per bay number, named "Loading dock decal mat <n>".
+                foreach (var decal in dock.GetComponentsInChildren<UnityEngine.Rendering.Universal.DecalProjector>(true))
+                    Mod.Log($"dock marking {property.PropertyCode}[{i}] decal '{decal.name}' material '{(decal.material != null ? decal.material.name : "none")}' active={decal.isActiveAndEnabled}");
                 if (lot?.EntryPoint != null) Mod.Log("dock road entry=" + V(lot.EntryPoint.position));
                 if (lot?.HiddenVehicleAccessPoint != null) Mod.Log("dock hidden access=" + V(lot.HiddenVehicleAccessPoint.position));
                 if (lot?.ParkingSpots != null)

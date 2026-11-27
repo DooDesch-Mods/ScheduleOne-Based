@@ -167,6 +167,7 @@ public static class BungalowStorey
         // storeys' shadows.
         if (level < 5) Rule(state, "shadow", "ShadowCaster", ObjectEffect.Remove, house);
         GraffitiSpot(state, level);
+        IdlePoint(state);
 
         var geometry = new CopyDefinition
         {
@@ -681,6 +682,16 @@ public static class BungalowStorey
             // Optional: another mod may have removed the spot; the storey stands without it.
             state.Moves.Add(new ObjectMoveDefinition { Id = "graffiti-spot", Path = GraffitiSpotPath, Offset = new Vector3(0f, Lift, 0f), Optional = true });
     }
+
+    // The game's first waiting place for the Bungalow's employees stands against the east wall where the landing now
+    // stands; an employee sent there walks into the gap under the landing and the stair. From the first build on, the
+    // place moves out to the open gravel south of the stair, beside the other four and clear of the loading bay.
+    private const string IdlePointPath = "@Properties/Bungalow/EmployeeIdlePoints/GameObject";
+    private static readonly Vector3 IdlePointShift = new(1.57f, 0f, -.84f);
+
+    private static void IdlePoint(WorldStateDefinition state) =>
+        // Optional: another mod may have removed or renamed the place; the storey stands without it.
+        state.Moves.Add(new ObjectMoveDefinition { Id = "idle-point-0", Path = IdlePointPath, Offset = IdlePointShift, Optional = true });
 
     private static void Rule(WorldStateDefinition state, string id, string name, ObjectEffect effect, Bounds area) =>
         state.Rules.Add(new ObjectRule { Id = id, Name = name, Parent = "bungalow", Side = WorldSide.Main, Effect = effect, Area = area });

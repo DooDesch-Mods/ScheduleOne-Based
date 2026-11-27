@@ -66,6 +66,7 @@
     <Reference Include="UnityEngine.AudioModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.AnimationModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.AnimationModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.AIModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.AIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.RenderPipelines.Universal.Runtime"><HintPath>$(WorkspaceLibPath)/game/Unity.RenderPipelines.Universal.Runtime.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(WorkspaceLibPath)/game/UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.TextMeshPro"><HintPath>$(WorkspaceLibPath)/game/Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="S1API.Il2Cpp.MelonLoader"><HintPath>$(WorkspaceLibPath)/s1api/S1API.Il2Cpp.MelonLoader.dll</HintPath><Private>false</Private></Reference>
