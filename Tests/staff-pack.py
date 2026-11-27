@@ -134,8 +134,9 @@ class Run:
         for m in re.finditer(r"baseddiag: place (\d+) at " + V + r" route none", tail):
             places[int(m.group(1))] = ((float(m.group(2)), float(m.group(4))), "none", 99.0, "?")
         employees = []
-        for m in re.finditer(r"baseddiag: employee (.+?) index (\d+) at " + V + r", waits at " + V, tail):
-            employees.append((m.group(1), int(m.group(2)), (float(m.group(3)), float(m.group(5))), (float(m.group(6)), float(m.group(8)))))
+        for m in re.finditer(r"baseddiag: employee (.+?) index (\d+) at " + V + r", waits at " + V + r"[^\n]*?behaviour ([^,\n]+)", tail):
+            employees.append((m.group(1), int(m.group(2)), (float(m.group(3)), float(m.group(5))), (float(m.group(6)), float(m.group(8))),
+                              m.group(9).strip()))
         return head, places, employees
 
     def markings(self):
@@ -151,6 +152,11 @@ class Run:
         log = self.cmd(command, wait=10.0)
         self.check(command, any("construction moved to" in l or "nothing to" in l or "are complete" in l for l in log),
                    next((l for l in reversed(log) if "baseddiag" in l), "no baseddiag line"))
+
+
+def waiting(employee):
+    """The game's idle behaviour is named "Wait ouside" (sic)."""
+    return employee[4].lower().startswith("wait")
 
 
 def inside(p, rect, margin):
@@ -202,11 +208,16 @@ def bungalow(r, shots):
     while time.time() < deadline:
         time.sleep(10)
         head, places, employees = r.staff("bungalow")
-        if head and head[0] == head[1] and employees and all(math.dist(e[2], e[3]) < 1.0 for e in employees):
+        if head and head[0] == head[1] and employees and all(math.dist(e[2], e[3]) < 1.0 for e in employees if waiting(e)):
             break
     r.check("Based#129: every Bungalow employee was hired", head is not None and head[0] == head[1] == len(employees), head)
-    for name, index, at, waits in employees:
-        r.check("Based#129: %s (index %d) stands at its place" % (name, index), math.dist(at, waits) < 1.0, "at %s, place %s" % (at, waits))
+    for name, index, at, waits, behaviour in employees:
+        # Only an idle employee walks to its waiting place; one at work stands at its station.
+        if waiting((name, index, at, waits, behaviour)):
+            r.check("Based#129: %s (index %d) stands at its place" % (name, index), math.dist(at, waits) < 1.0, "at %s, place %s" % (at, waits))
+        else:
+            print("SKIP  Based#129: %s (index %d) is at work (%s), place not checked - at %s, place %s"
+                  % (name, index, behaviour, at, waits), flush=True)
         r.check("Based#129: %s stands clear of the gap under the stair" % name, not inside(at, UNDER_STAIR, 0), "at (%.2f, %.2f)" % at)
 
     marks = r.markings()
@@ -218,7 +229,7 @@ def bungalow(r, shots):
     r.g.world("set_time", {"time": 1200})
     # Under the carport roof from the east: both bays' markings side by side.
     print("  shot bays: %s" % (r.shot((-159.5, -2.4, 107.7), (-165.8, -4.0, 107.7), "bungalow-bays", shots) or "none"), flush=True)
-    print("  shot stair: %s" % (r.shot((-163.5, -2.6, 109.0), (-168.6, -3.6, 112.0), "bungalow-under-stair", shots) or "none"), flush=True)
+    print("  shot stair: %s" % (r.shot((-163.0, -3.0, 111.0), (-168.5, -3.6, 111.6), "bungalow-under-stair", shots) or "none"), flush=True)
 
 
 def main():
