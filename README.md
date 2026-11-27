@@ -9,7 +9,7 @@
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
 [![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de) [![Polyfill](https://polyfill.doomods.com/badge/based.svg)](https://polyfill.doomods.com/mod/based)
 
-[![MLVScan Based.dll](https://mlvscan.com/attestations/att_he-Rqkgst1BC485cQD1FiL8M/badge.svg)](https://mlvscan.com/attestations/att_he-Rqkgst1BC485cQD1FiL8M)
+[![MLVScan Based.dll](https://mlvscan.com/attestations/att_CW4WA8lgh_2KltUXpUUSwNWJ/badge.svg)](https://mlvscan.com/attestations/att_CW4WA8lgh_2KltUXpUUSwNWJ)
 
 ![Based](https://raw.githubusercontent.com/DooDesch-Mods/ScheduleOne-Based/main/docs/img/header.jpg)
 
