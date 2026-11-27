@@ -157,6 +157,7 @@ public static class MingWorld
         Remove(state, "old-bay-north-stain", "Decals 0004 (2)", "Interior", BoundsOf(-58.1f, -.3f, 140.9f, -56f, 1.8f, 141.1f));
         // This one lies across the old floor's edge and would end there in a straight line.
         Remove(state, "old-floor-grime", "Grime 0", "Interior", BoundsOf(-60.5f, -.3f, 139.4f, -58.5f, -.2f, 141.4f));
+        GraffitiSpot(state, morning);
         // The sink hangs on a wall the cut removes. It stays usable through the work and moves when the new wall stands.
         if (morning == 4)
         {
@@ -602,6 +603,27 @@ public static class MingWorld
         At = new LocalPoint(targetPivot - Quaternion.Euler(0, yaw, 0) * (scale * (sourcePivot - PropertyPivot)), yaw),
         IndependentMesh = true, VisualOnly = true, Obstacle = false
     };
+
+    // The game's graffiti spot on the outer face of the old bay's south wall, a networked object outside the room. The
+    // breakthrough cuts that wall open, so the spot would hang in the middle of the wing. While the wing is built, its
+    // collider and drawing are off; in the finished wing the spot moves 1.96 m south onto the same place of the new
+    // south facade (outer face at z 135.88), with any graffiti painted on it.
+    private const string GraffitiSpotName = "SpraySurface (45)";
+    private const string GraffitiSpotPath = "@Managers/@Graffiti/Spray surfaces/" + GraffitiSpotName;
+    private static readonly Vector3 GraffitiSpotShift = new(0f, 0f, -1.96f);
+
+    private static void GraffitiSpot(WorldStateDefinition state, int morning)
+    {
+        if (morning < 4)
+            state.Rules.Add(new ObjectRule
+            {
+                Id = "graffiti-spot", Name = GraffitiSpotName, Side = WorldSide.Main, Effect = ObjectEffect.Remove,
+                Area = BoundsOf(-59.3f, .3f, 137.5f, -56.3f, 2.6f, 138.2f)
+            });
+        else
+            // Optional: another mod may have removed the spot; the wing stands without it.
+            state.Moves.Add(new ObjectMoveDefinition { Id = "graffiti-spot", Path = GraffitiSpotPath, Offset = GraffitiSpotShift, Optional = true });
+    }
 
     private static void Remove(WorldStateDefinition state, string id, string name, string parent, Bounds area) => state.Rules.Add(new ObjectRule
     {
